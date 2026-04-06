@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ESP32 Watch Console</title>
+  <link rel="stylesheet" href="/app.css?v=20260406_3" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>ESP32 Watch Console</h1>
+        <p id="deviceMeta">Connecting...</p>
+      </div>
+      <div class="topbar-actions">
+        <button id="refreshBtn">Refresh</button>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="card" id="statusCard">
+        <h2>Device Status</h2>
+        <div class="kv-grid" id="statusGrid"></div>
+      </section>
+
+      <section class="card" id="keypadCard">
+        <h2>Keypad</h2>
+        <div class="keypad">
+          <button data-key="up" class="key key-up">UP</button>
+          <button data-key="back" class="key key-back">BACK</button>
+          <button data-key="ok" class="key key-ok">OK</button>
+          <button data-key="down" class="key key-down">DOWN</button>
+        </div>
+
+        <div class="inline-form">
+          <label for="keyEventType">Event Type</label>
+          <select id="keyEventType">
+            <option value="short">short</option>
+            <option value="long">long</option>
+            <option value="repeat">repeat</option>
+            <option value="press">press</option>
+            <option value="release">release</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="card" id="overlayCard">
+        <h2>OLED Overlay</h2>
+        <textarea id="overlayText" maxlength="63" rows="4" placeholder="Up to 63 characters"></textarea>
+        <div class="form-meta">
+          <span id="overlayCount">0 / 63</span>
+        </div>
+        <div class="button-row">
+          <button id="previewBtn">Preview Text</button>
+          <button id="sendOverlayBtn">Send Overlay</button>
+          <button id="clearOverlayBtn" class="ghost">Clear Overlay</button>
+        </div>
+        <div class="oled-live">
+          <div class="oled-frame">
+            <canvas id="oledCanvas" class="oled-canvas" width="128" height="64"></canvas>
+          </div>
+          <div class="oled-meta">
+            <span>LIVE OLED 128x64</span>
+            <span id="oledFrameState">Waiting for frame...</span>
+          </div>
+          <div class="oled-preview" id="oledPreview">Draft preview will appear here.</div>
+        </div>
+      </section>
+
+      <section class="card" id="commandCard">
+        <h2>Commands</h2>
+        <div class="button-grid">
+          <button data-command="sensorReinit">Sensor Reinit</button>
+          <button data-command="sensorCalibration">Start Calibration</button>
+          <button data-command="storageManualFlush">Manual Storage Flush</button>
+          <button data-command="clearSafeMode">Clear Safe Mode</button>
+        </div>
+      </section>
+
+      <section class="card" id="diagCard">
+        <h2>Diagnostics</h2>
+        <div id="diagPanel"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toastHost" class="toast-host"></div>
+  <script src="/app.js?v=20260406_3"></script>
+</body>
+</html>
