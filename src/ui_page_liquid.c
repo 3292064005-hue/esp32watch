@@ -6,11 +6,11 @@
 
 /*
  * Liquid page rewritten around a compact FLIP-style pipeline inspired by
- * cccAboy/esp32-led-matrix. The internal visible domain stays 16x16 and the
- * OLED renders it as a centered 64x64 window using ordered grayscale dithering.
+ * cccAboy/esp32-led-matrix. The internal visible domain is 32x16 so the OLED
+ * can fill the full 128x64 display with square rendered cells.
  */
 
-#define FLIP_VISIBLE_W               16
+#define FLIP_VISIBLE_W               32
 #define FLIP_VISIBLE_H               16
 #define FLIP_PADDING                 1
 #define FLIP_SIM_W                   (FLIP_VISIBLE_W + (FLIP_PADDING * 2))
@@ -20,10 +20,10 @@
 #define LIQUID_BLOCK_SIZE            4
 #define LIQUID_RENDER_W             (FLIP_VISIBLE_W * LIQUID_BLOCK_SIZE)
 #define LIQUID_RENDER_H             (FLIP_VISIBLE_H * LIQUID_BLOCK_SIZE)
-#define LIQUID_RENDER_X              32
+#define LIQUID_RENDER_X               0
 #define LIQUID_RENDER_Y               0
 
-#define LIQUID_TANK_W                1.0f
+#define LIQUID_TANK_W                (((float)(FLIP_SIM_W - 1)) / ((float)(FLIP_SIM_H - 1)))
 #define LIQUID_TANK_H                1.0f
 #define LIQUID_FILL_RATIO            0.60f
 #define LIQUID_FILL_WIDTH_RATIO      0.80f
@@ -735,4 +735,3 @@ bool ui_page_liquid_handle(PageId page, const KeyEvent *e, uint32_t now_ms)
 
     return false;
 }
-
