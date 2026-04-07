@@ -5,21 +5,18 @@
 void ui_page_activity_render(PageId page, int16_t ox)
 {
     UiSystemSnapshot snap;
-    char line[32];
-    (void)page;
+    char line[24];
 
+    (void)page;
     ui_get_system_snapshot(&snap);
     ui_core_draw_header(ox, "Activity");
-    snprintf(line, sizeof(line), "steps %lu", (unsigned long)snap.activity.steps);
-    display_draw_text_centered_5x7(ox, 18, 128, line, true);
-    snprintf(line, sizeof(line), "goal %lu  %u%%", (unsigned long)snap.activity.goal, snap.activity.goal_percent);
-    display_draw_text_centered_5x7(ox, 29, 128, line, true);
-    display_draw_progress_bar(ox + 16, 40, 96, 10, snap.activity.goal_percent, false);
-    snprintf(line, sizeof(line), "lvl %u state %u active %u",
-             snap.activity.activity_level,
-             snap.activity.motion_state,
-             snap.activity.active_minutes);
-    display_draw_text_centered_5x7(ox, 55, 128, line, true);
+    ui_core_draw_card(ox + 8, 14, 112, 22, "TODAY");
+    snprintf(line, sizeof(line), "%lu", (unsigned long)snap.activity.steps);
+    display_draw_text_centered_5x7(ox, 22, 128, line, true);
+    display_draw_progress_bar(ox + 18, 39, 92, 8, snap.activity.goal_percent, false);
+    snprintf(line, sizeof(line), "G%lu  A%uMIN", (unsigned long)snap.activity.goal, snap.activity.active_minutes);
+    display_draw_text_centered_5x7(ox, 48, 128, line, true);
+    ui_core_draw_footer_hint(ox, "BK Back");
 }
 
 bool ui_page_activity_handle(PageId page, const KeyEvent *e, uint32_t now_ms)

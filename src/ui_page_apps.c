@@ -12,25 +12,26 @@ static const PageId app_pages[] = {
 
 void ui_page_apps_render(PageId page, int16_t ox)
 {
-    (void)page;
     uint8_t total = (uint8_t)(sizeof(app_names) / sizeof(app_names[0]));
-    uint8_t page_start = (ui_runtime_get_app_index() / 5U) * 5U;
+    uint8_t page_start = (ui_runtime_get_app_index() / 4U) * 4U;
+
+    (void)page;
     ui_core_draw_header(ox, "Apps");
-    for (uint8_t i = 0U; i < 5U; ++i) {
+    for (uint8_t i = 0U; i < 4U; ++i) {
         uint8_t idx = page_start + i;
+
         if (idx >= total) break;
-        bool sel = idx == ui_runtime_get_app_index();
-        int16_t y = 16 + i * 9;
-        if (sel) display_fill_round_rect(ox + 6, y - 1, 114, 8, true);
-        display_draw_text_5x7(ox + 12, y, app_names[idx], !sel);
+        ui_core_draw_list_item(ox, 14 + i * 10, 110, app_names[idx], "", idx == ui_runtime_get_app_index(), false);
     }
-    ui_core_draw_scrollbar(ox + 121, 16, 41, total, ui_runtime_get_app_index());
+    ui_core_draw_scrollbar(ox + 121, 14, 40, total, ui_runtime_get_app_index());
+    ui_core_draw_footer_hint(ox, "OK Open  BK Watch");
 }
 
 bool ui_page_apps_handle(PageId page, const KeyEvent *e, uint32_t now_ms)
 {
-    (void)page;
     uint8_t total = (uint8_t)(sizeof(app_names) / sizeof(app_names[0]));
+
+    (void)page;
     if (e->type != KEY_EVENT_SHORT) return false;
     if (e->id == KEY_ID_UP && ui_runtime_get_app_index() > 0U) ui_runtime_set_app_index((uint8_t)(ui_runtime_get_app_index() - 1U));
     else if (e->id == KEY_ID_DOWN && ui_runtime_get_app_index() + 1U < total) ui_runtime_set_app_index((uint8_t)(ui_runtime_get_app_index() + 1U));

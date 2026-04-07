@@ -10,6 +10,52 @@ static const char * const settings_items[] = {
     "Storage", "Time Set", "Restore"
 };
 
+static const char *setting_label(uint8_t idx)
+{
+    switch (idx) {
+        case 0U: return "Brightness";
+        case 1U: return "Raise Wake";
+        case 2U: return "Auto Sleep";
+        case 3U: return "DND";
+        case 4U: return "Step Goal";
+        case 5U: return "Watchface";
+        case 6U: return "Seconds";
+        case 7U: return "Motion";
+        case 8U: return "Timeout";
+        case 9U: return "IMU Sense";
+        case 10U: return "Calibrate";
+        case 11U: return "Input Test";
+        case 12U: return "Storage";
+        case 13U: return "Time Set";
+        default: return "Restore";
+    }
+}
+
+static void setting_value_string(uint8_t idx, const UiSystemSnapshot *snap, char *out, size_t out_size)
+{
+    if (out == NULL || out_size == 0U || snap == NULL) {
+        return;
+    }
+
+    switch (idx) {
+        case 0U: snprintf(out, out_size, "%u/4", snap->settings.brightness + 1U); break;
+        case 1U: snprintf(out, out_size, "%s", snap->settings.auto_wake ? "ON" : "OFF"); break;
+        case 2U: snprintf(out, out_size, "%s", snap->settings.auto_sleep ? "ON" : "OFF"); break;
+        case 3U: snprintf(out, out_size, "%s", snap->settings.dnd ? "ON" : "OFF"); break;
+        case 4U: snprintf(out, out_size, "%luk", (unsigned long)(snap->settings.goal / 1000UL)); break;
+        case 5U: snprintf(out, out_size, "F%u", snap->settings.watchface + 1U); break;
+        case 6U: snprintf(out, out_size, "%s", snap->settings.show_seconds ? "ON" : "OFF"); break;
+        case 7U: snprintf(out, out_size, "%s", snap->settings.animations ? "ON" : "OFF"); break;
+        case 8U: snprintf(out, out_size, "%lus", (unsigned long)snap->settings.screen_timeout_s); break;
+        case 9U: snprintf(out, out_size, "L%u", snap->settings.sensor_sensitivity + 1U); break;
+        case 10U: snprintf(out, out_size, "RUN"); break;
+        case 11U: snprintf(out, out_size, "OPEN"); break;
+        case 12U: snprintf(out, out_size, "INFO"); break;
+        case 13U: snprintf(out, out_size, "SET"); break;
+        default: snprintf(out, out_size, "NOW"); break;
+    }
+}
+
 static void change_setting(int8_t delta)
 {
     UiSystemSnapshot snap;
@@ -29,48 +75,31 @@ void ui_page_settings_main_render(PageId page, int16_t ox)
 {
     UiSystemSnapshot snap;
     uint8_t total = (uint8_t)(sizeof(settings_items) / sizeof(settings_items[0]));
-    uint8_t start = (ui_runtime_get_settings_index() / 5U) * 5U;
-    char line[32];
-    (void)page;
+    uint8_t start = (ui_runtime_get_settings_index() / 4U) * 4U;
 
+    (void)page;
     ui_get_system_snapshot(&snap);
     ui_core_draw_header(ox, "Settings");
-    for (uint8_t i = 0; i < 5U; ++i) {
+    for (uint8_t i = 0; i < 4U; ++i) {
         uint8_t idx = start + i;
-        bool sel;
-        int16_t y;
+        char value[16];
+
         if (idx >= total) break;
-        sel = idx == ui_runtime_get_settings_index();
-        y = 16 + i * 9;
-        if (sel) display_fill_round_rect(ox + 4, y - 1, 118, 8, true);
-        switch (idx) {
-            case 0: snprintf(line, sizeof(line), "%c Bright   %u", sel && ui_runtime_is_settings_editing() ? '*' : ' ', snap.settings.brightness + 1U); break;
-            case 1: snprintf(line, sizeof(line), "  RaiseWake %s", snap.settings.auto_wake ? "ON" : "OFF"); break;
-            case 2: snprintf(line, sizeof(line), "  AutoSleep %s", snap.settings.auto_sleep ? "ON" : "OFF"); break;
-            case 3: snprintf(line, sizeof(line), "  DND      %s", snap.settings.dnd ? "ON" : "OFF"); break;
-            case 4: snprintf(line, sizeof(line), "%c Goal     %lu", sel && ui_runtime_is_settings_editing() ? '*' : ' ', (unsigned long)snap.settings.goal); break;
-            case 5: snprintf(line, sizeof(line), "%c Face     %u", sel && ui_runtime_is_settings_editing() ? '*' : ' ', snap.settings.watchface + 1U); break;
-            case 6: snprintf(line, sizeof(line), "  Seconds  %s", snap.settings.show_seconds ? "ON" : "OFF"); break;
-            case 7: snprintf(line, sizeof(line), "  Anim     %s", snap.settings.animations ? "ON" : "OFF"); break;
-            case 8: snprintf(line, sizeof(line), "%c Timeout  %lus", sel && ui_runtime_is_settings_editing() ? '*' : ' ', (unsigned long)snap.settings.screen_timeout_s); break;
-            case 9: snprintf(line, sizeof(line), "%c Sens     %u", sel && ui_runtime_is_settings_editing() ? '*' : ' ', snap.settings.sensor_sensitivity + 1U); break;
-            case 10: snprintf(line, sizeof(line), "  Calibrate IMU"); break;
-            case 11: snprintf(line, sizeof(line), "  Input Test"); break;
-            case 12: snprintf(line, sizeof(line), "  Storage Info"); break;
-            case 13: snprintf(line, sizeof(line), "  Time Set"); break;
-            default: snprintf(line, sizeof(line), "  Restore Defaults"); break;
-        }
-        display_draw_text_5x7(ox + 8, y, line, !sel);
+        setting_value_string(idx, &snap, value, sizeof(value));
+        ui_core_draw_list_item(ox, 14 + i * 10, 110, setting_label(idx), value,
+                               idx == ui_runtime_get_settings_index(),
+                               idx == ui_runtime_get_settings_index() && ui_runtime_is_settings_editing());
     }
-    ui_core_draw_scrollbar(ox + 121, 16, 41, total, ui_runtime_get_settings_index());
+    ui_core_draw_scrollbar(ox + 121, 14, 40, total, ui_runtime_get_settings_index());
+    ui_core_draw_footer_hint(ox, ui_runtime_is_settings_editing() ? "UP/DN Adjust  OK Done" : "OK Edit  BK Back");
 }
 
 bool ui_page_settings_main_handle(PageId page, const KeyEvent *e, uint32_t now_ms)
 {
     UiSystemSnapshot snap;
     uint8_t total = (uint8_t)(sizeof(settings_items) / sizeof(settings_items[0]));
-    (void)page;
 
+    (void)page;
     ui_get_system_snapshot(&snap);
     if (ui_runtime_is_settings_editing()) {
         if (e->type == KEY_EVENT_SHORT || e->type == KEY_EVENT_REPEAT || e->type == KEY_EVENT_LONG) {
@@ -108,17 +137,15 @@ bool ui_page_settings_main_handle(PageId page, const KeyEvent *e, uint32_t now_m
                 if (snap.settings.time_valid) {
                     ui_runtime_set_edit_time(&snap.settings.current_time);
                 } else {
-                    {
-                        DateTime edit_time = {0};
-                        edit_time.year = 2024U;
-                        edit_time.month = 1U;
-                        edit_time.day = 1U;
-                        edit_time.weekday = 1U;
-                        edit_time.hour = 0U;
-                        edit_time.minute = 0U;
-                        edit_time.second = 0U;
-                        ui_runtime_set_edit_time(&edit_time);
-                    }
+                    DateTime edit_time = {0};
+                    edit_time.year = 2024U;
+                    edit_time.month = 1U;
+                    edit_time.day = 1U;
+                    edit_time.weekday = 1U;
+                    edit_time.hour = 0U;
+                    edit_time.minute = 0U;
+                    edit_time.second = 0U;
+                    ui_runtime_set_edit_time(&edit_time);
                 }
                 ui_runtime_set_time_field(0U);
                 ui_core_go(PAGE_TIMESET, 1, now_ms);

@@ -61,13 +61,31 @@ void display_draw_text_5x7(int16_t x, int16_t y, const char *text, bool color)
     }
 }
 
-void display_draw_text_centered_5x7(int16_t x, int16_t y, int16_t w, const char *text, bool color)
+int16_t display_text_width_5x7(const char *text)
 {
     int16_t len = 0;
     const char *p = text;
-    while (*p++) len++;
-    int16_t width = len * 6 - (len ? 1 : 0);
+
+    if (text == NULL || *text == '\0') {
+        return 0;
+    }
+
+    while (*p++) {
+        len++;
+    }
+    return (int16_t)(len * 6 - 1);
+}
+
+void display_draw_text_centered_5x7(int16_t x, int16_t y, int16_t w, const char *text, bool color)
+{
+    int16_t width = display_text_width_5x7(text);
+
     display_draw_text_5x7(x + (w - width) / 2, y, text, color);
+}
+
+void display_draw_text_right_5x7(int16_t x_right, int16_t y, const char *text, bool color)
+{
+    display_draw_text_5x7(x_right - display_text_width_5x7(text), y, text, color);
 }
 
 static void draw_seg(int16_t x, int16_t y, int16_t w, int16_t h, bool vertical, bool color)

@@ -5,35 +5,20 @@
 void ui_page_storage_render(PageId page, int16_t ox)
 {
     UiSystemSnapshot snap;
-    char line[32];
-    (void)page;
+    char line[24];
 
+    (void)page;
     ui_get_system_snapshot(&snap);
     ui_core_draw_header(ox, "Storage");
-    snprintf(line, sizeof(line), "backend %s v%u", snap.storage.backend_name, snap.storage.version);
-    display_draw_text_5x7(ox + 8, 12, line, true);
-
-    snprintf(line, sizeof(line), "init %s crc %s", snap.storage.initialized ? "ok" : "no",
-             snap.storage.crc_valid ? "ok" : "bad");
-    display_draw_text_5x7(ox + 8, 21, line, true);
-
-    snprintf(line, sizeof(line), "pend %02X dirty %02X", (unsigned)snap.storage.pending_mask,
-             (unsigned)snap.storage.dirty_source_mask);
-    display_draw_text_5x7(ox + 8, 30, line, true);
-
-    snprintf(line, sizeof(line), "stored %04X calc %04X", snap.storage.stored_crc,
-             snap.storage.calculated_crc);
-    display_draw_text_5x7(ox + 8, 39, line, true);
-
-    snprintf(line, sizeof(line), "c%lu %s %s", (unsigned long)snap.storage.commit_count,
-             snap.storage.last_commit_ok ? "ok" : "bad",
-             snap.storage.last_commit_reason_name);
-    display_draw_text_5x7(ox + 8, 48, line, true);
-
-    snprintf(line, sizeof(line), "%s %s wear %lu", snap.storage.commit_state_name,
-             snap.storage.sleep_flush_pending ? "flush" : "idle",
-             (unsigned long)snap.storage.wear_count);
-    display_draw_text_5x7(ox + 8, 57, line, true);
+    ui_core_draw_card(ox + 8, 14, 112, 22, snap.storage.backend_name);
+    snprintf(line, sizeof(line), "V%u  %s", snap.storage.version, snap.storage.crc_valid ? "CRC OK" : "CRC BAD");
+    display_draw_text_centered_5x7(ox, 22, 128, line, true);
+    snprintf(line, sizeof(line), "%02X / %02X", (unsigned)snap.storage.pending_mask, (unsigned)snap.storage.dirty_source_mask);
+    ui_core_draw_kv_row(ox + 10, 39, 108, "PEND", line);
+    snprintf(line, sizeof(line), "%lu", (unsigned long)snap.storage.commit_count);
+    snprintf(line, sizeof(line), "%lu / %lu", (unsigned long)snap.storage.commit_count, (unsigned long)snap.storage.wear_count);
+    ui_core_draw_kv_row(ox + 10, 47, 108, "CNT/WEAR", line);
+    ui_core_draw_footer_hint(ox, "OK Flush  BK Back");
 }
 
 bool ui_page_storage_handle(PageId page, const KeyEvent *e, uint32_t now_ms)

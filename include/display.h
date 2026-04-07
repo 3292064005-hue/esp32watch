@@ -31,6 +31,8 @@ void display_fill_circle(int16_t x0, int16_t y0, int16_t r, bool color);
 void display_draw_char_5x7(int16_t x, int16_t y, char c, bool color);
 void display_draw_text_5x7(int16_t x, int16_t y, const char *text, bool color);
 void display_draw_text_centered_5x7(int16_t x, int16_t y, int16_t w, const char *text, bool color);
+int16_t display_text_width_5x7(const char *text);
+void display_draw_text_right_5x7(int16_t x_right, int16_t y, const char *text, bool color);
 
 void display_draw_big_digit(int16_t x, int16_t y, uint8_t digit, uint8_t scale, bool color);
 void display_draw_big_colon(int16_t x, int16_t y, uint8_t scale, bool color, bool on);

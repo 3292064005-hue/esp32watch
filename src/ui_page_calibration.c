@@ -5,19 +5,18 @@
 void ui_page_calibration_render(PageId page, int16_t ox)
 {
     UiSystemSnapshot snap;
-    char line[28];
-    (void)page;
+    char line[24];
 
+    (void)page;
     ui_get_system_snapshot(&snap);
     ui_core_draw_header(ox, "Calibration");
-    snprintf(line, sizeof(line), "imu %s", snap.sensor.online ? "online" : "offline");
-    display_draw_text_centered_5x7(ox, 17, 128, line, true);
-    snprintf(line, sizeof(line), "static %s  q%u", snap.sensor.static_now ? "yes" : "no", snap.sensor.quality);
-    display_draw_text_centered_5x7(ox, 28, 128, line, true);
-    snprintf(line, sizeof(line), "progress %u%%", snap.sensor.calibration_progress);
-    display_draw_text_centered_5x7(ox, 39, 128, line, true);
-    display_draw_progress_bar(ox + 18, 49, 92, 8, snap.sensor.calibration_progress, false);
-    display_draw_text_centered_5x7(ox, 59, 128, "OK start/retry  BK back", true);
+    ui_core_draw_card(ox + 8, 14, 112, 22, snap.sensor.online ? "IMU READY" : "IMU OFFLINE");
+    snprintf(line, sizeof(line), "%s  Q%u", snap.sensor.static_now ? "STATIC" : "MOVE", snap.sensor.quality);
+    display_draw_text_centered_5x7(ox, 22, 128, line, true);
+    display_draw_progress_bar(ox + 18, 39, 92, 8, snap.sensor.calibration_progress, false);
+    snprintf(line, sizeof(line), "%u%%  BK %lu", snap.sensor.calibration_progress, (unsigned long)snap.sensor.retry_backoff_s);
+    display_draw_text_centered_5x7(ox, 48, 128, line, true);
+    ui_core_draw_footer_hint(ox, "OK Start  BK Back");
 }
 
 bool ui_page_calibration_handle(PageId page, const KeyEvent *e, uint32_t now_ms)

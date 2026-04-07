@@ -3,9 +3,9 @@
 
 #include <stdint.h>
 
-#define UI_FPS                          15U
+#define UI_FPS                          24U
 #define UI_FRAME_MS                     (1000U / UI_FPS)
-#define UI_ANIM_DURATION_MS             180U
+#define UI_ANIM_DURATION_MS             220U
 #define UI_POPUP_REFRESH_MS             180U
 #define UI_WATCHFACE_REFRESH_MS         1000U
 #define UI_CARD_REFRESH_MS              400U

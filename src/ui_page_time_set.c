@@ -63,24 +63,34 @@ static void adjust_time_field(int8_t delta)
 
 void ui_page_time_set_render(PageId page, int16_t ox)
 {
-    (void)page;
     char line[24];
+    const char *fields[] = {"Y", "M", "D", "H", "MIN", "OK"};
+
+    (void)page;
     ui_core_draw_header(ox, "Time Set");
-    { DateTime edit_time = ui_runtime_get_edit_time();
-    snprintf(line, sizeof(line), "%04u-%02u-%02u", edit_time.year, edit_time.month, edit_time.day);
-    display_draw_text_centered_5x7(ox, 20, 128, line, true);
-    snprintf(line, sizeof(line), "%02u:%02u", edit_time.hour, edit_time.minute);
-    }
-    display_draw_text_centered_5x7(ox, 32, 128, line, true);
     {
-        const char *fields[] = {"Y", "M", "D", "H", "Min", "OK"};
-        for (uint8_t i = 0; i < 6; ++i) {
-            int16_t bx = ox + 6 + i * 20;
-            bool sel = i == ui_runtime_get_time_field();
-            if (sel) display_fill_round_rect(bx, 49, 18, 10, true);
-            display_draw_text_centered_5x7(bx, 51, 18, fields[i], !sel);
+        DateTime edit_time = ui_runtime_get_edit_time();
+
+        ui_core_draw_card(ox + 8, 14, 112, 23, "CLOCK");
+        snprintf(line, sizeof(line), "%04u-%02u-%02u", edit_time.year, edit_time.month, edit_time.day);
+        display_draw_text_centered_5x7(ox, 20, 128, line, true);
+        snprintf(line, sizeof(line), "%02u:%02u", edit_time.hour, edit_time.minute);
+    }
+    display_draw_text_centered_5x7(ox, 29, 128, line, true);
+
+    for (uint8_t i = 0; i < 6; ++i) {
+        int16_t bx = ox + 5 + i * 20;
+        bool sel = i == ui_runtime_get_time_field();
+
+        if (sel) {
+            display_fill_round_rect(bx, 42, 18, 10, true);
+            display_draw_text_centered_5x7(bx, 44, 18, fields[i], false);
+        } else {
+            display_draw_round_rect(bx, 42, 18, 10, true);
+            display_draw_text_centered_5x7(bx, 44, 18, fields[i], true);
         }
     }
+    ui_core_draw_footer_hint(ox, ui_runtime_get_time_field() == 5U ? "OK Save  BK Cancel" : "UP/DN Adjust  OK Next");
 }
 
 bool ui_page_time_set_handle(PageId page, const KeyEvent *e, uint32_t now_ms)

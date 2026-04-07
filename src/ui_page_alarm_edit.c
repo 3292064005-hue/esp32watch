@@ -5,11 +5,11 @@
 
 static const char *repeat_mask_label(uint8_t mask)
 {
-    if (mask == 0x7FU) return "Daily";
-    if (mask == 0x3EU) return "Weekday";
-    if (mask == 0x41U) return "Weekend";
-    if (mask == 0U) return "Once";
-    return "Custom";
+    if (mask == 0x7FU) return "DAILY";
+    if (mask == 0x3EU) return "WEEKDAY";
+    if (mask == 0x41U) return "WEEKEND";
+    if (mask == 0U) return "ONCE";
+    return "CUSTOM";
 }
 
 static uint8_t cycle_repeat_mask(uint8_t current, int8_t dir)
@@ -51,25 +51,39 @@ void ui_page_alarm_edit_render(PageId page, int16_t ox)
 {
     ModelDomainState domain_state;
     char line[24];
+    const char *fields[] = {"EN", "HR", "MIN", "RPT", "OK"};
 
     (void)page;
     if (model_get_domain_state(&domain_state) == NULL) {
         return;
     }
+
     ui_core_draw_header(ox, "Alarm Edit");
-    snprintf(line, sizeof(line), "A%u  %02u:%02u", domain_state.alarm_selected + 1U, domain_state.selected_alarm.hour, domain_state.selected_alarm.minute);
-    display_draw_text_centered_5x7(ox, 18, 128, line, true);
+    snprintf(line, sizeof(line), "ALARM %u", domain_state.alarm_selected + 1U);
+    ui_core_draw_card(ox + 8, 14, 112, 23, line);
+    snprintf(line, sizeof(line), "%02u:%02u", domain_state.selected_alarm.hour, domain_state.selected_alarm.minute);
+    display_draw_text_centered_5x7(ox, 22, 128, line, true);
+    snprintf(line, sizeof(line), "%s  %s",
+             domain_state.selected_alarm.enabled ? "ON" : "OFF",
+             repeat_mask_label(domain_state.selected_alarm.repeat_mask));
+    display_draw_text_centered_5x7(ox, 30, 128, line, true);
+
     for (uint8_t i = 0; i < 5U; ++i) {
+        int16_t bx = ox + 6 + (int16_t)i * 23;
         bool sel = i == ui_runtime_get_alarm_field();
-        int16_t y = 30 + i * 8;
-        if (sel) display_fill_round_rect(ox + 8, y - 1, 112, 8, true);
-        if (i == 0U) snprintf(line, sizeof(line), "%c enable  %s", sel && ui_runtime_is_alarm_editing() ? '*' : ' ', domain_state.selected_alarm.enabled ? "ON" : "OFF");
-        else if (i == 1U) snprintf(line, sizeof(line), "%c hour    %02u", sel && ui_runtime_is_alarm_editing() ? '*' : ' ', domain_state.selected_alarm.hour);
-        else if (i == 2U) snprintf(line, sizeof(line), "%c minute  %02u", sel && ui_runtime_is_alarm_editing() ? '*' : ' ', domain_state.selected_alarm.minute);
-        else if (i == 3U) snprintf(line, sizeof(line), "%c repeat  %s", sel && ui_runtime_is_alarm_editing() ? '*' : ' ', repeat_mask_label(domain_state.selected_alarm.repeat_mask));
-        else snprintf(line, sizeof(line), "  done");
-        display_draw_text_5x7(ox + 12, y, line, !sel);
+
+        if (sel) {
+            display_fill_round_rect(bx, 42, 20, 10, true);
+            if (ui_runtime_is_alarm_editing()) {
+                display_fill_rect(bx + 2, 44, 2, 6, false);
+            }
+            display_draw_text_centered_5x7(bx, 44, 20, fields[i], false);
+        } else {
+            display_draw_round_rect(bx, 42, 20, 10, true);
+            display_draw_text_centered_5x7(bx, 44, 20, fields[i], true);
+        }
     }
+    ui_core_draw_footer_hint(ox, ui_runtime_is_alarm_editing() ? "UP/DN Adjust  OK Done" : "OK Select  BK Back");
 }
 
 bool ui_page_alarm_edit_handle(PageId page, const KeyEvent *e, uint32_t now_ms)
@@ -90,7 +104,7 @@ bool ui_page_alarm_edit_handle(PageId page, const KeyEvent *e, uint32_t now_ms)
         }
     } else if (e->type == KEY_EVENT_SHORT) {
         if (e->id == KEY_ID_UP && ui_runtime_get_alarm_field() > 0U) ui_runtime_set_alarm_field((uint8_t)(ui_runtime_get_alarm_field() - 1U));
-        else if (e->id == KEY_ID_DOWN && ui_runtime_get_alarm_field() < 3U) ui_runtime_set_alarm_field((uint8_t)(ui_runtime_get_alarm_field() + 1U));
+        else if (e->id == KEY_ID_DOWN && ui_runtime_get_alarm_field() < 4U) ui_runtime_set_alarm_field((uint8_t)(ui_runtime_get_alarm_field() + 1U));
         else if (e->id == KEY_ID_BACK) ui_core_go(PAGE_ALARM, -1, now_ms);
         else if (e->id == KEY_ID_OK) {
             if (ui_runtime_get_alarm_field() == 0U) ui_request_set_alarm_enabled_at(domain_state.alarm_selected, !domain_state.selected_alarm.enabled);

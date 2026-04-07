@@ -81,6 +81,7 @@ typedef struct {
     float particle_inv_spacing;
     uint16_t num_particles;
     uint32_t last_ms;
+    bool frame_ready;
     bool initialized;
 } LiquidPageState;
 
@@ -192,6 +193,7 @@ static void liquid_reset_state(void)
     g_liquid.num_particles = (uint16_t)particle_index;
     g_liquid.particle_rest_density = 0.0f;
     g_liquid.last_ms = 0U;
+    g_liquid.frame_ready = false;
     g_liquid.initialized = true;
 }
 
@@ -674,6 +676,34 @@ static void liquid_get_led_grid(void)
     }
 }
 
+static void liquid_prime_cached_frame(void)
+{
+    int i;
+
+    memset(g_liquid.particle_density, 0, sizeof(g_liquid.particle_density));
+
+    for (i = 0; i < FLIP_SIM_CELLS; ++i) {
+        g_liquid.cell_type[i] = (g_liquid.solid[i] == 0.0f) ? FLIP_SOLID_CELL : FLIP_AIR_CELL;
+    }
+
+    for (i = 0; i < g_liquid.num_particles; ++i) {
+        int xi = clamp_i_local((int)(g_liquid.particle_pos[i * 2] * g_liquid.inv_spacing), 0, FLIP_SIM_W - 1);
+        int yi = clamp_i_local((int)(g_liquid.particle_pos[i * 2 + 1] * g_liquid.inv_spacing), 0, FLIP_SIM_H - 1);
+        int cell = FLIP_GRID_INDEX(xi, yi);
+
+        if (g_liquid.cell_type[cell] == FLIP_AIR_CELL) {
+            g_liquid.cell_type[cell] = FLIP_FLUID_CELL;
+        }
+    }
+
+    liquid_update_particle_density();
+    if (g_liquid.particle_rest_density <= 0.0f) {
+        g_liquid.particle_rest_density = liquid_calculate_rest_density();
+    }
+    liquid_get_led_grid();
+    g_liquid.frame_ready = true;
+}
+
 static void liquid_draw_led_grid(int16_t ox)
 {
     int cell_x;
@@ -701,12 +731,26 @@ static void liquid_draw_led_grid(int16_t ox)
 
 void ui_page_liquid_render(PageId page, int16_t ox)
 {
-    UiSystemSnapshot snap;
     (void)page;
 
-    ui_get_system_snapshot(&snap);
-    liquid_step_simulation(&snap);
-    liquid_get_led_grid();
+    if (!g_liquid.initialized) {
+        liquid_reset_state();
+    }
+
+    if (ui_runtime_is_transition_render()) {
+        g_liquid.last_ms = platform_time_now_ms();
+        if (!g_liquid.frame_ready) {
+            liquid_prime_cached_frame();
+        }
+    } else {
+        UiSystemSnapshot snap;
+
+        ui_get_system_snapshot(&snap);
+        liquid_step_simulation(&snap);
+        liquid_get_led_grid();
+        g_liquid.frame_ready = true;
+    }
+
     liquid_draw_led_grid(ox);
 }
 

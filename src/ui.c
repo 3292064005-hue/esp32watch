@@ -26,6 +26,35 @@ static uint8_t g_ui_model_mutation_count;
 static const char * const g_weekdays[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
 static bool g_ui_initialized;
 
+#define UI_LAYOUT_HEADER_LINE_Y       11
+#define UI_LAYOUT_FOOTER_LINE_Y       55
+#define UI_LAYOUT_FOOTER_TEXT_Y       57
+
+static int16_t ui_anim_eased_shift(uint32_t elapsed_ms, uint32_t duration_ms)
+{
+    float t;
+    float eased;
+    int32_t shift;
+
+    if (duration_ms == 0U) {
+        return OLED_WIDTH;
+    }
+
+    if (elapsed_ms >= duration_ms) {
+        return OLED_WIDTH;
+    }
+
+    t = (float)elapsed_ms / (float)duration_ms;
+    eased = t * t * (3.0f - 2.0f * t);
+    shift = (int32_t)(eased * (float)OLED_WIDTH + 0.5f);
+    if (shift < 0) {
+        shift = 0;
+    } else if (shift > OLED_WIDTH) {
+        shift = OLED_WIDTH;
+    }
+    return (int16_t)shift;
+}
+
 /**
  * @brief Queue a page-originated model mutation for the app orchestrator.
  *
@@ -132,6 +161,7 @@ bool ui_get_runtime_snapshot(UiRuntimeSnapshot *out)
     out->from = g_ui.from;
     out->to = g_ui.to;
     out->animating = g_ui.animating;
+    out->transition_render = g_ui.transition_render;
     out->dir = g_ui.dir;
     out->anim_start_ms = g_ui.anim_start_ms;
     out->last_input_ms = g_ui.last_input_ms;
@@ -458,22 +488,46 @@ void ui_core_apply_brightness(void)
 
 void ui_core_draw_header(int16_t x, const char *title)
 {
-    display_draw_text_centered_5x7(x, 2, 128, title, true);
-    display_draw_hline(x + 4, 11, 120, true);
+    int16_t pill_w = display_text_width_5x7(title) + 10;
+    int16_t line_x = x + pill_w + 8;
+
+    if (pill_w < 26) {
+        pill_w = 26;
+    }
+
+    display_fill_round_rect(x + 4, 1, pill_w, 9, true);
+    display_draw_text_5x7(x + 9, 2, title, false);
+    if (line_x < x + 123) {
+        display_draw_hline(line_x, 5, (x + 123) - line_x, true);
+    }
+    display_draw_hline(x + 4, UI_LAYOUT_HEADER_LINE_Y, 120, true);
+}
+
+void ui_core_draw_footer_hint(int16_t x, const char *text)
+{
+    if (text == NULL || *text == '\0') {
+        return;
+    }
+
+    display_draw_hline(x + 4, UI_LAYOUT_FOOTER_LINE_Y, 120, true);
+    display_draw_text_centered_5x7(x, UI_LAYOUT_FOOTER_TEXT_Y, 128, text, true);
 }
 
 void ui_core_draw_scrollbar(int16_t x, int16_t y, int16_t h, uint8_t total, uint8_t index)
 {
+    int16_t thumb_h;
+    int16_t travel;
+    int16_t thumb_y;
+
     if (total <= 1U) return;
-    display_draw_rect(x, y, 3, h, true);
+
+    display_draw_vline(x + 1, y, h, true);
     {
-        int16_t thumb_h = h / total;
-        int16_t travel;
-        int16_t thumb_y;
-        if (thumb_h < 6) thumb_h = 6;
+        thumb_h = h / total;
+        if (thumb_h < 7) thumb_h = 7;
         travel = h - thumb_h;
-        thumb_y = y + (travel * index) / (total - 1U);
-        display_fill_rect(x + 1, thumb_y + 1, 1, thumb_h - 2, true);
+        thumb_y = y + ((total > 1U) ? ((travel * index) / (total - 1U)) : 0);
+        display_fill_round_rect(x, thumb_y, 3, thumb_h, true);
     }
 }
 
@@ -498,6 +552,55 @@ void ui_core_draw_status_bar(int16_t ox)
     if (domain_state.settings.dnd) display_draw_text_5x7(ox + 14, 2, "DND", true);
 }
 
+void ui_core_draw_card(int16_t x, int16_t y, int16_t w, int16_t h, const char *title)
+{
+    display_draw_round_rect(x, y, w, h, true);
+    if (title != NULL && *title != '\0') {
+        int16_t tag_w = display_text_width_5x7(title) + 8;
+
+        if (tag_w > (w - 8)) {
+            tag_w = w - 8;
+        }
+        display_fill_round_rect(x + 4, y + 1, tag_w, 9, true);
+        display_draw_text_5x7(x + 8, y + 2, title, false);
+    }
+}
+
+void ui_core_draw_kv_row(int16_t x, int16_t y, int16_t w, const char *label, const char *value)
+{
+    if (label != NULL && *label != '\0') {
+        display_draw_text_5x7(x + 6, y, label, true);
+    }
+    if (value != NULL && *value != '\0') {
+        display_draw_text_right_5x7(x + w - 6, y, value, true);
+    }
+    display_draw_hline(x + 4, y + 8, w - 8, true);
+}
+
+void ui_core_draw_list_item(int16_t x, int16_t y, int16_t w, const char *label, const char *value, bool selected, bool accent)
+{
+    int16_t box_x = x + 6;
+    bool text_color = true;
+
+    if (selected) {
+        display_fill_round_rect(box_x, y, w, 10, true);
+        text_color = false;
+    } else {
+        display_draw_hline(box_x + 4, y + 10, w - 8, true);
+    }
+
+    if (accent) {
+        display_fill_rect(box_x + 3, y + 2, 2, 6, selected ? false : true);
+    }
+
+    if (label != NULL && *label != '\0') {
+        display_draw_text_5x7(box_x + 8, y + 2, label, text_color);
+    }
+    if (value != NULL && *value != '\0') {
+        display_draw_text_right_5x7(box_x + w - 8, y + 2, value, text_color);
+    }
+}
+
 void ui_init(void)
 {
     memset(&g_ui, 0, sizeof(g_ui));
@@ -517,14 +620,17 @@ void ui_init(void)
 
 void ui_render(void)
 {
+    bool transition_render = g_ui.animating;
+
     if (g_ui.sleeping) return;
     display_service_begin_frame();
+    ui_runtime_set_transition_render(transition_render);
 
     if (g_ui.animating) {
         uint32_t elapsed = platform_time_now_ms() - g_ui.anim_start_ms;
         if (elapsed > app_tuning_manifest_get()->ui_anim_duration_ms) elapsed = app_tuning_manifest_get()->ui_anim_duration_ms;
         {
-            int16_t shift = (int16_t)((elapsed * OLED_WIDTH) / app_tuning_manifest_get()->ui_anim_duration_ms);
+            int16_t shift = ui_anim_eased_shift(elapsed, app_tuning_manifest_get()->ui_anim_duration_ms);
             int16_t from_x = (g_ui.dir > 0) ? -shift : shift;
             int16_t to_x = (g_ui.dir > 0) ? (OLED_WIDTH - shift) : (shift - OLED_WIDTH);
             ui_core_render_page(g_ui.from, from_x);
@@ -534,6 +640,7 @@ void ui_render(void)
         ui_core_render_page(g_ui.current, 0);
     }
 
+    ui_runtime_set_transition_render(false);
     ui_popup_render();
     display_service_end_frame();
     g_ui.last_render_ms = platform_time_now_ms();
@@ -550,4 +657,3 @@ bool ui_is_initialized(void)
 {
     return g_ui_initialized;
 }
-

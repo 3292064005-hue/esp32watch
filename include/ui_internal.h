@@ -41,6 +41,7 @@ typedef struct {
     PageId from;
     PageId to;
     bool animating;
+    bool transition_render;
     int8_t dir;
     uint32_t anim_start_ms;
     uint32_t last_input_ms;
@@ -270,6 +271,7 @@ typedef struct {
     PageId from;
     PageId to;
     bool animating;
+    bool transition_render;
     int8_t dir;
     uint32_t anim_start_ms;
     uint32_t last_input_ms;
@@ -300,6 +302,8 @@ static inline PageId ui_runtime_get_to_page(void) { return g_ui.to; }
 static inline void ui_runtime_set_to_page(PageId page) { g_ui.to = page; }
 static inline bool ui_runtime_is_animating(void) { return g_ui.animating; }
 static inline void ui_runtime_set_animating(bool animating) { g_ui.animating = animating; }
+static inline bool ui_runtime_is_transition_render(void) { return g_ui.transition_render; }
+static inline void ui_runtime_set_transition_render(bool transition_render) { g_ui.transition_render = transition_render; }
 static inline int8_t ui_runtime_get_nav_dir(void) { return g_ui.dir; }
 static inline void ui_runtime_set_nav_dir(int8_t dir) { g_ui.dir = dir; }
 static inline uint32_t ui_runtime_get_anim_start_ms(void) { return g_ui.anim_start_ms; }
@@ -334,8 +338,12 @@ const char *ui_weekday_name(uint8_t weekday);
 void ui_core_mark_dirty(void);
 void ui_core_go(PageId next, int8_t dir, uint32_t now_ms);
 void ui_core_draw_header(int16_t x, const char *title);
+void ui_core_draw_footer_hint(int16_t x, const char *text);
 void ui_core_draw_scrollbar(int16_t x, int16_t y, int16_t h, uint8_t total, uint8_t index);
 void ui_core_draw_status_bar(int16_t ox);
+void ui_core_draw_card(int16_t x, int16_t y, int16_t w, int16_t h, const char *title);
+void ui_core_draw_kv_row(int16_t x, int16_t y, int16_t w, const char *label, const char *value);
+void ui_core_draw_list_item(int16_t x, int16_t y, int16_t w, const char *label, const char *value, bool selected, bool accent);
 void ui_core_apply_brightness(void);
 void ui_core_haptic_soft(void);
 void ui_core_haptic_confirm(void);

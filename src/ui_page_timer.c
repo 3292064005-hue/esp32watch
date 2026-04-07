@@ -8,21 +8,25 @@ void ui_page_timer_render(PageId page, int16_t ox)
 {
     ModelDomainState domain_state;
     char line[24];
+    uint8_t pct;
 
     (void)page;
     if (model_get_domain_state(&domain_state) == NULL) {
         return;
     }
+
+    pct = (uint8_t)APP_CLAMP((domain_state.timer.preset_s == 0U) ? 0U : (domain_state.timer.remain_s * 100UL) / domain_state.timer.preset_s, 0U, 100U);
     ui_core_draw_header(ox, "Timer");
+    ui_core_draw_card(ox + 8, 14, 112, 22, domain_state.timer.running ? "RUNNING" : "READY");
     snprintf(line, sizeof(line), "%02lu:%02lu", (unsigned long)(domain_state.timer.remain_s / 60U), (unsigned long)(domain_state.timer.remain_s % 60U));
-    display_draw_text_centered_5x7(ox, 18, 128, line, true);
-    snprintf(line, sizeof(line), "preset %lus", (unsigned long)domain_state.timer.preset_s);
-    display_draw_text_centered_5x7(ox, 29, 128, line, true);
-    display_draw_progress_bar(ox + 16, 40, 96, 10,
-                              (uint8_t)APP_CLAMP((domain_state.timer.preset_s == 0U) ? 0U : (domain_state.timer.remain_s * 100UL) / domain_state.timer.preset_s, 0U, 100U), false);
-    snprintf(line, sizeof(line), "slot %u/%u", (unsigned)(domain_state.timer.preset_index + 1U), (unsigned)APP_TIMER_PRESET_COUNT);
-    display_draw_text_centered_5x7(ox, 54, 128, line, true);
-    display_draw_text_centered_5x7(ox, 61, 128, domain_state.timer.running ? "OK pause DN reset" : "UP/DN tune BK preset", true);
+    display_draw_text_centered_5x7(ox, 22, 128, line, true);
+    display_draw_progress_bar(ox + 18, 39, 92, 8, pct, false);
+    snprintf(line, sizeof(line), "%lus  SLOT %u/%u",
+             (unsigned long)domain_state.timer.preset_s,
+             (unsigned)(domain_state.timer.preset_index + 1U),
+             (unsigned)APP_TIMER_PRESET_COUNT);
+    display_draw_text_centered_5x7(ox, 48, 128, line, true);
+    ui_core_draw_footer_hint(ox, domain_state.timer.running ? "OK Pause  DN Reset" : "OK Start  BK Preset");
 }
 
 bool ui_page_timer_handle(PageId page, const KeyEvent *e, uint32_t now_ms)
