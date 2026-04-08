@@ -28,6 +28,7 @@ void ui_snapshot_build(UiSystemSnapshot *out, uint32_t now_ms)
     out->domain = domain_state;
     out->runtime = runtime_state;
     out->ui = ui_state;
+    out->game_stats = domain_state.game_stats;
 
     out->activity.steps = domain_state.activity.steps;
     out->activity.goal = domain_state.activity.goal;

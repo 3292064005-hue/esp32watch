@@ -10,6 +10,9 @@ static void ui_core_start_anim(PageId next, int8_t dir, uint32_t now_ms)
     if (next == ui_runtime_get_current_page()) return;
     ui_runtime_set_from_page(ui_runtime_get_current_page());
     ui_runtime_set_to_page(next);
+    if (ui_page_game_is_page(next)) {
+        ui_page_game_reset(next);
+    }
     ui_runtime_set_nav_dir(dir);
     ui_runtime_set_anim_start_ms(now_ms);
     ui_runtime_set_animating(model_get_domain_state(&domain_state) != NULL ? domain_state.settings.animations : false);

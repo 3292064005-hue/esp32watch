@@ -2,12 +2,13 @@
 #include "display.h"
 
 static const char * const app_names[] = {
-    "Alarms", "Stopwatch", "Timer", "Activity", "Sensor",
-    "Liquid", "Settings", "Diag", "Calib", "Input", "Storage", "About"
+    "Alarms", "Timer", "Activity", "Settings", "Games", "Stopwatch",
+    "Sensor", "Diag", "Storage", "Calib", "Input", "Liquid", "About"
 };
 static const PageId app_pages[] = {
-    PAGE_ALARM, PAGE_STOPWATCH, PAGE_TIMER, PAGE_ACTIVITY, PAGE_SENSOR,
-    PAGE_LIQUID, PAGE_SETTINGS, PAGE_DIAG, PAGE_CALIBRATION, PAGE_INPUTTEST, PAGE_STORAGE, PAGE_ABOUT
+    PAGE_ALARM, PAGE_TIMER, PAGE_ACTIVITY, PAGE_SETTINGS, PAGE_GAMES, PAGE_STOPWATCH,
+    PAGE_SENSOR, PAGE_DIAG, PAGE_STORAGE, PAGE_CALIBRATION,
+    PAGE_INPUTTEST, PAGE_LIQUID, PAGE_ABOUT
 };
 
 void ui_page_apps_render(PageId page, int16_t ox)
@@ -19,12 +20,19 @@ void ui_page_apps_render(PageId page, int16_t ox)
     ui_core_draw_header(ox, "Apps");
     for (uint8_t i = 0U; i < 4U; ++i) {
         uint8_t idx = page_start + i;
+        char value[16] = "";
+        bool accent = idx >= 6U;
 
         if (idx >= total) break;
-        ui_core_draw_list_item(ox, 14 + i * 10, 110, app_names[idx], "", idx == ui_runtime_get_app_index(), false);
+        if (app_pages[idx] == PAGE_ALARM) ui_status_compose_alarm_value(value, sizeof(value));
+        else if (app_pages[idx] == PAGE_ACTIVITY) ui_status_compose_activity_value(value, sizeof(value));
+        else if (app_pages[idx] == PAGE_SENSOR) ui_status_compose_sensor_value(value, sizeof(value));
+        else if (app_pages[idx] == PAGE_STORAGE) ui_status_compose_storage_value(value, sizeof(value));
+        else if (app_pages[idx] == PAGE_DIAG) ui_status_compose_diag_value(value, sizeof(value));
+        ui_core_draw_list_item(ox, 14 + i * 10, 110, app_names[idx], value, idx == ui_runtime_get_app_index(), accent);
     }
     ui_core_draw_scrollbar(ox + 121, 14, 40, total, ui_runtime_get_app_index());
-    ui_core_draw_footer_hint(ox, "OK Open  BK Watch");
+    ui_core_draw_footer_hint(ox, "OK Open  BK Home");
 }
 
 bool ui_page_apps_handle(PageId page, const KeyEvent *e, uint32_t now_ms)

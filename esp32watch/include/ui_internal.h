@@ -16,6 +16,14 @@ typedef enum {
     PAGE_ALARM_EDIT,
     PAGE_STOPWATCH,
     PAGE_TIMER,
+    PAGE_GAMES,
+    PAGE_GAME_DETAIL,
+    PAGE_BREAKOUT,
+    PAGE_DINO,
+    PAGE_PONG,
+    PAGE_SNAKE,
+    PAGE_TETRIS,
+    PAGE_SHOOTER,
     PAGE_ACTIVITY,
     PAGE_SENSOR,
     PAGE_SETTINGS,
@@ -50,6 +58,8 @@ typedef struct {
     bool dirty;
     uint8_t quick_index;
     uint8_t app_index;
+    uint8_t game_index;
+    uint8_t game_detail_index;
     uint8_t settings_index;
     uint8_t alarm_field;
     uint8_t time_field;
@@ -65,6 +75,7 @@ typedef enum {
     UI_REFRESH_WATCHFACE,
     UI_REFRESH_CARD,
     UI_REFRESH_SENSOR,
+    UI_REFRESH_GAME,
     UI_REFRESH_LIQUID,
     UI_REFRESH_TIMER,
     UI_REFRESH_STOPWATCH
@@ -193,7 +204,8 @@ typedef enum {
     UI_MODEL_MUTATION_TIMER_TOGGLE,
     UI_MODEL_MUTATION_TIMER_ADJUST_SECONDS,
     UI_MODEL_MUTATION_TIMER_CYCLE_PRESET,
-    UI_MODEL_MUTATION_SET_DATETIME
+    UI_MODEL_MUTATION_SET_DATETIME,
+    UI_MODEL_MUTATION_SET_GAME_HIGH_SCORE
 } UiModelMutationType;
 
 typedef struct {
@@ -219,6 +231,10 @@ typedef struct {
             uint8_t index;
             uint8_t repeat_mask;
         } alarm_repeat;
+        struct {
+            uint8_t game_id;
+            uint16_t score;
+        } game_high_score;
     } data;
 } UiModelMutation;
 
@@ -230,6 +246,7 @@ typedef struct {
     UiSensorView sensor;
     UiSettingsView settings;
     UiStorageView storage;
+    GameStatsState game_stats;
     const char *storage_backend_name;
     const char *storage_commit_state_name;
     bool storage_transaction_active;
@@ -321,6 +338,10 @@ static inline uint8_t ui_runtime_get_quick_index(void) { return g_ui.quick_index
 static inline void ui_runtime_set_quick_index(uint8_t index) { g_ui.quick_index = index; }
 static inline uint8_t ui_runtime_get_app_index(void) { return g_ui.app_index; }
 static inline void ui_runtime_set_app_index(uint8_t index) { g_ui.app_index = index; }
+static inline uint8_t ui_runtime_get_game_index(void) { return g_ui.game_index; }
+static inline void ui_runtime_set_game_index(uint8_t index) { g_ui.game_index = index; }
+static inline uint8_t ui_runtime_get_game_detail_index(void) { return g_ui.game_detail_index; }
+static inline void ui_runtime_set_game_detail_index(uint8_t index) { g_ui.game_detail_index = index; }
 static inline uint8_t ui_runtime_get_settings_index(void) { return g_ui.settings_index; }
 static inline void ui_runtime_set_settings_index(uint8_t index) { g_ui.settings_index = index; }
 static inline uint8_t ui_runtime_get_alarm_field(void) { return g_ui.alarm_field; }
@@ -344,6 +365,13 @@ void ui_core_draw_status_bar(int16_t ox);
 void ui_core_draw_card(int16_t x, int16_t y, int16_t w, int16_t h, const char *title);
 void ui_core_draw_kv_row(int16_t x, int16_t y, int16_t w, const char *label, const char *value);
 void ui_core_draw_list_item(int16_t x, int16_t y, int16_t w, const char *label, const char *value, bool selected, bool accent);
+void ui_status_compose_header_tags(char *out, size_t out_size);
+void ui_status_compose_alarm_value(char *out, size_t out_size);
+void ui_status_compose_activity_value(char *out, size_t out_size);
+void ui_status_compose_sensor_value(char *out, size_t out_size);
+void ui_status_compose_storage_value(char *out, size_t out_size);
+void ui_status_compose_diag_value(char *out, size_t out_size);
+void ui_status_compose_network_value(char *line, size_t line_size, char *subline, size_t subline_size);
 void ui_core_apply_brightness(void);
 void ui_core_haptic_soft(void);
 void ui_core_haptic_confirm(void);
@@ -365,6 +393,22 @@ void ui_page_stopwatch_render(PageId page, int16_t ox);
 bool ui_page_stopwatch_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
 void ui_page_timer_render(PageId page, int16_t ox);
 bool ui_page_timer_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_games_menu_render(PageId page, int16_t ox);
+bool ui_page_games_menu_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_game_detail_render(PageId page, int16_t ox);
+bool ui_page_game_detail_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_breakout_render(PageId page, int16_t ox);
+bool ui_page_breakout_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_dino_render(PageId page, int16_t ox);
+bool ui_page_dino_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_pong_render(PageId page, int16_t ox);
+bool ui_page_pong_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_snake_render(PageId page, int16_t ox);
+bool ui_page_snake_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_tetris_render(PageId page, int16_t ox);
+bool ui_page_tetris_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_shooter_render(PageId page, int16_t ox);
+bool ui_page_shooter_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
 void ui_page_tools_render(PageId page, int16_t ox);
 bool ui_page_tools_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
 void ui_page_settings_main_render(PageId page, int16_t ox);
@@ -406,6 +450,17 @@ const UiPageOps *ui_page_registry_get(PageId page);
 void ui_get_system_snapshot(UiSystemSnapshot *out);
 bool ui_get_runtime_snapshot(UiRuntimeSnapshot *out);
 void ui_runtime_set_sleeping(bool sleeping);
+bool ui_page_game_is_page(PageId page);
+void ui_page_game_reset(PageId page);
+uint8_t ui_game_count(void);
+PageId ui_game_page_from_index(uint8_t index);
+GameId ui_game_id_from_page(PageId page);
+GameId ui_game_id_from_index(uint8_t index);
+const char *ui_game_name(GameId game_id);
+const char *ui_game_detail_tag(GameId game_id);
+const char *ui_game_detail_desc(GameId game_id);
+const char *ui_game_detail_controls_a(GameId game_id);
+const char *ui_game_detail_controls_b(GameId game_id);
 /**
  * @brief Queue a sensor reinitialization action for the app orchestrator.
  *
@@ -499,6 +554,7 @@ void ui_request_timer_toggle(uint32_t now_ms);
 void ui_request_timer_adjust_seconds(int32_t delta_s);
 void ui_request_timer_cycle_preset(int8_t dir);
 void ui_request_set_datetime(const DateTime *dt);
+void ui_request_set_game_high_score(GameId game_id, uint16_t score);
 
 /**
  * @brief Queue sensor setting synchronization through the app orchestrator.

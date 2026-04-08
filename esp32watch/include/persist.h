@@ -16,6 +16,8 @@ void persist_save_settings(const SettingsState *settings);
 void persist_load_settings(SettingsState *settings);
 void persist_save_alarms(const AlarmState *alarms, uint8_t count);
 void persist_load_alarms(AlarmState *alarms, uint8_t count);
+void persist_save_game_stats(const GameStatsState *stats);
+void persist_load_game_stats(GameStatsState *stats);
 void persist_save_sensor_calibration(const SensorCalibrationData *cal);
 void persist_load_sensor_calibration(SensorCalibrationData *cal);
 

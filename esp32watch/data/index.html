@@ -3,59 +3,52 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ESP32 Watch Console</title>
-  <link rel="stylesheet" href="/app.css?v=20260406_3" />
+  <title>ESP32 Watch Terminal</title>
+  <link rel="stylesheet" href="/app.css?v=20260408_1" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <h1>ESP32 Watch Console</h1>
+        <p class="eyebrow">Terminal Console</p>
+        <h1>ESP32 Watch</h1>
         <p id="deviceMeta">Connecting...</p>
       </div>
-      <div class="topbar-actions">
+      <div class="topbar-side">
+        <div id="tagBar" class="tag-bar"></div>
         <button id="refreshBtn">Refresh</button>
       </div>
     </header>
 
     <main class="dashboard">
-      <section class="card" id="statusCard">
-        <h2>Device Status</h2>
-        <div class="kv-grid" id="statusGrid"></div>
+      <section class="card section-wide" id="statusCard">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Overview</p>
+            <h2>Terminal Status</h2>
+          </div>
+        </div>
+        <div class="terminal-grid" id="terminalGrid"></div>
       </section>
 
-      <section class="card" id="keypadCard">
-        <h2>Keypad</h2>
-        <div class="keypad">
-          <button data-key="up" class="key key-up">UP</button>
-          <button data-key="back" class="key key-back">BACK</button>
-          <button data-key="ok" class="key key-ok">OK</button>
-          <button data-key="down" class="key key-down">DOWN</button>
+      <section class="card section-wide" id="hubCard">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Device Hub</p>
+            <h2>Hub Cards</h2>
+          </div>
         </div>
-
-        <div class="inline-form">
-          <label for="keyEventType">Event Type</label>
-          <select id="keyEventType">
-            <option value="short">short</option>
-            <option value="long">long</option>
-            <option value="repeat">repeat</option>
-            <option value="press">press</option>
-            <option value="release">release</option>
-          </select>
-        </div>
+        <div class="hub-grid" id="hubGrid"></div>
       </section>
 
-      <section class="card" id="overlayCard">
-        <h2>OLED Overlay</h2>
-        <textarea id="overlayText" maxlength="63" rows="4" placeholder="Up to 63 characters"></textarea>
-        <div class="form-meta">
-          <span id="overlayCount">0 / 63</span>
+      <section class="card live-card" id="oledCard">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Live Device</p>
+            <h2>OLED + Input</h2>
+          </div>
         </div>
-        <div class="button-row">
-          <button id="previewBtn">Preview Text</button>
-          <button id="sendOverlayBtn">Send Overlay</button>
-          <button id="clearOverlayBtn" class="ghost">Clear Overlay</button>
-        </div>
+
         <div class="oled-live">
           <div class="oled-frame">
             <canvas id="oledCanvas" class="oled-canvas" width="128" height="64"></canvas>
@@ -64,28 +57,78 @@
             <span>LIVE OLED 128x64</span>
             <span id="oledFrameState">Waiting for frame...</span>
           </div>
-          <div class="oled-preview" id="oledPreview">Draft preview will appear here.</div>
+        </div>
+
+        <div class="keypad-panel">
+          <div class="keypad">
+            <button data-key="up" class="key key-up">UP</button>
+            <button data-key="back" class="key key-back">BACK</button>
+            <button data-key="ok" class="key key-ok">OK</button>
+            <button data-key="down" class="key key-down">DOWN</button>
+          </div>
+
+          <div class="inline-form">
+            <label for="keyEventType">Event Type</label>
+            <select id="keyEventType">
+              <option value="short">short</option>
+              <option value="long">long</option>
+              <option value="repeat">repeat</option>
+              <option value="press">press</option>
+              <option value="release">release</option>
+            </select>
+          </div>
         </div>
       </section>
 
-      <section class="card" id="commandCard">
-        <h2>Commands</h2>
-        <div class="button-grid">
-          <button data-command="sensorReinit">Sensor Reinit</button>
-          <button data-command="sensorCalibration">Start Calibration</button>
-          <button data-command="storageManualFlush">Manual Storage Flush</button>
-          <button data-command="clearSafeMode">Clear Safe Mode</button>
+      <section class="card action-card" id="actionCard">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Control</p>
+            <h2>Actions & Diagnostics</h2>
+          </div>
         </div>
-      </section>
 
-      <section class="card" id="diagCard">
-        <h2>Diagnostics</h2>
-        <div id="diagPanel"></div>
+        <div class="panel-stack">
+          <section class="subpanel">
+            <h3>Overlay</h3>
+            <textarea id="overlayText" maxlength="63" rows="4" placeholder="Up to 63 characters"></textarea>
+            <div class="form-meta">
+              <span id="overlayCount">0 / 63</span>
+            </div>
+            <div class="button-row">
+              <button id="previewBtn">Preview</button>
+              <button id="sendOverlayBtn">Send</button>
+              <button id="clearOverlayBtn" class="ghost">Clear</button>
+            </div>
+            <div class="oled-preview" id="oledPreview">Draft preview will appear here.</div>
+          </section>
+
+          <section class="subpanel">
+            <h3>Commands</h3>
+            <div class="button-grid">
+              <button data-command="sensorReinit">Reinit</button>
+              <button data-command="sensorCalibration">Calibrate</button>
+              <button data-command="storageManualFlush">Flush</button>
+              <button data-command="clearSafeMode">Clear Safe</button>
+            </div>
+          </section>
+
+          <section class="subpanel dual-panels">
+            <div>
+              <h3>Diag</h3>
+              <div class="mini-grid" id="diagPanel"></div>
+            </div>
+            <div>
+              <h3>Storage</h3>
+              <div class="mini-grid" id="storagePanel"></div>
+            </div>
+          </section>
+        </div>
       </section>
     </main>
   </div>
 
   <div id="toastHost" class="toast-host"></div>
-  <script src="/app.js?v=20260406_3"></script>
+  <script src="/app.js?v=20260408_1"></script>
 </body>
 </html>

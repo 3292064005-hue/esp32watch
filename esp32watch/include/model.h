@@ -73,13 +73,24 @@ typedef enum {
 } TimeState;
 
 typedef enum {
+    GAME_ID_BREAKOUT = 0,
+    GAME_ID_DINO,
+    GAME_ID_PONG,
+    GAME_ID_SNAKE,
+    GAME_ID_TETRIS,
+    GAME_ID_SHOOTER,
+    GAME_ID_COUNT
+} GameId;
+
+typedef enum {
     MODEL_RUNTIME_REQUEST_NONE = 0,
     MODEL_RUNTIME_REQUEST_STAGE_SETTINGS = 1 << 0,
     MODEL_RUNTIME_REQUEST_STAGE_ALARMS = 1 << 1,
     MODEL_RUNTIME_REQUEST_STORAGE_COMMIT = 1 << 2,
     MODEL_RUNTIME_REQUEST_APPLY_BRIGHTNESS = 1 << 3,
     MODEL_RUNTIME_REQUEST_SYNC_SENSOR_SETTINGS = 1 << 4,
-    MODEL_RUNTIME_REQUEST_CLEAR_SENSOR_CALIBRATION = 1 << 5
+    MODEL_RUNTIME_REQUEST_CLEAR_SENSOR_CALIBRATION = 1 << 5,
+    MODEL_RUNTIME_REQUEST_STAGE_GAME_STATS = 1 << 6
 } ModelRuntimeRequestFlags;
 
 typedef struct {
@@ -174,6 +185,15 @@ typedef struct {
 } SettingsState;
 
 typedef struct {
+    uint16_t breakout_hi;
+    uint16_t dino_hi;
+    uint16_t pong_hi;
+    uint16_t snake_hi;
+    uint16_t tetris_hi;
+    uint16_t shooter_hi;
+} GameStatsState;
+
+typedef struct {
     DateTime now;
     bool time_valid;
     TimeState time_state;
@@ -186,6 +206,7 @@ typedef struct {
     ActivityState activity;
     SensorState sensor;
     SettingsState settings;
+    GameStatsState game_stats;
     uint16_t battery_mv;
     uint8_t battery_percent;
     bool battery_present;
@@ -232,6 +253,7 @@ typedef struct {
     TimerState timer;
     ActivityState activity;
     SettingsState settings;
+    GameStatsState game_stats;
     uint16_t current_day_id;
 } ModelDomainState;
 
@@ -377,6 +399,9 @@ void model_set_animations(bool enabled);
 void model_set_sensor_sensitivity(uint8_t level);
 void model_set_screen_timeout_idx(uint8_t idx);
 void model_cycle_screen_timeout(int8_t dir);
+bool model_set_game_high_score(GameId game_id, uint16_t score);
+uint16_t model_get_game_high_score(GameId game_id);
+const GameStatsState *model_get_game_stats(GameStatsState *out);
 
 void model_update_sensor_raw(const SensorSnapshot *snap, uint32_t now_ms);
 void model_update_activity(bool wrist_raise, uint8_t activity_level,

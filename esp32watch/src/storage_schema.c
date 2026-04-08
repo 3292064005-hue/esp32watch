@@ -33,7 +33,8 @@ size_t storage_schema_payload_size_for_version(uint8_t version)
 {
     switch (version) {
         case STORAGE_SCHEMA_VERSION_V4: return sizeof(StorageSchemaPayloadV4);
-        case STORAGE_SCHEMA_VERSION_CURRENT: return sizeof(StorageSchemaPayloadV5);
+        case STORAGE_SCHEMA_VERSION_V5: return sizeof(StorageSchemaPayloadV5);
+        case STORAGE_SCHEMA_VERSION_CURRENT: return sizeof(StorageSchemaPayloadV6);
         default: return 0U;
     }
 }
@@ -46,7 +47,7 @@ bool storage_schema_validate_payload(const StorageSchemaPayload *payload)
     if (payload == NULL) {
         return false;
     }
-    storage_schema_to_runtime(payload, &settings, alarms, APP_MAX_ALARMS, &cal);
+    storage_schema_to_runtime(payload, &settings, alarms, APP_MAX_ALARMS, &cal, NULL);
     (void)cal;
     if (settings.goal < 1000U || settings.goal > 30000U) {
         return false;
@@ -65,6 +66,24 @@ bool storage_schema_validate_payload(const StorageSchemaPayload *payload)
     return true;
 }
 
+static bool migrate_v5_to_current(const StorageSchemaPayloadV5 *src, StorageSchemaPayload *dst)
+{
+    if (src == NULL || dst == NULL) {
+        return false;
+    }
+
+    memset(dst, 0, sizeof(*dst));
+    dst->settings0 = src->settings0;
+    dst->settings1 = src->settings1;
+    dst->settings2 = src->settings2;
+    memcpy(dst->alarms, src->alarms, sizeof(dst->alarms));
+    dst->alarm_meta = src->alarm_meta;
+    memcpy(dst->cal, src->cal, sizeof(dst->cal));
+    dst->reserved[0] = src->reserved[0];
+    dst->reserved[1] = src->reserved[1];
+    return true;
+}
+
 static bool migrate_v4_to_current(const StorageSchemaPayloadV4 *src, StorageSchemaPayload *dst)
 {
     if (src == NULL || dst == NULL) {
@@ -77,7 +96,8 @@ static bool migrate_v4_to_current(const StorageSchemaPayloadV4 *src, StorageSche
     memcpy(dst->alarms, src->alarms, sizeof(dst->alarms));
     dst->alarm_meta = src->alarm_meta;
     memcpy(dst->cal, src->cal, sizeof(dst->cal));
-    memcpy(dst->reserved, src->reserved, sizeof(dst->reserved));
+    dst->reserved[0] = src->reserved[0];
+    dst->reserved[1] = src->reserved[1];
     return true;
 }
 
@@ -94,6 +114,17 @@ bool storage_schema_upgrade_payload(uint8_t src_version,
             return false;
         }
         memcpy(dst_payload, src_payload, sizeof(StorageSchemaPayload));
+        return storage_schema_validate_payload(dst_payload);
+    }
+    if (src_version == STORAGE_SCHEMA_VERSION_V5) {
+        StorageSchemaPayload migrated;
+        if (src_len != sizeof(StorageSchemaPayloadV5)) {
+            return false;
+        }
+        if (!migrate_v5_to_current((const StorageSchemaPayloadV5 *)src_payload, &migrated)) {
+            return false;
+        }
+        *dst_payload = migrated;
         return storage_schema_validate_payload(dst_payload);
     }
     if (src_version == STORAGE_SCHEMA_VERSION_V4) {
@@ -113,19 +144,22 @@ bool storage_schema_upgrade_payload(uint8_t src_version,
 void storage_schema_from_runtime(StorageSchemaPayload *payload,
                                  const SettingsState *settings,
                                  const AlarmState *alarms,
-                                 const SensorCalibrationData *cal)
+                                 const SensorCalibrationData *cal,
+                                 const GameStatsState *game_stats)
 {
     SensorCalibrationData local_cal;
     AlarmState local_alarms[APP_MAX_ALARMS] = {0};
     SettingsState local_settings;
+    GameStatsState local_game_stats;
 
-    if (payload == NULL || settings == NULL || alarms == NULL || cal == NULL) {
+    if (payload == NULL || settings == NULL || alarms == NULL || cal == NULL || game_stats == NULL) {
         return;
     }
 
     memset(payload, 0, sizeof(*payload));
     local_settings = *settings;
     local_cal = *cal;
+    local_game_stats = *game_stats;
     for (uint8_t i = 0U; i < APP_MAX_ALARMS; ++i) {
         local_alarms[i] = alarms[i];
     }
@@ -141,6 +175,12 @@ void storage_schema_from_runtime(StorageSchemaPayload *payload,
     payload->cal[1] = local_cal.gx_bias;
     payload->cal[2] = local_cal.gy_bias;
     payload->cal[3] = local_cal.gz_bias;
+    payload->breakout_hi = local_game_stats.breakout_hi;
+    payload->dino_hi = local_game_stats.dino_hi;
+    payload->pong_hi = local_game_stats.pong_hi;
+    payload->snake_hi = local_game_stats.snake_hi;
+    payload->tetris_hi = local_game_stats.tetris_hi;
+    payload->shooter_hi = local_game_stats.shooter_hi;
     payload->reserved[0] = local_cal.valid ? STORAGE_SCHEMA_CAL_VALID_MAGIC : 0U;
 }
 
@@ -148,7 +188,8 @@ void storage_schema_to_runtime(const StorageSchemaPayload *payload,
                                SettingsState *settings,
                                AlarmState *alarms,
                                uint8_t count,
-                               SensorCalibrationData *cal)
+                               SensorCalibrationData *cal,
+                               GameStatsState *game_stats)
 {
     if (settings != NULL) {
         seed_default_settings(settings);
@@ -163,6 +204,9 @@ void storage_schema_to_runtime(const StorageSchemaPayload *payload,
     }
     if (cal != NULL) {
         memset(cal, 0, sizeof(*cal));
+    }
+    if (game_stats != NULL) {
+        memset(game_stats, 0, sizeof(*game_stats));
     }
 
     if (payload == NULL) {
@@ -193,5 +237,14 @@ void storage_schema_to_runtime(const StorageSchemaPayload *payload,
             cal->gy_bias = payload->cal[2];
             cal->gz_bias = payload->cal[3];
         }
+    }
+
+    if (game_stats != NULL) {
+        game_stats->breakout_hi = payload->breakout_hi;
+        game_stats->dino_hi = payload->dino_hi;
+        game_stats->pong_hi = payload->pong_hi;
+        game_stats->snake_hi = payload->snake_hi;
+        game_stats->tetris_hi = payload->tetris_hi;
+        game_stats->shooter_hi = payload->shooter_hi;
     }
 }

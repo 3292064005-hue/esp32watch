@@ -147,7 +147,9 @@ bool watch_app_should_defer_render(const WatchAppStageTelemetry *telemetry, uint
         return false;
     }
     ops = ui_page_registry_get((ui_get_runtime_snapshot(&ui_runtime) ? ui_runtime.current : PAGE_WATCHFACE));
-    if (ops->refresh_policy == UI_REFRESH_TIMER || ops->refresh_policy == UI_REFRESH_STOPWATCH) {
+    if (ops->refresh_policy == UI_REFRESH_TIMER ||
+        ops->refresh_policy == UI_REFRESH_STOPWATCH ||
+        ops->refresh_policy == UI_REFRESH_GAME) {
         return false;
     }
     return (loop_counter & 1U) != 0U;

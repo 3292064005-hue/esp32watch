@@ -134,6 +134,13 @@ void model_internal_persist_all_alarms(void)
     model_internal_request_runtime_sync(MODEL_RUNTIME_REQUEST_STAGE_ALARMS, STORAGE_COMMIT_REASON_NONE);
 }
 
+void model_internal_persist_game_stats(void)
+{
+    model_internal_request_runtime_sync(MODEL_RUNTIME_REQUEST_STAGE_GAME_STATS |
+                                            MODEL_RUNTIME_REQUEST_STORAGE_COMMIT,
+                                        STORAGE_COMMIT_REASON_IDLE);
+}
+
 static void set_alarm_defaults(AlarmState *alarm, uint8_t index)
 {
     memset(alarm, 0, sizeof(*alarm));
@@ -263,6 +270,7 @@ void model_init(void)
     memcpy(g_model.alarms, alarm_defaults, sizeof(g_model.alarms));
     storage_service_load_settings(&g_model.settings);
     storage_service_load_alarms(g_model.alarms, APP_MAX_ALARMS);
+    storage_service_load_game_stats(&g_model.game_stats);
     g_model.alarm_selected = 0U;
     model_internal_sync_selected_alarm_view();
 
@@ -287,6 +295,7 @@ void model_init(void)
     if (!g_model.storage_ok) {
         storage_service_save_settings(&g_model.settings);
         storage_service_save_alarms(g_model.alarms, APP_MAX_ALARMS);
+        storage_service_save_game_stats(&g_model.game_stats);
         storage_service_commit_now();
         model_internal_sync_storage_runtime();
     }
@@ -480,4 +489,3 @@ const char *model_time_state_name(TimeState state)
         default: return "UNSET";
     }
 }
-

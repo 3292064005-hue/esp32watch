@@ -35,24 +35,30 @@ void persist_flash_seed_default_alarm(AlarmState *alarm, uint8_t index)
 void persist_flash_payload_from_runtime(FlashStoragePayload *payload,
                                         const SettingsState *settings,
                                         const AlarmState *alarms,
-                                        const SensorCalibrationData *cal)
+                                        const SensorCalibrationData *cal,
+                                        const GameStatsState *game_stats)
 {
-    storage_schema_from_runtime(payload, settings, alarms, cal);
+    storage_schema_from_runtime(payload, settings, alarms, cal, game_stats);
 }
 
 void persist_flash_payload_to_settings(const FlashStoragePayload *payload, SettingsState *settings)
 {
-    storage_schema_to_runtime(payload, settings, NULL, 0U, NULL);
+    storage_schema_to_runtime(payload, settings, NULL, 0U, NULL, NULL);
 }
 
 void persist_flash_payload_to_alarms(const FlashStoragePayload *payload, AlarmState *alarms, uint8_t count)
 {
-    storage_schema_to_runtime(payload, NULL, alarms, count, NULL);
+    storage_schema_to_runtime(payload, NULL, alarms, count, NULL, NULL);
 }
 
 void persist_flash_payload_to_calibration(const FlashStoragePayload *payload, SensorCalibrationData *cal)
 {
-    storage_schema_to_runtime(payload, NULL, NULL, 0U, cal);
+    storage_schema_to_runtime(payload, NULL, NULL, 0U, cal, NULL);
+}
+
+void persist_flash_payload_to_game_stats(const FlashStoragePayload *payload, GameStatsState *game_stats)
+{
+    storage_schema_to_runtime(payload, NULL, NULL, 0U, NULL, game_stats);
 }
 
 bool persist_flash_validate_record(const FlashStorageRecord *rec, FlashPageInfo *info)

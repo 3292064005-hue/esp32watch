@@ -106,6 +106,8 @@ void storage_service_load_alarms(AlarmState *alarms, uint8_t count);
  * @throws None.
  */
 void storage_service_save_alarms(const AlarmState *alarms, uint8_t count);
+void storage_service_load_game_stats(GameStatsState *stats);
+void storage_service_save_game_stats(const GameStatsState *stats);
 /**
  * @brief Load sensor calibration data from staged state or persistent backend.
  *

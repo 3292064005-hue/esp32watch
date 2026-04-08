@@ -32,7 +32,8 @@ uint16_t persist_flash_get_calculated_crc(void);
 bool persist_flash_commit_all(const SettingsState *settings,
                               const AlarmState *alarms,
                               uint8_t count,
-                              const SensorCalibrationData *cal);
+                              const SensorCalibrationData *cal,
+                              const GameStatsState *game_stats);
 /**
  * @brief Prepare a multi-tick flash commit journal entry.
  *
@@ -46,7 +47,8 @@ bool persist_flash_commit_all(const SettingsState *settings,
 bool persist_flash_begin_commit(const SettingsState *settings,
                                 const AlarmState *alarms,
                                 uint8_t count,
-                                const SensorCalibrationData *cal);
+                                const SensorCalibrationData *cal,
+                                const GameStatsState *game_stats);
 /**
  * @brief Advance the staged flash commit by one backend phase.
  *
@@ -62,6 +64,8 @@ void persist_flash_save_settings(const SettingsState *settings);
 void persist_flash_load_settings(SettingsState *settings);
 void persist_flash_save_alarms(const AlarmState *alarms, uint8_t count);
 void persist_flash_load_alarms(AlarmState *alarms, uint8_t count);
+void persist_flash_save_game_stats(const GameStatsState *stats);
+void persist_flash_load_game_stats(GameStatsState *stats);
 void persist_flash_save_sensor_calibration(const SensorCalibrationData *cal);
 void persist_flash_load_sensor_calibration(SensorCalibrationData *cal);
 uint32_t persist_flash_get_wear_count(void);

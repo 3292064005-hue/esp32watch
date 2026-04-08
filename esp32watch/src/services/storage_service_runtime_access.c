@@ -185,6 +185,39 @@ void storage_service_save_alarms(const AlarmState *alarms, uint8_t count)
     storage_scheduler_mark_dirty(&g_storage, platform_time_now_ms(), STORAGE_PENDING_ALARMS);
 }
 
+void storage_service_load_game_stats(GameStatsState *stats)
+{
+    if (stats == NULL) {
+        return;
+    }
+
+    if (g_storage.pending_game_stats) {
+        *stats = g_storage.game_stats;
+        return;
+    }
+
+    storage_backend_adapter_load_game_stats(stats);
+}
+
+void storage_service_save_game_stats(const GameStatsState *stats)
+{
+    if (stats == NULL) {
+        return;
+    }
+
+    if (g_storage.pending_game_stats && memcmp(&g_storage.game_stats, stats, sizeof(*stats)) == 0) {
+        return;
+    }
+    if (!g_storage.pending_game_stats && g_storage.shadow_game_stats_valid &&
+        memcmp(&g_storage.shadow_game_stats, stats, sizeof(*stats)) == 0) {
+        return;
+    }
+
+    g_storage.game_stats = *stats;
+    g_storage.pending_game_stats = true;
+    storage_scheduler_mark_dirty(&g_storage, platform_time_now_ms(), STORAGE_PENDING_GAME_STATS);
+}
+
 void storage_service_load_sensor_calibration(SensorCalibrationData *cal)
 {
     if (cal == NULL) {
@@ -223,4 +256,3 @@ void storage_service_clear_sensor_calibration(void)
     cal.valid = false;
     storage_service_save_sensor_calibration(&cal);
 }
-

@@ -25,24 +25,20 @@ static void draw_sensor(int16_t ox)
 {
     UiSystemSnapshot snap;
     char line[32];
+    char value[20];
 
     ui_get_system_snapshot(&snap);
     ui_core_draw_header(ox, "Sensor");
-    snprintf(line, sizeof(line), "%s q%u e%u", snap.sensor.runtime_state_name,
-             snap.sensor.quality, snap.sensor.error_code);
-    display_draw_text_5x7(ox + 6, 16, line, true);
-    snprintf(line, sizeof(line), "A %d %d %d", snap.sensor.ax, snap.sensor.ay, snap.sensor.az);
-    display_draw_text_5x7(ox + 6, 25, line, true);
-    snprintf(line, sizeof(line), "G %d %d %d", snap.sensor.gx, snap.sensor.gy, snap.sensor.gz);
-    display_draw_text_5x7(ox + 6, 34, line, true);
-    snprintf(line, sizeof(line), "P %d R %d M %d", snap.sensor.pitch_deg,
-             snap.sensor.roll_deg, snap.sensor.motion_score);
-    display_draw_text_5x7(ox + 6, 43, line, true);
-    snprintf(line, sizeof(line), "%s %u%% bk%lus", snap.sensor.calibration_state_name,
-             snap.sensor.calibration_progress,
-             (unsigned long)snap.sensor.retry_backoff_s);
-    display_draw_text_5x7(ox + 6, 52, line, true);
-    display_draw_text_centered_5x7(ox, 60, 128, "OK reinit LONG OK calib", true);
+    ui_core_draw_card(ox + 8, 14, 112, 16, snap.sensor.online ? "ONLINE" : "OFFLINE");
+    snprintf(value, sizeof(value), "Q%u  CAL %u%%", snap.sensor.quality, snap.sensor.calibration_progress);
+    display_draw_text_5x7(ox + 14, 21, value, true);
+    display_draw_text_right_5x7(ox + 112, 21, snap.sensor.runtime_state_name, true);
+    ui_core_draw_card(ox + 8, 32, 112, 20, "MOTION");
+    snprintf(line, sizeof(line), "P %d  R %d  M %d", snap.sensor.pitch_deg, snap.sensor.roll_deg, snap.sensor.motion_score);
+    display_draw_text_5x7(ox + 14, 40, line, true);
+    snprintf(line, sizeof(line), "A %d %d  G %d", snap.sensor.ax, snap.sensor.ay, snap.sensor.gz);
+    display_draw_text_5x7(ox + 14, 48, line, true);
+    ui_core_draw_footer_hint(ox, "OK Reinit  LONG Cal");
 }
 
 static void draw_diag(int16_t ox)
@@ -51,29 +47,21 @@ static void draw_diag(int16_t ox)
     char line[32];
 
     ui_get_system_snapshot(&snap);
-    ui_core_draw_header(ox, "Diagnostics");
-    snprintf(line, sizeof(line), "rst %s wake %s", snap.reset_reason_name, snap.wake_reason_name);
-    display_draw_text_5x7(ox + 4, 14, line, true);
-    snprintf(line, sizeof(line), "slp %s stor %s", snap.sleep_reason_name,
-             snap.storage.crc_valid ? "ok" : "bad");
-    display_draw_text_5x7(ox + 4, 23, line, true);
-    snprintf(line, sizeof(line), "imu %s rq%u fq%u", snap.sensor.runtime_state_name,
-             snap.sensor.reinit_count, snap.sensor.fault_count);
-    display_draw_text_5x7(ox + 4, 32, line, true);
-    if (snap.sensor.online) {
-        snprintf(line, sizeof(line), "qual %u mot %d", snap.sensor.quality, snap.sensor.motion_score);
-    } else {
-        snprintf(line, sizeof(line), "off %lu bk %lu",
-                 (unsigned long)snap.sensor.offline_elapsed_s,
-                 (unsigned long)snap.sensor.retry_backoff_s);
-    }
-    display_draw_text_5x7(ox + 4, 41, line, true);
-    snprintf(line, sizeof(line), "key %u uiq %lu", (unsigned)snap.runtime.input_queue_overflow_count,
-             (unsigned long)snap.ui_mutation_overflow_event_count);
-    display_draw_text_5x7(ox + 4, 50, line, true);
-    snprintf(line, sizeof(line), "last %s @%lus", snap.storage.last_commit_ok ? "ok" : "bad",
-             (unsigned long)(snap.runtime.storage_last_commit_ms / 1000UL));
-    display_draw_text_5x7(ox + 4, 59, line, true);
+    ui_core_draw_header(ox, "Diag");
+    ui_core_draw_card(ox + 8, 14, 112, 14, snap.safe_mode_active ? "SAFE MODE" : "SYSTEM OK");
+    snprintf(line, sizeof(line), "%s  %s", snap.reset_reason_name, snap.wake_reason_name);
+    display_draw_text_5x7(ox + 14, 20, line, true);
+    ui_core_draw_card(ox + 8, 30, 112, 14, "FAULT");
+    snprintf(line, sizeof(line), "%s  %s", snap.has_last_fault ? snap.last_fault_name : "NONE",
+             snap.has_last_fault ? snap.last_fault_severity_name : "IDLE");
+    display_draw_text_5x7(ox + 14, 36, line, true);
+    ui_core_draw_card(ox + 8, 46, 112, 14, "COUNTS");
+    snprintf(line, sizeof(line), "IMU %u/%u UI %lu DSP %lu",
+             snap.sensor.reinit_count, snap.sensor.fault_count,
+             (unsigned long)snap.ui_mutation_overflow_event_count,
+             (unsigned long)snap.display_tx_fail_count);
+    display_draw_text_5x7(ox + 14, 52, line, true);
+    ui_core_draw_footer_hint(ox, snap.safe_mode_active ? "OK Clear Safe  BK Locked" : "BK Back");
 }
 
 static void draw_calibration(int16_t ox)
@@ -90,25 +78,26 @@ static void draw_calibration(int16_t ox)
     snprintf(line, sizeof(line), "progress %u%%", snap.sensor.calibration_progress);
     display_draw_text_centered_5x7(ox, 39, 128, line, true);
     display_draw_progress_bar(ox + 18, 49, 92, 8, snap.sensor.calibration_progress, false);
-    display_draw_text_centered_5x7(ox, 59, 128, "OK start/retry  BK back", true);
+    ui_core_draw_footer_hint(ox, "OK Start  BK Back");
 }
 
 static void draw_inputtest(int16_t ox)
 {
     UiSystemSnapshot snap;
-    char line[20];
+    char line[24];
 
     ui_get_system_snapshot(&snap);
     ui_core_draw_header(ox, "Input Test");
-    snprintf(line, sizeof(line), "UP   %s", snap.key_up_down ? "DOWN" : "UP");
-    display_draw_text_5x7(ox + 18, 16, line, true);
-    snprintf(line, sizeof(line), "DOWN %s", snap.key_down_down ? "DOWN" : "UP");
-    display_draw_text_5x7(ox + 18, 27, line, true);
-    snprintf(line, sizeof(line), "OK   %s", snap.key_ok_down ? "DOWN" : "UP");
-    display_draw_text_5x7(ox + 18, 38, line, true);
-    snprintf(line, sizeof(line), "BACK %s", snap.key_back_down ? "DOWN" : "UP");
-    display_draw_text_5x7(ox + 18, 49, line, true);
-    display_draw_text_centered_5x7(ox, 60, 128, "press keys  BK back", true);
+    ui_core_draw_card(ox + 8, 14, 112, 36, "KEY STATE");
+    snprintf(line, sizeof(line), "UP    %s", snap.key_up_down ? "DOWN" : "UP");
+    display_draw_text_5x7(ox + 18, 20, line, true);
+    snprintf(line, sizeof(line), "DOWN  %s", snap.key_down_down ? "DOWN" : "UP");
+    display_draw_text_5x7(ox + 18, 28, line, true);
+    snprintf(line, sizeof(line), "OK    %s", snap.key_ok_down ? "DOWN" : "UP");
+    display_draw_text_5x7(ox + 18, 36, line, true);
+    snprintf(line, sizeof(line), "BACK  %s", snap.key_back_down ? "DOWN" : "UP");
+    display_draw_text_5x7(ox + 18, 44, line, true);
+    ui_core_draw_footer_hint(ox, "BK Back");
 }
 
 static void draw_storage(int16_t ox)
@@ -118,34 +107,29 @@ static void draw_storage(int16_t ox)
 
     ui_get_system_snapshot(&snap);
     ui_core_draw_header(ox, "Storage");
-    snprintf(line, sizeof(line), "backend %s v%u", snap.storage.backend_name, snap.storage.version);
-    display_draw_text_5x7(ox + 8, 15, line, true);
-    snprintf(line, sizeof(line), "init %s crc %s", snap.storage.initialized ? "ok" : "no",
-             snap.storage.crc_valid ? "ok" : "bad");
-    display_draw_text_5x7(ox + 8, 24, line, true);
-    snprintf(line, sizeof(line), "pend 0x%02X dirty 0x%02X", (unsigned)snap.storage.pending_mask,
-             (unsigned)snap.storage.dirty_source_mask);
-    display_draw_text_5x7(ox + 8, 33, line, true);
-    snprintf(line, sizeof(line), "stored %04X calc %04X", snap.storage.stored_crc,
-             snap.storage.calculated_crc);
-    display_draw_text_5x7(ox + 8, 42, line, true);
-    snprintf(line, sizeof(line), "c%lu %s %s", (unsigned long)snap.storage.commit_count,
-             snap.storage.last_commit_ok ? "ok" : "bad",
-             snap.storage_last_commit_reason_name);
-    display_draw_text_5x7(ox + 8, 51, line, true);
-    snprintf(line, sizeof(line), "%s %s", snap.storage.commit_state_name,
-             snap.storage.sleep_flush_pending ? "flush" : "idle");
-    display_draw_text_centered_5x7(ox, 60, 128, line, true);
+    ui_core_draw_card(ox + 8, 14, 112, 14, snap.storage.crc_valid ? "STORAGE OK" : "STORAGE WARN");
+    snprintf(line, sizeof(line), "%s  V%u  %s", snap.storage.backend_name, snap.storage.version, snap.storage.commit_state_name);
+    display_draw_text_5x7(ox + 14, 20, line, true);
+    ui_core_draw_card(ox + 8, 30, 112, 14, "CRC");
+    snprintf(line, sizeof(line), "S %04X  C %04X  D%02X", snap.storage.stored_crc, snap.storage.calculated_crc, (unsigned)snap.storage.dirty_source_mask);
+    display_draw_text_5x7(ox + 14, 36, line, true);
+    ui_core_draw_card(ox + 8, 46, 112, 14, "COMMIT");
+    snprintf(line, sizeof(line), "C%lu  %s  %s", (unsigned long)snap.storage.commit_count,
+             snap.storage.last_commit_ok ? "OK" : "BAD",
+             snap.storage.sleep_flush_pending ? "FLUSH" : "IDLE");
+    display_draw_text_5x7(ox + 14, 52, line, true);
+    ui_core_draw_footer_hint(ox, "OK Flush  BK Back");
 }
 
 static void draw_about(int16_t ox)
 {
     ui_core_draw_header(ox, "About");
-    display_draw_text_5x7(ox + 10, 16, "F103 watch terminal", true);
-    display_draw_text_5x7(ox + 10, 26, "split UI + services", true);
-    display_draw_text_5x7(ox + 10, 36, "RTC/OLED/MPU6050 stack", true);
-    display_draw_text_5x7(ox + 10, 46, "diag/cal/storage tools", true);
-    display_draw_text_centered_5x7(ox, 58, 128, "BACK return", true);
+    ui_core_draw_card(ox + 8, 14, 112, 16, "DEVICE");
+    display_draw_text_5x7(ox + 14, 21, "ESP32 watch terminal", true);
+    ui_core_draw_card(ox + 8, 32, 112, 20, "STACK");
+    display_draw_text_5x7(ox + 14, 40, "RTC/OLED/MPU6050/Web", true);
+    display_draw_text_5x7(ox + 14, 48, "Diag + Storage + Input", true);
+    ui_core_draw_footer_hint(ox, "BK Back");
 }
 
 void ui_page_system_render(PageId page, int16_t ox)

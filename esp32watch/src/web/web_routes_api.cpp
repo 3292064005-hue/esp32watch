@@ -211,6 +211,14 @@ void web_register_api_routes(AsyncWebServer &server)
         web_json_kv_u32(response, "goalPercent", snap.goal_percent, true);
         response += "},";
 
+        response += "\"alarm\":{";
+        web_json_kv_u32(response, "nextIndex", snap.next_alarm_index, false);
+        web_json_kv_str(response, "nextTime", snap.alarm_time, false);
+        web_json_kv_bool(response, "enabled", snap.alarm_enabled, false);
+        web_json_kv_bool(response, "ringing", snap.alarm_ringing, false);
+        web_json_kv_str(response, "label", snap.alarm_label, true);
+        response += "},";
+
         response += "\"sensor\":{";
         web_json_kv_bool(response, "online", snap.sensor_online, false);
         web_json_kv_bool(response, "calibrated", snap.sensor_calibrated, false);
@@ -266,6 +274,24 @@ void web_register_api_routes(AsyncWebServer &server)
         web_json_kv_str(response, "text", snap.weather_text, false);
         web_json_kv_f32(response, "temperatureC", (float)snap.weather_temperature_tenths_c / 10.0f, 1, false);
         web_json_kv_u32(response, "updatedAtMs", snap.weather_updated_at_ms, true);
+        response += "},";
+
+        response += "\"summary\":{";
+        web_json_kv_str(response, "headerTags", snap.header_tags, false);
+        web_json_kv_str(response, "networkLine", snap.network_line, false);
+        web_json_kv_str(response, "networkSubline", snap.network_subline, false);
+        web_json_kv_str(response, "sensorLabel", snap.sensor_label, false);
+        web_json_kv_str(response, "storageLabel", snap.storage_label, false);
+        web_json_kv_str(response, "diagLabel", snap.diag_label, true);
+        response += "},";
+
+        response += "\"terminal\":{";
+        web_json_kv_str(response, "systemFace", snap.system_face, false);
+        web_json_kv_str(response, "brightnessLabel", snap.brightness_label, false);
+        web_json_kv_str(response, "activityLabel", snap.activity_label, false);
+        web_json_kv_str(response, "sensorLabel", snap.sensor_label, false);
+        web_json_kv_str(response, "networkLabel", snap.network_label, false);
+        web_json_kv_str(response, "storageLabel", snap.storage_label, true);
         response += "},";
 
         response += "\"overlay\":{";

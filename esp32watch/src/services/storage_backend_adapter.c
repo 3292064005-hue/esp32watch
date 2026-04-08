@@ -11,6 +11,7 @@ typedef struct {
     SettingsState settings;
     AlarmState alarms[APP_MAX_ALARMS];
     SensorCalibrationData calibration;
+    GameStatsState game_stats;
 } StorageBackendCommitContext;
 
 static StorageBackendCommitContext g_backend_commit;
@@ -119,12 +120,25 @@ void storage_backend_adapter_load_calibration(SensorCalibrationData *cal)
     }
 }
 
+void storage_backend_adapter_load_game_stats(GameStatsState *stats)
+{
+    if (stats == NULL) {
+        return;
+    }
+    if (storage_backend_adapter_flash_ready()) {
+        persist_flash_load_game_stats(stats);
+    } else {
+        persist_load_game_stats(stats);
+    }
+}
+
 bool storage_backend_adapter_begin_commit(const SettingsState *settings,
                                           const AlarmState *alarms,
                                           uint8_t count,
-                                          const SensorCalibrationData *cal)
+                                          const SensorCalibrationData *cal,
+                                          const GameStatsState *stats)
 {
-    if (settings == NULL || alarms == NULL || cal == NULL || g_backend_commit.active) {
+    if (settings == NULL || alarms == NULL || cal == NULL || stats == NULL || g_backend_commit.active) {
         return false;
     }
     if (count > APP_MAX_ALARMS) {
@@ -138,13 +152,15 @@ bool storage_backend_adapter_begin_commit(const SettingsState *settings,
     g_backend_commit.settings = *settings;
     memcpy(g_backend_commit.alarms, alarms, sizeof(AlarmState) * count);
     g_backend_commit.calibration = *cal;
+    g_backend_commit.game_stats = *stats;
 
 #if APP_STORAGE_USE_FLASH
     if (g_backend_commit.use_flash) {
         if (!persist_flash_begin_commit(&g_backend_commit.settings,
                                         g_backend_commit.alarms,
                                         APP_MAX_ALARMS,
-                                        &g_backend_commit.calibration)) {
+                                        &g_backend_commit.calibration,
+                                        &g_backend_commit.game_stats)) {
             storage_backend_adapter_reset_commit_context();
             return false;
         }
@@ -187,10 +203,12 @@ StorageBackendCommitTickResult storage_backend_adapter_commit_tick(void)
         persist_save_settings(&g_backend_commit.settings);
         persist_save_alarms(g_backend_commit.alarms, APP_MAX_ALARMS);
         persist_save_sensor_calibration(&g_backend_commit.calibration);
+        persist_save_game_stats(&g_backend_commit.game_stats);
 #elif !APP_STORAGE_USE_FLASH
         persist_save_settings(&g_backend_commit.settings);
         persist_save_alarms(g_backend_commit.alarms, APP_MAX_ALARMS);
         persist_save_sensor_calibration(&g_backend_commit.calibration);
+        persist_save_game_stats(&g_backend_commit.game_stats);
 #endif
         g_backend_commit.phase = STORAGE_BACKEND_COMMIT_PHASE_VERIFY;
         return STORAGE_BACKEND_COMMIT_TICK_IN_PROGRESS;
@@ -231,9 +249,10 @@ void storage_backend_adapter_abort_commit(void)
 bool storage_backend_adapter_commit_all(const SettingsState *settings,
                                         const AlarmState *alarms,
                                         uint8_t count,
-                                        const SensorCalibrationData *cal)
+                                        const SensorCalibrationData *cal,
+                                        const GameStatsState *stats)
 {
-    if (!storage_backend_adapter_begin_commit(settings, alarms, count, cal)) {
+    if (!storage_backend_adapter_begin_commit(settings, alarms, count, cal, stats)) {
         return false;
     }
 
@@ -260,9 +279,11 @@ void storage_backend_adapter_capture_shadows(StorageServiceState *state)
     storage_backend_adapter_load_settings(&state->shadow_settings);
     storage_backend_adapter_load_alarms(state->shadow_alarms, APP_MAX_ALARMS);
     storage_backend_adapter_load_calibration(&state->shadow_calibration);
+    storage_backend_adapter_load_game_stats(&state->shadow_game_stats);
     state->shadow_settings_valid = true;
     state->shadow_alarms_valid = true;
     state->shadow_calibration_valid = true;
+    state->shadow_game_stats_valid = true;
 }
 
 bool storage_backend_adapter_migrate_from_bkp_to_flash(void)
@@ -272,6 +293,7 @@ bool storage_backend_adapter_migrate_from_bkp_to_flash(void)
         SettingsState settings = {0};
         AlarmState alarms[APP_MAX_ALARMS] = {0};
         SensorCalibrationData cal = {0};
+        GameStatsState stats = {0};
 
         /*
          * Migration runs specifically when flash storage is not yet initialized.
@@ -283,7 +305,8 @@ bool storage_backend_adapter_migrate_from_bkp_to_flash(void)
         persist_load_settings(&settings);
         persist_load_alarms(alarms, APP_MAX_ALARMS);
         persist_load_sensor_calibration(&cal);
-        if (!persist_flash_commit_all(&settings, alarms, APP_MAX_ALARMS, &cal)) {
+        persist_load_game_stats(&stats);
+        if (!persist_flash_commit_all(&settings, alarms, APP_MAX_ALARMS, &cal, &stats)) {
             return false;
         }
         persist_flash_init();

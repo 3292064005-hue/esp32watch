@@ -88,10 +88,10 @@ void ui_page_settings_main_render(PageId page, int16_t ox)
         setting_value_string(idx, &snap, value, sizeof(value));
         ui_core_draw_list_item(ox, 14 + i * 10, 110, setting_label(idx), value,
                                idx == ui_runtime_get_settings_index(),
-                               idx == ui_runtime_get_settings_index() && ui_runtime_is_settings_editing());
+                               idx >= 10U || (idx == ui_runtime_get_settings_index() && ui_runtime_is_settings_editing()));
     }
     ui_core_draw_scrollbar(ox + 121, 14, 40, total, ui_runtime_get_settings_index());
-    ui_core_draw_footer_hint(ox, ui_runtime_is_settings_editing() ? "UP/DN Adjust  OK Done" : "OK Edit  BK Back");
+    ui_core_draw_footer_hint(ox, ui_runtime_is_settings_editing() ? "UP/DN Adjust  OK Done" : "OK Edit/Open  BK Back");
 }
 
 bool ui_page_settings_main_handle(PageId page, const KeyEvent *e, uint32_t now_ms)

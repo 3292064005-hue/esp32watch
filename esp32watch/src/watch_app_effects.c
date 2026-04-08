@@ -169,6 +169,11 @@ static bool watch_app_command_from_ui_mutation(const UiModelMutation *mutation, 
             out->type = APP_COMMAND_SET_DATETIME;
             out->data.date_time = mutation->data.date_time;
             return true;
+        case UI_MODEL_MUTATION_SET_GAME_HIGH_SCORE:
+            out->type = APP_COMMAND_SET_GAME_HIGH_SCORE;
+            out->data.game_high_score.game_id = mutation->data.game_high_score.game_id;
+            out->data.game_high_score.score = mutation->data.game_high_score.score;
+            return true;
         case UI_MODEL_MUTATION_NONE:
         default:
             return false;
@@ -207,6 +212,10 @@ void watch_app_apply_model_runtime_requests(uint8_t *last_sensor_sensitivity)
 
     if ((flags & MODEL_RUNTIME_REQUEST_STAGE_ALARMS) != 0U) {
         storage_service_save_alarms(domain_state.alarms, APP_MAX_ALARMS);
+    }
+
+    if ((flags & MODEL_RUNTIME_REQUEST_STAGE_GAME_STATS) != 0U) {
+        storage_service_save_game_stats(&domain_state.game_stats);
     }
 
     if ((flags & MODEL_RUNTIME_REQUEST_STORAGE_COMMIT) != 0U) {
@@ -308,4 +317,3 @@ void watch_app_after_storage_tick(WatchAppSleepRequestState *sleep_request, uint
 
     watch_app_sleep_now(sleep_request->reason, sleep_request);
 }
-

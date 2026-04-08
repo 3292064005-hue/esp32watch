@@ -59,49 +59,123 @@ async function refreshState() {
 
 function renderAll() {
   renderTopbar();
-  renderStatus();
+  renderTerminal();
+  renderHub();
   renderDiag();
+  renderStorage();
   renderOLEDFrame();
+}
+
+function splitTags(text) {
+  return String(text || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
 }
 
 function renderTopbar() {
   const s = state.snapshot;
   if (!s) return;
 
-  const ip = s.wifi?.ip || "-";
   const page = s.system?.page || "-";
   const timeSource = s.system?.timeSource || "-";
-  const safeMode = s.system?.safeMode ? "SAFE MODE" : "NORMAL";
+  const wifi = s.wifi?.connected ? "WIFI" : "OFFLINE";
+  const safe = s.system?.safeMode ? "SAFE" : "OK";
 
   document.getElementById("deviceMeta").textContent =
-    `IP ${ip} | PAGE ${page} | TIME ${timeSource} | ${safeMode}`;
+    `PAGE ${page}  TIME ${timeSource}  NET ${wifi}  SYS ${safe}`;
+
+  const tags = splitTags(s.summary?.headerTags);
+  document.getElementById("tagBar").innerHTML = tags
+    .map(tag => `<span class="status-tag">${tag}</span>`)
+    .join("");
 }
 
-function renderStatus() {
+function renderTerminal() {
   const s = state.snapshot;
   if (!s) return;
 
-  const items = [
-    ["WiFi", s.wifi?.connected ? "Connected" : "Offline"],
-    ["RSSI", `${s.wifi?.rssi ?? "-"} dBm`],
-    ["Page", s.system?.page ?? "-"],
-    ["Time Source", s.system?.timeSource ?? "-"],
-    ["Uptime", formatUptime(s.system?.uptimeMs ?? 0)],
-    ["Steps", String(s.activity?.steps ?? 0)],
-    ["Goal", `${s.activity?.goal ?? 0} (${s.activity?.goalPercent ?? 0}%)`],
-    ["Sensor", s.sensor?.online ? `${s.sensor?.runtimeState ?? "Online"} q${s.sensor?.quality ?? "-"}` : "Offline"],
-    ["Accel Raw", `${s.sensor?.ax ?? "-"} ${s.sensor?.ay ?? "-"} ${s.sensor?.az ?? "-"}`],
-    ["Gyro Raw", `${s.sensor?.gx ?? "-"} ${s.sensor?.gy ?? "-"} ${s.sensor?.gz ?? "-"}`],
-    ["Pose Deg", `P${s.sensor?.pitchDeg ?? "-"} R${s.sensor?.rollDeg ?? "-"}`],
-    ["Motion", `${s.sensor?.motionScore ?? "-"} / steps ${s.sensor?.stepsTotal ?? 0}`],
-    ["Storage", s.storage?.backend ?? "-"],
-    ["Weather", s.weather?.valid ? `${s.weather?.location ?? "-"} ${s.weather?.temperatureC ?? "-"}C ${s.weather?.text ?? ""}` : "Waiting"],
-    ["Presents", String(s.display?.presentCount ?? 0)],
-    ["TX Fail", String(s.display?.txFailCount ?? 0)]
+  const cards = [
+    {
+      title: "System",
+      value: `${s.system?.page ?? "-"}  ${s.terminal?.systemFace ?? "-"}`,
+      meta: `BR ${s.terminal?.brightnessLabel ?? "-"}  ${s.system?.safeMode ? "SAFE" : "READY"}`
+    },
+    {
+      title: "Activity",
+      value: `${s.activity?.steps ?? 0} / ${s.activity?.goal ?? 0}`,
+      meta: `GOAL ${s.terminal?.activityLabel ?? "0%"}`
+    },
+    {
+      title: "Alarm",
+      value: s.alarm?.label || "OFF",
+      meta: s.alarm?.ringing ? "RINGING" : (s.alarm?.enabled ? `NEXT ${s.alarm?.nextTime}` : "NO ALARM")
+    },
+    {
+      title: "Sensor",
+      value: s.terminal?.sensorLabel || "OFFLINE",
+      meta: `${s.sensor?.runtimeState ?? "-"}  CAL ${s.sensor?.calibrationProgress ?? 0}%`
+    },
+    {
+      title: "Network",
+      value: s.summary?.networkLine || "SYNC NEEDED",
+      meta: s.summary?.networkSubline || "-"
+    }
   ];
 
-  document.getElementById("statusGrid").innerHTML = items
-    .map(([k, v]) => `<div class="kv"><span>${k}</span><strong>${v}</strong></div>`)
+  document.getElementById("terminalGrid").innerHTML = cards
+    .map(card => `
+      <article class="terminal-card">
+        <span class="terminal-label">${card.title}</span>
+        <strong class="terminal-value">${card.value}</strong>
+        <span class="terminal-meta">${card.meta}</span>
+      </article>
+    `)
+    .join("");
+}
+
+function renderHub() {
+  const s = state.snapshot;
+  if (!s) return;
+
+  const cards = [
+    {
+      title: "System",
+      tag: s.summary?.headerTags || "READY",
+      body: `FACE ${s.terminal?.systemFace ?? "-"}  BR ${s.terminal?.brightnessLabel ?? "-"}`
+    },
+    {
+      title: "Activity",
+      tag: s.terminal?.activityLabel || "0%",
+      body: `${s.activity?.steps ?? 0} steps  /  ${(s.activity?.goal ?? 0)}`
+    },
+    {
+      title: "Alarm",
+      tag: s.alarm?.ringing ? "RING" : (s.alarm?.enabled ? "ARMED" : "OFF"),
+      body: s.alarm?.enabled ? `NEXT ${s.alarm?.nextTime}` : "No scheduled alarm"
+    },
+    {
+      title: "Sensor",
+      tag: s.summary?.sensorLabel || "OFFLINE",
+      body: `${s.sensor?.runtimeState ?? "-"}  Q${s.sensor?.quality ?? "-"}`
+    },
+    {
+      title: "Network",
+      tag: s.terminal?.networkLabel || "SYNC",
+      body: s.summary?.networkSubline || "-"
+    }
+  ];
+
+  document.getElementById("hubGrid").innerHTML = cards
+    .map(card => `
+      <article class="hub-tile">
+        <div class="hub-tile-head">
+          <span>${card.title}</span>
+          <em>${card.tag}</em>
+        </div>
+        <p>${card.body}</p>
+      </article>
+    `)
     .join("");
 }
 
@@ -109,40 +183,33 @@ function renderDiag() {
   const s = state.snapshot;
   if (!s) return;
 
-  const diag = s.diag || {};
-  const items = [];
-
-  if (diag.hasLastFault) {
-    items.push({
-      label: "Last Fault",
-      value: `${diag.lastFaultName} (${diag.lastFaultSeverity})`
-    });
-  }
-
-  if (diag.hasLastLog) {
-    items.push({
-      label: "Last Log",
-      value: `${diag.lastLogName}: ${diag.lastLogValue}`
-    });
-  }
-
-  items.push({
-    label: "Storage State",
-    value: s.storage?.commitState ?? "?"
-  });
-
-  items.push({
-    label: "Overlay",
-    value: s.overlay?.active ? "ACTIVE" : "IDLE"
-  });
-
-  items.push({
-    label: "Safe Mode",
-    value: s.system?.safeMode ? "ACTIVE" : "OK"
-  });
+  const items = [
+    ["STATE", s.summary?.diagLabel || (s.system?.safeMode ? "SAFE" : "OK")],
+    ["SAFE", s.system?.safeMode ? "ACTIVE" : "CLEAR"],
+    ["FAULT", s.diag?.hasLastFault ? `${s.diag.lastFaultName}` : "NONE"],
+    ["SEV", s.diag?.hasLastFault ? `${s.diag.lastFaultSeverity}` : "INFO"],
+    ["LOG", s.diag?.hasLastLog ? `${s.diag.lastLogName}` : "NONE"]
+  ];
 
   document.getElementById("diagPanel").innerHTML = items
-    .map(item => `<div class="diag-item"><span class="diag-label">${item.label}</span><span class="diag-value">${item.value}</span></div>`)
+    .map(([k, v]) => `<div class="mini-item"><span>${k}</span><strong>${v}</strong></div>`)
+    .join("");
+}
+
+function renderStorage() {
+  const s = state.snapshot;
+  if (!s) return;
+
+  const items = [
+    ["STATE", s.summary?.storageLabel || "OK"],
+    ["BACKEND", s.storage?.backend || "-"],
+    ["COMMIT", s.storage?.commitState || "-"],
+    ["TXN", s.storage?.transactionActive ? "ACTIVE" : "IDLE"],
+    ["FLUSH", s.storage?.sleepFlushPending ? "PENDING" : "CLEAR"]
+  ];
+
+  document.getElementById("storagePanel").innerHTML = items
+    .map(([k, v]) => `<div class="mini-item"><span>${k}</span><strong>${v}</strong></div>`)
     .join("");
 }
 
@@ -287,7 +354,7 @@ function renderOLEDFrame() {
   }
 
   ctx.putImageData(oledImageData, 0, 0);
-  statusEl.textContent = `Frame ${frame.presentCount ?? "-"}`;
+  statusEl.textContent = `Frame ${frame.presentCount ?? "-"}  UPTIME ${formatUptime(state.snapshot?.system?.uptimeMs ?? 0)}`;
 }
 
 function toast(message, type = "info") {

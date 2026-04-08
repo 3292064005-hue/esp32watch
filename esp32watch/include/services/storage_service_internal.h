@@ -11,6 +11,7 @@
 #define STORAGE_PENDING_SETTINGS    0x01U
 #define STORAGE_PENDING_ALARMS      0x02U
 #define STORAGE_PENDING_CALIBRATION 0x04U
+#define STORAGE_PENDING_GAME_STATS  0x08U
 
 typedef enum {
     STORAGE_COMMIT_PHASE_IDLE = 0,
@@ -37,9 +38,11 @@ typedef struct {
     bool pending_settings;
     bool pending_alarms;
     bool pending_calibration;
+    bool pending_game_stats;
     bool shadow_settings_valid;
     bool shadow_alarms_valid;
     bool shadow_calibration_valid;
+    bool shadow_game_stats_valid;
     bool transaction_active;
     bool commit_in_progress;
     bool backend_degraded;
@@ -61,12 +64,15 @@ typedef struct {
     SettingsState settings;
     AlarmState alarms[APP_MAX_ALARMS];
     SensorCalibrationData calibration;
+    GameStatsState game_stats;
     SettingsState inflight_settings;
     AlarmState inflight_alarms[APP_MAX_ALARMS];
     SensorCalibrationData inflight_calibration;
+    GameStatsState inflight_game_stats;
     SettingsState shadow_settings;
     AlarmState shadow_alarms[APP_MAX_ALARMS];
     SensorCalibrationData shadow_calibration;
+    GameStatsState shadow_game_stats;
 } StorageServiceState;
 
 typedef struct {
@@ -87,14 +93,17 @@ uint32_t storage_backend_adapter_get_wear_count(void);
 void storage_backend_adapter_load_settings(SettingsState *settings);
 void storage_backend_adapter_load_alarms(AlarmState *alarms, uint8_t count);
 void storage_backend_adapter_load_calibration(SensorCalibrationData *cal);
+void storage_backend_adapter_load_game_stats(GameStatsState *stats);
 bool storage_backend_adapter_commit_all(const SettingsState *settings,
                                         const AlarmState *alarms,
                                         uint8_t count,
-                                        const SensorCalibrationData *cal);
+                                        const SensorCalibrationData *cal,
+                                        const GameStatsState *stats);
 bool storage_backend_adapter_begin_commit(const SettingsState *settings,
                                           const AlarmState *alarms,
                                           uint8_t count,
-                                          const SensorCalibrationData *cal);
+                                          const SensorCalibrationData *cal,
+                                          const GameStatsState *stats);
 StorageBackendCommitTickResult storage_backend_adapter_commit_tick(void);
 StorageBackendCommitPhase storage_backend_adapter_commit_phase(void);
 const char *storage_backend_adapter_commit_phase_name(StorageBackendCommitPhase phase);

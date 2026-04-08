@@ -111,6 +111,9 @@ bool app_command_execute(const AppCommand *command, uint8_t *last_sensor_sensiti
         case APP_COMMAND_SET_DATETIME:
             model_set_datetime(&command->data.date_time);
             return true;
+        case APP_COMMAND_SET_GAME_HIGH_SCORE:
+            return model_set_game_high_score((GameId)command->data.game_high_score.game_id,
+                                             command->data.game_high_score.score);
         case APP_COMMAND_SENSOR_REINIT:
             return sensor_service_force_reinit();
         case APP_COMMAND_SENSOR_CALIBRATION:

@@ -112,6 +112,8 @@ bool ui_should_render(uint32_t now_ms)
             return (now_ms - ui_runtime_get_last_render_ms()) >= app_tuning_manifest_get()->ui_card_refresh_ms;
         case UI_REFRESH_SENSOR:
             return (now_ms - ui_runtime_get_last_render_ms()) >= app_tuning_manifest_get()->ui_sensor_refresh_ms;
+        case UI_REFRESH_GAME:
+            return (now_ms - ui_runtime_get_last_render_ms()) >= app_tuning_manifest_get()->ui_game_refresh_ms;
         case UI_REFRESH_LIQUID:
             return (now_ms - ui_runtime_get_last_render_ms()) >= app_tuning_manifest_get()->ui_liquid_refresh_ms;
         case UI_REFRESH_TIMER:
@@ -122,4 +124,3 @@ bool ui_should_render(uint32_t now_ms)
             return false;
     }
 }
-

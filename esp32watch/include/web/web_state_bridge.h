@@ -17,6 +17,7 @@ typedef struct {
     bool animating;
     char current_page[16];
     char time_source[24];
+    char header_tags[40];
 
     uint32_t steps;
     uint32_t goal;
@@ -54,11 +55,13 @@ typedef struct {
     char last_fault_name[32];
     char last_fault_severity[24];
     uint8_t last_fault_count;
+    char diag_label[12];
 
     char storage_backend[24];
     char storage_commit_state[24];
     bool storage_transaction_active;
     bool storage_sleep_flush_pending;
+    char storage_label[16];
 
     uint32_t display_present_count;
     uint32_t display_tx_fail_count;
@@ -67,6 +70,19 @@ typedef struct {
     char weather_text[20];
     char weather_location[24];
     uint32_t weather_updated_at_ms;
+    char network_line[32];
+    char network_subline[32];
+
+    uint8_t next_alarm_index;
+    bool alarm_enabled;
+    bool alarm_ringing;
+    char alarm_time[12];
+    char alarm_label[16];
+    char system_face[8];
+    char brightness_label[12];
+    char activity_label[16];
+    char sensor_label[16];
+    char network_label[20];
 
     bool has_last_log;
     char last_log_name[32];

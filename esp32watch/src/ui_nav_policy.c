@@ -8,6 +8,9 @@ bool ui_nav_policy_handle_global(const KeyEvent *e, uint32_t now_ms)
     }
 
     if (e->type == KEY_EVENT_LONG && e->id == KEY_ID_BACK) {
+        if (ui_runtime_get_current_page() == PAGE_SNAKE || ui_runtime_get_current_page() == PAGE_TETRIS) {
+            return false;
+        }
         if (ui_runtime_get_current_page() == PAGE_WATCHFACE) {
             ui_request_sleep(SLEEP_REASON_MANUAL);
             ui_core_mark_dirty();

@@ -221,9 +221,10 @@ uint16_t persist_flash_get_calculated_crc(void)
 bool persist_flash_commit_all(const SettingsState *settings,
                               const AlarmState *alarms,
                               uint8_t count,
-                              const SensorCalibrationData *cal)
+                              const SensorCalibrationData *cal,
+                              const GameStatsState *game_stats)
 {
-    if (!persist_flash_begin_commit(settings, alarms, count, cal)) {
+    if (!persist_flash_begin_commit(settings, alarms, count, cal, game_stats)) {
         return false;
     }
 
@@ -244,14 +245,16 @@ bool persist_flash_commit_all(const SettingsState *settings,
 bool persist_flash_begin_commit(const SettingsState *settings,
                                 const AlarmState *alarms,
                                 uint8_t count,
-                                const SensorCalibrationData *cal)
+                                const SensorCalibrationData *cal,
+                                const GameStatsState *game_stats)
 {
     AlarmState local_alarms[APP_MAX_ALARMS] = {0};
     SettingsState local_settings;
     SensorCalibrationData local_cal;
+    GameStatsState local_game_stats;
     FlashStoragePayload next_payload;
 
-    if (settings == NULL || alarms == NULL || cal == NULL) {
+    if (settings == NULL || alarms == NULL || cal == NULL || game_stats == NULL) {
         return false;
     }
     if (count > APP_MAX_ALARMS) {
@@ -261,11 +264,12 @@ bool persist_flash_begin_commit(const SettingsState *settings,
     memset(&local_settings, 0, sizeof(local_settings));
     local_settings = *settings;
     local_cal = *cal;
+    local_game_stats = *game_stats;
     for (uint8_t i = 0; i < count; ++i) {
         local_alarms[i] = alarms[i];
     }
 
-    persist_flash_payload_from_runtime(&next_payload, &local_settings, local_alarms, &local_cal);
+    persist_flash_payload_from_runtime(&next_payload, &local_settings, local_alarms, &local_cal, &local_game_stats);
     return persist_flash_prepare_payload_record(&next_payload);
 }
 
@@ -365,9 +369,11 @@ void persist_flash_save_settings(const SettingsState *settings)
 {
     SensorCalibrationData cal;
     AlarmState alarms[APP_MAX_ALARMS] = {0};
+    GameStatsState stats = {0};
     persist_flash_load_sensor_calibration(&cal);
     persist_flash_load_alarms(alarms, APP_MAX_ALARMS);
-    (void)persist_flash_commit_all(settings, alarms, APP_MAX_ALARMS, &cal);
+    persist_flash_load_game_stats(&stats);
+    (void)persist_flash_commit_all(settings, alarms, APP_MAX_ALARMS, &cal, &stats);
 }
 
 void persist_flash_load_settings(SettingsState *settings)
@@ -383,14 +389,16 @@ void persist_flash_save_alarms(const AlarmState *alarms, uint8_t count)
     SensorCalibrationData cal;
     SettingsState settings;
     AlarmState local[APP_MAX_ALARMS] = {0};
+    GameStatsState stats = {0};
     if (count > APP_MAX_ALARMS) count = APP_MAX_ALARMS;
     persist_flash_load_sensor_calibration(&cal);
     memset(&settings, 0, sizeof(settings));
     persist_flash_load_settings(&settings);
+    persist_flash_load_game_stats(&stats);
     for (uint8_t i = 0; i < count; ++i) {
         local[i] = alarms[i];
     }
-    (void)persist_flash_commit_all(&settings, local, APP_MAX_ALARMS, &cal);
+    (void)persist_flash_commit_all(&settings, local, APP_MAX_ALARMS, &cal, &stats);
 }
 
 void persist_flash_load_alarms(AlarmState *alarms, uint8_t count)
@@ -404,14 +412,37 @@ void persist_flash_load_alarms(AlarmState *alarms, uint8_t count)
     persist_flash_payload_to_alarms(&g_shadow, alarms, count);
 }
 
+void persist_flash_save_game_stats(const GameStatsState *stats)
+{
+    SettingsState settings;
+    AlarmState alarms[APP_MAX_ALARMS] = {0};
+    SensorCalibrationData cal;
+
+    memset(&settings, 0, sizeof(settings));
+    persist_flash_load_settings(&settings);
+    persist_flash_load_alarms(alarms, APP_MAX_ALARMS);
+    persist_flash_load_sensor_calibration(&cal);
+    (void)persist_flash_commit_all(&settings, alarms, APP_MAX_ALARMS, &cal, stats);
+}
+
+void persist_flash_load_game_stats(GameStatsState *stats)
+{
+    if (stats == NULL) return;
+    memset(stats, 0, sizeof(*stats));
+    if (!g_initialized) return;
+    persist_flash_payload_to_game_stats(&g_shadow, stats);
+}
+
 void persist_flash_save_sensor_calibration(const SensorCalibrationData *cal)
 {
     SettingsState settings;
     AlarmState alarms[APP_MAX_ALARMS] = {0};
+    GameStatsState stats = {0};
     memset(&settings, 0, sizeof(settings));
     persist_flash_load_settings(&settings);
     persist_flash_load_alarms(alarms, APP_MAX_ALARMS);
-    (void)persist_flash_commit_all(&settings, alarms, APP_MAX_ALARMS, cal);
+    persist_flash_load_game_stats(&stats);
+    (void)persist_flash_commit_all(&settings, alarms, APP_MAX_ALARMS, cal, &stats);
 }
 
 void persist_flash_load_sensor_calibration(SensorCalibrationData *cal)
@@ -435,23 +466,27 @@ uint16_t persist_flash_get_calculated_crc(void) { return 0U; }
 bool persist_flash_commit_all(const SettingsState *settings,
                               const AlarmState *alarms,
                               uint8_t count,
-                              const SensorCalibrationData *cal)
+                              const SensorCalibrationData *cal,
+                              const GameStatsState *game_stats)
 {
     (void)settings;
     (void)alarms;
     (void)count;
     (void)cal;
+    (void)game_stats;
     return false;
 }
 bool persist_flash_begin_commit(const SettingsState *settings,
                                 const AlarmState *alarms,
                                 uint8_t count,
-                                const SensorCalibrationData *cal)
+                                const SensorCalibrationData *cal,
+                                const GameStatsState *game_stats)
 {
     (void)settings;
     (void)alarms;
     (void)count;
     (void)cal;
+    (void)game_stats;
     return false;
 }
 PersistFlashCommitStepResult persist_flash_commit_step(void) { return PERSIST_FLASH_COMMIT_STEP_DONE_FAIL; }
@@ -462,11 +497,12 @@ void persist_flash_save_settings(const SettingsState *settings) { (void)settings
 void persist_flash_load_settings(SettingsState *settings) { (void)settings; }
 void persist_flash_save_alarms(const AlarmState *alarms, uint8_t count) { (void)alarms; (void)count; }
 void persist_flash_load_alarms(AlarmState *alarms, uint8_t count) { (void)alarms; (void)count; }
+void persist_flash_save_game_stats(const GameStatsState *stats) { (void)stats; }
+void persist_flash_load_game_stats(GameStatsState *stats) { memset(stats, 0, sizeof(*stats)); }
 void persist_flash_save_sensor_calibration(const SensorCalibrationData *cal) { (void)cal; }
 void persist_flash_load_sensor_calibration(SensorCalibrationData *cal) { memset(cal, 0, sizeof(*cal)); }
 uint32_t persist_flash_get_wear_count(void) { return 0U; }
 #endif
-
 
 
 

@@ -9,12 +9,15 @@
 #include "services/power_service.h"
 #include "services/sensor_service.h"
 #include "services/storage_service.h"
+#include "services/network_sync_service.h"
+#include "services/time_service.h"
 #include "services/wdt_service.h"
 #include "services/input_service.h"
 #include "web/web_wifi.h"
 #include "platform_api.h"
 #include "vibe.h"
 #include "ui_snapshot.h"
+#include <stdio.h>
 #include <string.h>
 
 UiState g_ui;
@@ -125,6 +128,17 @@ static void ui_enqueue_i32_mutation(UiModelMutationType type, int32_t value)
     memset(&mutation, 0, sizeof(mutation));
     mutation.type = type;
     mutation.data.delta_i32 = value;
+    (void)ui_enqueue_model_mutation(&mutation);
+}
+
+static void ui_enqueue_game_score_mutation(GameId game_id, uint16_t score)
+{
+    UiModelMutation mutation;
+
+    memset(&mutation, 0, sizeof(mutation));
+    mutation.type = UI_MODEL_MUTATION_SET_GAME_HIGH_SCORE;
+    mutation.data.game_high_score.game_id = (uint8_t)game_id;
+    mutation.data.game_high_score.score = score;
     (void)ui_enqueue_model_mutation(&mutation);
 }
 
@@ -422,6 +436,14 @@ void ui_request_set_datetime(const DateTime *dt)
     (void)ui_enqueue_model_mutation(&mutation);
 }
 
+void ui_request_set_game_high_score(GameId game_id, uint16_t score)
+{
+    if ((uint8_t)game_id >= (uint8_t)GAME_ID_COUNT) {
+        return;
+    }
+    ui_enqueue_game_score_mutation(game_id, score);
+}
+
 /**
  * @brief Apply service-side sensor sensitivity from the current model settings.
  *
@@ -550,6 +572,153 @@ void ui_core_draw_status_bar(int16_t ox)
     display_draw_wifi_icon(wifi_x, 0, web_wifi_connected(), false);
     if (model_find_next_enabled_alarm() < APP_MAX_ALARMS) display_draw_alarm_icon(ox + 1, 1, false);
     if (domain_state.settings.dnd) display_draw_text_5x7(ox + 14, 2, "DND", true);
+}
+
+void ui_status_compose_header_tags(char *out, size_t out_size)
+{
+    ModelDomainState domain_state;
+    ModelRuntimeState runtime_state;
+    NetworkSyncSnapshot net_snapshot;
+    uint8_t alarm_index;
+    bool has_wifi = false;
+    bool has_sync = false;
+    bool has_low = false;
+    bool has_alarm = false;
+
+    if (out == NULL || out_size == 0U) {
+        return;
+    }
+
+    out[0] = '\0';
+    if (model_get_domain_state(&domain_state) == NULL || model_get_runtime_state(&runtime_state) == NULL) {
+        return;
+    }
+
+    memset(&net_snapshot, 0, sizeof(net_snapshot));
+    (void)network_sync_service_get_snapshot(&net_snapshot);
+    alarm_index = model_find_next_enabled_alarm();
+    has_wifi = net_snapshot.wifi_connected || web_wifi_connected();
+    has_sync = domain_state.time_valid && (domain_state.time_state == TIME_STATE_RECOVERED || net_snapshot.time_synced);
+    has_low = runtime_state.battery_present && runtime_state.battery_percent <= app_tuning_manifest_get()->low_battery_threshold;
+    has_alarm = domain_state.alarm_ringing_index < APP_MAX_ALARMS || alarm_index < APP_MAX_ALARMS;
+
+    if (has_sync) strncat(out, "SYNC ", out_size - strlen(out) - 1U);
+    if (has_wifi) strncat(out, "WIFI ", out_size - strlen(out) - 1U);
+    if (domain_state.settings.dnd) strncat(out, "DND ", out_size - strlen(out) - 1U);
+    if (has_alarm) strncat(out, "ALM ", out_size - strlen(out) - 1U);
+    if (has_low) strncat(out, "LOW ", out_size - strlen(out) - 1U);
+    {
+        size_t len = strlen(out);
+        while (len > 0U && out[len - 1U] == ' ') {
+            out[--len] = '\0';
+        }
+    }
+}
+
+void ui_status_compose_alarm_value(char *out, size_t out_size)
+{
+    uint8_t index;
+
+    if (out == NULL || out_size == 0U) return;
+    index = model_find_next_enabled_alarm();
+    if (index < APP_MAX_ALARMS) {
+        const AlarmState *alarm = model_get_alarm(index);
+        snprintf(out, out_size, alarm->ringing ? "RING" : "%02u:%02u", alarm->hour, alarm->minute);
+    } else {
+        snprintf(out, out_size, "OFF");
+    }
+}
+
+void ui_status_compose_activity_value(char *out, size_t out_size)
+{
+    ModelDomainState domain_state;
+    uint8_t pct;
+
+    if (out == NULL || out_size == 0U) return;
+    if (model_get_domain_state(&domain_state) == NULL) {
+        out[0] = '\0';
+        return;
+    }
+    pct = (uint8_t)APP_CLAMP((domain_state.activity.goal == 0U) ? 0U :
+                             (domain_state.activity.steps * 100UL) / domain_state.activity.goal, 0U, 100U);
+    snprintf(out, out_size, "%u%%", pct);
+}
+
+void ui_status_compose_sensor_value(char *out, size_t out_size)
+{
+    ModelRuntimeState runtime_state;
+
+    if (out == NULL || out_size == 0U) return;
+    if (model_get_runtime_state(&runtime_state) == NULL) {
+        out[0] = '\0';
+        return;
+    }
+    if (!runtime_state.sensor.online) {
+        snprintf(out, out_size, "OFF");
+    } else {
+        snprintf(out, out_size, "ON/Q%u", runtime_state.sensor.quality);
+    }
+}
+
+void ui_status_compose_storage_value(char *out, size_t out_size)
+{
+    ModelRuntimeState runtime_state;
+
+    if (out == NULL || out_size == 0U) return;
+    if (model_get_runtime_state(&runtime_state) == NULL) {
+        out[0] = '\0';
+        return;
+    }
+    snprintf(out, out_size, runtime_state.storage_crc_ok ? "OK" : "BAD");
+}
+
+void ui_status_compose_diag_value(char *out, size_t out_size)
+{
+    if (out == NULL || out_size == 0U) return;
+    snprintf(out, out_size, diag_service_is_safe_mode_active() ? "SAFE" : "");
+}
+
+void ui_status_compose_network_value(char *line, size_t line_size, char *subline, size_t subline_size)
+{
+    ModelDomainState domain_state;
+    NetworkSyncSnapshot net_snapshot;
+    TimeSourceSnapshot time_snapshot;
+    uint32_t now_ms = platform_time_now_ms();
+    uint32_t age_s = 0U;
+
+    if (line != NULL && line_size > 0U) line[0] = '\0';
+    if (subline != NULL && subline_size > 0U) subline[0] = '\0';
+    if (model_get_domain_state(&domain_state) == NULL) {
+        return;
+    }
+
+    memset(&net_snapshot, 0, sizeof(net_snapshot));
+    memset(&time_snapshot, 0, sizeof(time_snapshot));
+    (void)network_sync_service_get_snapshot(&net_snapshot);
+    (void)time_service_get_source_snapshot(&time_snapshot);
+    if (net_snapshot.last_weather_sync_ms != 0U && now_ms >= net_snapshot.last_weather_sync_ms) {
+        age_s = (now_ms - net_snapshot.last_weather_sync_ms) / 1000UL;
+    }
+
+    if (!net_snapshot.wifi_connected && !web_wifi_connected()) {
+        snprintf(line, line_size, "WIFI OFFLINE");
+        snprintf(subline, subline_size, domain_state.time_valid ? "TIME %s" : "TIME UNSYNC",
+                 domain_state.time_state == TIME_STATE_RECOVERED ? "RECOVERED" : "LOCAL");
+    } else if (net_snapshot.weather_valid) {
+        snprintf(line, line_size, "%d.%dC %s",
+                 (int)(net_snapshot.temperature_tenths_c / 10),
+                 (int)((net_snapshot.temperature_tenths_c < 0 ? -net_snapshot.temperature_tenths_c : net_snapshot.temperature_tenths_c) % 10),
+                 net_snapshot.weather_text);
+        snprintf(subline, subline_size, "%s  %lus",
+                 time_service_source_name(time_snapshot.source),
+                 (unsigned long)age_s);
+    } else if (domain_state.time_valid) {
+        snprintf(line, line_size, net_snapshot.time_synced ? "TIME READY" : "TIME LOCAL");
+        snprintf(subline, subline_size, "SRC %s  WEATHER SYNC", time_service_source_name(time_snapshot.source));
+    } else {
+        snprintf(line, line_size, "SYNC NEEDED");
+        snprintf(subline, subline_size, "WIFI READY  OK REFRESH");
+    }
 }
 
 void ui_core_draw_card(int16_t x, int16_t y, int16_t w, int16_t h, const char *title)

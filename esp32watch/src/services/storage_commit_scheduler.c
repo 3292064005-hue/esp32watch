@@ -33,6 +33,9 @@ uint8_t storage_scheduler_pending_mask(const StorageServiceState *state)
     if (state->pending_calibration) {
         mask |= STORAGE_PENDING_CALIBRATION;
     }
+    if (state->pending_game_stats) {
+        mask |= STORAGE_PENDING_GAME_STATS;
+    }
     return mask;
 }
 

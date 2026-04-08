@@ -7,6 +7,7 @@
 
 extern "C" {
 #include "display.h"
+#include "ui_internal.h"
 #include "services/time_service.h"
 #include "services/sensor_service.h"
 #include "services/storage_service.h"
@@ -17,6 +18,22 @@ extern "C" {
 }
 
 static uint32_t g_startup_ms = 0;
+
+static const char *web_page_name(PageId page)
+{
+    switch (page) {
+        case PAGE_WATCHFACE: return "WATCH";
+        case PAGE_QUICK: return "HUB";
+        case PAGE_APPS: return "APPS";
+        case PAGE_SETTINGS: return "SETTINGS";
+        case PAGE_SENSOR: return "SENSOR";
+        case PAGE_DIAG: return "DIAG";
+        case PAGE_STORAGE: return "STORAGE";
+        case PAGE_GAMES: return "GAMES";
+        case PAGE_GAME_DETAIL: return "GAME";
+        default: return "SYSTEM";
+    }
+}
 
 void web_state_bridge_mark_startup(uint32_t mark_ms)
 {
@@ -37,6 +54,8 @@ bool web_state_snapshot_collect(WebStateSnapshot *out)
     TimeSourceSnapshot time_snapshot;
     NetworkSyncSnapshot net_snapshot;
     ModelDomainState domain_state;
+    ModelRuntimeState runtime_state;
+    UiRuntimeSnapshot ui_runtime;
     const SensorSnapshot *sensor_snapshot = sensor_service_get_snapshot();
     DiagFaultCode last_fault_code = DIAG_FAULT_NONE;
     DiagFaultInfo last_fault_info;
@@ -55,7 +74,13 @@ bool web_state_snapshot_collect(WebStateSnapshot *out)
 
     out->sleeping = false;
     out->animating = false;
-    strncpy(out->current_page, "MENU", sizeof(out->current_page) - 1);
+    if (ui_get_runtime_snapshot(&ui_runtime)) {
+        out->sleeping = ui_runtime.sleeping;
+        out->animating = ui_runtime.animating;
+        strncpy(out->current_page, web_page_name(ui_runtime.current), sizeof(out->current_page) - 1);
+    } else {
+        strncpy(out->current_page, "WATCH", sizeof(out->current_page) - 1);
+    }
     if (time_service_get_source_snapshot(&time_snapshot)) {
         strncpy(out->time_source, time_service_source_name(time_snapshot.source), sizeof(out->time_source) - 1);
     } else {
@@ -67,11 +92,26 @@ bool web_state_snapshot_collect(WebStateSnapshot *out)
         out->goal = domain_state.activity.goal;
         out->goal_percent = (domain_state.activity.goal == 0U) ? 0U :
             (uint8_t)(((uint64_t)domain_state.activity.steps * 100ULL) / domain_state.activity.goal);
+        snprintf(out->system_face, sizeof(out->system_face), "F%u", domain_state.settings.watchface + 1U);
+        snprintf(out->brightness_label, sizeof(out->brightness_label), "%u/4", domain_state.settings.brightness + 1U);
+        snprintf(out->activity_label, sizeof(out->activity_label), "%u%%", out->goal_percent);
     } else {
         out->steps = 0;
         out->goal = 0;
         out->goal_percent = 0;
+        strncpy(out->system_face, "F-", sizeof(out->system_face) - 1);
+        strncpy(out->brightness_label, "-", sizeof(out->brightness_label) - 1);
+        strncpy(out->activity_label, "0%", sizeof(out->activity_label) - 1);
     }
+    (void)model_get_runtime_state(&runtime_state);
+
+    ui_status_compose_header_tags(out->header_tags, sizeof(out->header_tags));
+    ui_status_compose_network_value(out->network_line, sizeof(out->network_line),
+                                    out->network_subline, sizeof(out->network_subline));
+    ui_status_compose_alarm_value(out->alarm_label, sizeof(out->alarm_label));
+    ui_status_compose_sensor_value(out->sensor_label, sizeof(out->sensor_label));
+    ui_status_compose_storage_value(out->storage_label, sizeof(out->storage_label));
+    ui_status_compose_diag_value(out->diag_label, sizeof(out->diag_label));
 
     if (sensor_snapshot != NULL) {
         out->sensor_online = sensor_snapshot->online;
@@ -133,6 +173,10 @@ bool web_state_snapshot_collect(WebStateSnapshot *out)
                 sizeof(out->last_fault_severity) - 1);
         out->last_fault_count = last_fault_info.count;
     }
+    if (out->diag_label[0] == '\0') {
+        strncpy(out->diag_label, (out->has_last_fault || !runtime_state.storage_crc_ok) ? "WARN" : "OK",
+                sizeof(out->diag_label) - 1);
+    }
 
     strncpy(out->storage_backend, storage_service_get_backend_name(), sizeof(out->storage_backend) - 1);
     strncpy(out->storage_commit_state,
@@ -149,6 +193,24 @@ bool web_state_snapshot_collect(WebStateSnapshot *out)
         strncpy(out->weather_text, net_snapshot.weather_text, sizeof(out->weather_text) - 1);
         strncpy(out->weather_location, net_snapshot.location_name, sizeof(out->weather_location) - 1);
         out->weather_updated_at_ms = net_snapshot.last_weather_sync_ms;
+    }
+
+    out->next_alarm_index = model_find_next_enabled_alarm();
+    if (out->next_alarm_index < APP_MAX_ALARMS) {
+        const AlarmState *alarm = model_get_alarm(out->next_alarm_index);
+        out->alarm_enabled = alarm->enabled;
+        out->alarm_ringing = alarm->ringing;
+        snprintf(out->alarm_time, sizeof(out->alarm_time), "%02u:%02u", alarm->hour, alarm->minute);
+    } else {
+        out->next_alarm_index = 0xFFU;
+        strncpy(out->alarm_time, "--:--", sizeof(out->alarm_time) - 1);
+    }
+    if (!out->wifi_connected) {
+        strncpy(out->network_label, "OFFLINE", sizeof(out->network_label) - 1);
+    } else if (out->weather_valid) {
+        strncpy(out->network_label, "READY", sizeof(out->network_label) - 1);
+    } else {
+        strncpy(out->network_label, "SYNC", sizeof(out->network_label) - 1);
     }
 
     out->has_last_log = diag_service_get_last_log(&last_log);

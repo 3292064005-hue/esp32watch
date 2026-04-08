@@ -90,7 +90,8 @@ static void storage_commit_apply_event(StorageCommitEvent event)
 
 static void storage_commit_prepare_payloads(SettingsState *settings_to_write,
                                             AlarmState *alarms_to_write,
-                                            SensorCalibrationData *cal_to_write)
+                                            SensorCalibrationData *cal_to_write,
+                                            GameStatsState *stats_to_write)
 {
     if (g_storage.pending_settings) {
         *settings_to_write = g_storage.settings;
@@ -115,23 +116,35 @@ static void storage_commit_prepare_payloads(SettingsState *settings_to_write,
     } else {
         storage_backend_adapter_load_calibration(cal_to_write);
     }
+
+    if (g_storage.pending_game_stats) {
+        *stats_to_write = g_storage.game_stats;
+    } else if (g_storage.shadow_game_stats_valid) {
+        *stats_to_write = g_storage.shadow_game_stats;
+    } else {
+        storage_backend_adapter_load_game_stats(stats_to_write);
+    }
 }
 
 static void storage_commit_apply_success(const SettingsState *settings_to_write,
                                          const AlarmState *alarms_to_write,
-                                         const SensorCalibrationData *cal_to_write)
+                                         const SensorCalibrationData *cal_to_write,
+                                         const GameStatsState *stats_to_write)
 {
     g_storage.requested_commit_reason = STORAGE_COMMIT_REASON_NONE;
     g_storage.flush_before_sleep = false;
     g_storage.shadow_settings = *settings_to_write;
     memcpy(g_storage.shadow_alarms, alarms_to_write, sizeof(g_storage.shadow_alarms));
     g_storage.shadow_calibration = *cal_to_write;
+    g_storage.shadow_game_stats = *stats_to_write;
     g_storage.shadow_settings_valid = true;
     g_storage.shadow_alarms_valid = true;
     g_storage.shadow_calibration_valid = true;
+    g_storage.shadow_game_stats_valid = true;
     g_storage.pending_settings = false;
     g_storage.pending_alarms = false;
     g_storage.pending_calibration = false;
+    g_storage.pending_game_stats = false;
     g_storage.dirty_since_ms = 0U;
     g_storage.last_change_ms = 0U;
     g_storage.dirty_source_mask = 0U;
@@ -150,7 +163,8 @@ static bool storage_commit_prepare_execution(StorageCommitReason reason)
 
     storage_commit_prepare_payloads(&g_storage.inflight_settings,
                                     g_storage.inflight_alarms,
-                                    &g_storage.inflight_calibration);
+                                    &g_storage.inflight_calibration,
+                                    &g_storage.inflight_game_stats);
     g_storage.inflight_commit_reason = reason;
     g_storage.inflight_commit_ok = false;
     g_storage.inflight_previously_transaction_active = tx_ctx.previously_transaction_active;
@@ -166,7 +180,8 @@ static void storage_commit_execute_prepared(void)
         if (!storage_backend_adapter_begin_commit(&g_storage.inflight_settings,
                                                   g_storage.inflight_alarms,
                                                   APP_MAX_ALARMS,
-                                                  &g_storage.inflight_calibration)) {
+                                                  &g_storage.inflight_calibration,
+                                                  &g_storage.inflight_game_stats)) {
             g_storage.last_commit_ms = platform_time_now_ms();
             g_storage.last_commit_reason = g_storage.inflight_commit_reason;
             g_storage.last_commit_ok = false;
@@ -194,7 +209,8 @@ static void storage_commit_execute_prepared(void)
     if (g_storage.inflight_commit_ok) {
         storage_commit_apply_success(&g_storage.inflight_settings,
                                      g_storage.inflight_alarms,
-                                     &g_storage.inflight_calibration);
+                                     &g_storage.inflight_calibration,
+                                     &g_storage.inflight_game_stats);
     } else {
         g_storage.last_commit_ok = false;
         g_storage.backend_degraded = true;
@@ -358,5 +374,4 @@ void storage_service_commit_now_with_reason(StorageCommitReason reason)
         storage_commit_finalize_execution();
     }
 }
-
 

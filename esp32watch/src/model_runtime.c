@@ -50,6 +50,7 @@ static void model_internal_rebuild_domain_state(void)
     g_model_domain_state.timer = g_model.timer;
     g_model_domain_state.activity = g_model.activity;
     g_model_domain_state.settings = g_model.settings;
+    g_model_domain_state.game_stats = g_model.game_stats;
     g_model_domain_state.current_day_id = g_model.current_day_id;
 }
 
@@ -162,6 +163,17 @@ const ModelDomainState *model_get_domain_state(ModelDomainState *out)
 
     model_internal_flush_read_models();
     *out = g_model_domain_state;
+    return out;
+}
+
+const GameStatsState *model_get_game_stats(GameStatsState *out)
+{
+    if (out == NULL) {
+        return NULL;
+    }
+
+    model_internal_flush_read_models();
+    *out = g_model_domain_state.game_stats;
     return out;
 }
 

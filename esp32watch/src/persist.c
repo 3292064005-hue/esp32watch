@@ -4,6 +4,7 @@
 #include "common/storage_codec.h"
 #include "common/crc16.h"
 #include <stddef.h>
+#include <string.h>
 
 #define PERSIST_CAL_VALID_FLAG 0x8000U
 
@@ -136,6 +137,19 @@ void persist_load_alarms(AlarmState *alarms, uint8_t count)
     if (count > 0U) storage_unpack_alarm_word(platform_rtc_backup_read(&platform_rtc_main, BKP_DR_ALARM), (uint8_t)(meta & 0x0FU), &alarms[0], 0U);
     if (count > 1U) storage_unpack_alarm_word(platform_rtc_backup_read(&platform_rtc_main, BKP_DR_ALARM1), (uint8_t)((meta >> 4) & 0x0FU), &alarms[1], 1U);
     if (count > 2U) storage_unpack_alarm_word(platform_rtc_backup_read(&platform_rtc_main, BKP_DR_ALARM2), (uint8_t)((meta >> 8) & 0x0FU), &alarms[2], 2U);
+}
+
+void persist_save_game_stats(const GameStatsState *stats)
+{
+    (void)stats;
+}
+
+void persist_load_game_stats(GameStatsState *stats)
+{
+    if (stats == NULL) {
+        return;
+    }
+    memset(stats, 0, sizeof(*stats));
 }
 
 void persist_save_sensor_calibration(const SensorCalibrationData *cal)

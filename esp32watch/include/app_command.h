@@ -43,6 +43,7 @@ typedef enum {
     APP_COMMAND_TIMER_ADJUST_SECONDS,
     APP_COMMAND_TIMER_CYCLE_PRESET,
     APP_COMMAND_SET_DATETIME,
+    APP_COMMAND_SET_GAME_HIGH_SCORE,
     APP_COMMAND_SENSOR_REINIT,
     APP_COMMAND_SENSOR_CALIBRATION,
     APP_COMMAND_STORAGE_MANUAL_FLUSH,
@@ -73,6 +74,10 @@ typedef struct {
             uint8_t index;
             uint8_t repeat_mask;
         } alarm_repeat;
+        struct {
+            uint8_t game_id;
+            uint16_t score;
+        } game_high_score;
     } data;
 } AppCommand;
 

@@ -67,6 +67,7 @@ void model_internal_persist_settings(void);
  * @throws None.
  */
 void model_internal_persist_all_alarms(void);
+void model_internal_persist_game_stats(void);
 
 /**
  * @brief Request a runtime side-effect bundle to be executed by the app loop.

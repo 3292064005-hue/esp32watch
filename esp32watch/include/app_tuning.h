@@ -12,6 +12,7 @@
 #define UI_TIMER_REFRESH_MS             200U
 #define UI_STOPWATCH_REFRESH_MS         80U
 #define UI_SENSOR_REFRESH_MS            150U
+#define UI_GAME_REFRESH_MS              50U
 #define UI_LIQUID_REFRESH_MS            45U
 
 #define BATTERY_SAMPLE_MS               30000U
@@ -54,7 +55,7 @@
 #define WATCH_APP_STAGE_RENDER_BUDGET_MS    8U
 #define WATCH_APP_STAGE_IDLE_BUDGET_MS      2U
 
-#define APP_STORAGE_VERSION             5U
+#define APP_STORAGE_VERSION             6U
 
 typedef struct {
     uint32_t ui_fps;
@@ -66,6 +67,7 @@ typedef struct {
     uint32_t ui_timer_refresh_ms;
     uint32_t ui_stopwatch_refresh_ms;
     uint32_t ui_sensor_refresh_ms;
+    uint32_t ui_game_refresh_ms;
     uint32_t ui_liquid_refresh_ms;
 
     uint32_t battery_sample_ms;
@@ -118,6 +120,7 @@ static inline const AppTuningManifest *app_tuning_manifest_get(void)
         .ui_timer_refresh_ms = UI_TIMER_REFRESH_MS,
         .ui_stopwatch_refresh_ms = UI_STOPWATCH_REFRESH_MS,
         .ui_sensor_refresh_ms = UI_SENSOR_REFRESH_MS,
+        .ui_game_refresh_ms = UI_GAME_REFRESH_MS,
         .ui_liquid_refresh_ms = UI_LIQUID_REFRESH_MS,
 
         .battery_sample_ms = BATTERY_SAMPLE_MS,
