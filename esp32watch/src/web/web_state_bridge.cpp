@@ -2,6 +2,7 @@
 #include "web/web_wifi.h"
 #include "web/web_overlay.h"
 #include "services/network_sync_service.h"
+#include "melody_service.h"
 #include <string.h>
 #include <Arduino.h>
 
@@ -26,6 +27,7 @@ static const char *web_page_name(PageId page)
         case PAGE_QUICK: return "HUB";
         case PAGE_APPS: return "APPS";
         case PAGE_SETTINGS: return "SETTINGS";
+        case PAGE_MUSIC: return "MUSIC";
         case PAGE_SENSOR: return "SENSOR";
         case PAGE_DIAG: return "DIAG";
         case PAGE_STORAGE: return "STORAGE";
@@ -109,6 +111,7 @@ bool web_state_snapshot_collect(WebStateSnapshot *out)
     ui_status_compose_network_value(out->network_line, sizeof(out->network_line),
                                     out->network_subline, sizeof(out->network_subline));
     ui_status_compose_alarm_value(out->alarm_label, sizeof(out->alarm_label));
+    ui_status_compose_music_value(out->music_label, sizeof(out->music_label));
     ui_status_compose_sensor_value(out->sensor_label, sizeof(out->sensor_label));
     ui_status_compose_storage_value(out->storage_label, sizeof(out->storage_label));
     ui_status_compose_diag_value(out->diag_label, sizeof(out->diag_label));
@@ -205,6 +208,10 @@ bool web_state_snapshot_collect(WebStateSnapshot *out)
         out->next_alarm_index = 0xFFU;
         strncpy(out->alarm_time, "--:--", sizeof(out->alarm_time) - 1);
     }
+    out->music_available = melody_is_available();
+    out->music_playing = melody_is_playing();
+    strncpy(out->music_state, melody_state_name(melody_get_state()), sizeof(out->music_state) - 1);
+    strncpy(out->music_song, melody_song_ascii_name(melody_get_current_song()), sizeof(out->music_song) - 1);
     if (!out->wifi_connected) {
         strncpy(out->network_label, "OFFLINE", sizeof(out->network_label) - 1);
     } else if (out->weather_valid) {

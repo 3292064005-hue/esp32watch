@@ -13,6 +13,7 @@
 #include "services/time_service.h"
 #include "services/wdt_service.h"
 #include "services/input_service.h"
+#include "melody_service.h"
 #include "web/web_wifi.h"
 #include "platform_api.h"
 #include "vibe.h"
@@ -642,6 +643,21 @@ void ui_status_compose_activity_value(char *out, size_t out_size)
     pct = (uint8_t)APP_CLAMP((domain_state.activity.goal == 0U) ? 0U :
                              (domain_state.activity.steps * 100UL) / domain_state.activity.goal, 0U, 100U);
     snprintf(out, out_size, "%u%%", pct);
+}
+
+void ui_status_compose_music_value(char *out, size_t out_size)
+{
+    if (out == NULL || out_size == 0U) return;
+
+    if (!melody_is_available()) {
+        snprintf(out, out_size, "OFF");
+    } else if (melody_is_playing()) {
+        snprintf(out, out_size, "PLAY");
+    } else if (melody_get_state() == MELODY_STATE_DONE) {
+        snprintf(out, out_size, "DONE");
+    } else {
+        snprintf(out, out_size, "IDLE");
+    }
 }
 
 void ui_status_compose_sensor_value(char *out, size_t out_size)

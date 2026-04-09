@@ -219,6 +219,14 @@ void web_register_api_routes(AsyncWebServer &server)
         web_json_kv_str(response, "label", snap.alarm_label, true);
         response += "},";
 
+        response += "\"music\":{";
+        web_json_kv_bool(response, "available", snap.music_available, false);
+        web_json_kv_bool(response, "playing", snap.music_playing, false);
+        web_json_kv_str(response, "state", snap.music_state, false);
+        web_json_kv_str(response, "song", snap.music_song, false);
+        web_json_kv_str(response, "label", snap.music_label, true);
+        response += "},";
+
         response += "\"sensor\":{";
         web_json_kv_bool(response, "online", snap.sensor_online, false);
         web_json_kv_bool(response, "calibrated", snap.sensor_calibrated, false);

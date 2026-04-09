@@ -162,6 +162,7 @@ extern "C" bool system_runtime_capability_probe(SystemRuntimeCapabilities *out)
     return manifest->profile_name != NULL &&
            (!manifest->sensor_enabled || (manifest->i2c_port != NULL && manifest->i2c_scl_pin != 0U && manifest->i2c_sda_pin != 0U)) &&
            (!manifest->vibration_enabled || (manifest->vibe_port != NULL && manifest->vibe_pin != 0U)) &&
+           (!manifest->buzzer_enabled || manifest->buzzer_gpio >= 0) &&
            g_runtime_caps.storage_map_valid;
 }
 

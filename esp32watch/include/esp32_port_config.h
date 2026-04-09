@@ -45,6 +45,9 @@
 #ifndef ESP32_VIBE_GPIO
 #define ESP32_VIBE_GPIO                -1
 #endif
+#ifndef ESP32_BUZZER_GPIO
+#define ESP32_BUZZER_GPIO              17
+#endif
 #ifndef ESP32_CHARGE_DET_GPIO
 #define ESP32_CHARGE_DET_GPIO          -1
 #endif

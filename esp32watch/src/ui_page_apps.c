@@ -2,11 +2,11 @@
 #include "display.h"
 
 static const char * const app_names[] = {
-    "Alarms", "Timer", "Activity", "Settings", "Games", "Stopwatch",
+    "Alarms", "Timer", "Music", "Activity", "Settings", "Games", "Stopwatch",
     "Sensor", "Diag", "Storage", "Calib", "Input", "Liquid", "About"
 };
 static const PageId app_pages[] = {
-    PAGE_ALARM, PAGE_TIMER, PAGE_ACTIVITY, PAGE_SETTINGS, PAGE_GAMES, PAGE_STOPWATCH,
+    PAGE_ALARM, PAGE_TIMER, PAGE_MUSIC, PAGE_ACTIVITY, PAGE_SETTINGS, PAGE_GAMES, PAGE_STOPWATCH,
     PAGE_SENSOR, PAGE_DIAG, PAGE_STORAGE, PAGE_CALIBRATION,
     PAGE_INPUTTEST, PAGE_LIQUID, PAGE_ABOUT
 };
@@ -25,6 +25,7 @@ void ui_page_apps_render(PageId page, int16_t ox)
 
         if (idx >= total) break;
         if (app_pages[idx] == PAGE_ALARM) ui_status_compose_alarm_value(value, sizeof(value));
+        else if (app_pages[idx] == PAGE_MUSIC) ui_status_compose_music_value(value, sizeof(value));
         else if (app_pages[idx] == PAGE_ACTIVITY) ui_status_compose_activity_value(value, sizeof(value));
         else if (app_pages[idx] == PAGE_SENSOR) ui_status_compose_sensor_value(value, sizeof(value));
         else if (app_pages[idx] == PAGE_STORAGE) ui_status_compose_storage_value(value, sizeof(value));

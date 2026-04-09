@@ -2,12 +2,16 @@
 #include "ui_internal.h"
 #include "ui_page_registry.h"
 #include "model.h"
+#include "melody_service.h"
 
 static void ui_core_start_anim(PageId next, int8_t dir, uint32_t now_ms)
 {
     ModelDomainState domain_state;
 
     if (next == ui_runtime_get_current_page()) return;
+    if (ui_runtime_get_current_page() == PAGE_MUSIC && next != PAGE_MUSIC) {
+        melody_stop();
+    }
     ui_runtime_set_from_page(ui_runtime_get_current_page());
     ui_runtime_set_to_page(next);
     if (ui_page_game_is_page(next)) {

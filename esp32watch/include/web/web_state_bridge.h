@@ -78,6 +78,11 @@ typedef struct {
     bool alarm_ringing;
     char alarm_time[12];
     char alarm_label[16];
+    bool music_available;
+    bool music_playing;
+    char music_state[16];
+    char music_song[24];
+    char music_label[16];
     char system_face[8];
     char brightness_label[12];
     char activity_label[16];

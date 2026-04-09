@@ -1,5 +1,7 @@
 #include "services/alert_service.h"
 #include "model.h"
+#include "drv_buzzer.h"
+#include "melody_service.h"
 #include "vibe.h"
 #include <stddef.h>
 
@@ -8,6 +10,7 @@ static bool g_alert_service_initialized;
 void alert_service_init(void)
 {
     vibe_init();
+    melody_init();
     g_alert_service_initialized = true;
 }
 
@@ -21,10 +24,17 @@ void alert_service_tick(uint32_t now_ms)
     }
 
     vibe_tick(now_ms, ui_state.popup, domain_state.settings.vibrate && !domain_state.settings.dnd);
+    melody_tick(now_ms);
+    drv_buzzer_tick(now_ms);
 }
 
 
 bool alert_service_is_initialized(void)
 {
     return g_alert_service_initialized;
+}
+
+void alert_service_stop_audio(void)
+{
+    melody_stop();
 }

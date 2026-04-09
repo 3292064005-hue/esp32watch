@@ -13,6 +13,7 @@ typedef struct {
     const char *profile_name;
     bool battery_enabled;
     bool vibration_enabled;
+    bool buzzer_enabled;
     bool sensor_enabled;
     bool watchdog_enabled;
     bool flash_storage_enabled;
@@ -25,6 +26,7 @@ typedef struct {
     uint16_t i2c_sda_pin;
     PlatformGpioPort *vibe_port;
     uint16_t vibe_pin;
+    int16_t buzzer_gpio;
 } BoardManifest;
 
 const BoardManifest *board_manifest_get(void);
@@ -37,4 +39,3 @@ uint32_t board_manifest_storage_reserved_bytes(void);
 #endif
 
 #endif
-

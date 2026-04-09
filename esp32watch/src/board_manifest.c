@@ -1,5 +1,6 @@
 #include "board_manifest.h"
 #include "board_storage_map.h"
+#include "esp32_port_config.h"
 
 static const BoardManifest g_manifest = {
 #if defined(APP_BOARD_PROFILE_BLUEPILL_FULL)
@@ -13,6 +14,7 @@ static const BoardManifest g_manifest = {
 #endif
     .battery_enabled = APP_FEATURE_BATTERY != 0,
     .vibration_enabled = APP_FEATURE_VIBRATION != 0,
+    .buzzer_enabled = APP_FEATURE_BUZZER != 0,
     .sensor_enabled = APP_FEATURE_SENSOR != 0,
     .watchdog_enabled = APP_FEATURE_WATCHDOG != 0,
     .flash_storage_enabled = APP_STORAGE_USE_FLASH != 0,
@@ -25,6 +27,7 @@ static const BoardManifest g_manifest = {
     .i2c_sda_pin = PLATFORM_PIN_7,
     .vibe_port = PLATFORM_GPIOB,
     .vibe_pin = PLATFORM_PIN_0,
+    .buzzer_gpio = ESP32_BUZZER_GPIO,
 };
 
 const BoardManifest *board_manifest_get(void)

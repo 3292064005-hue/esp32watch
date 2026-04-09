@@ -16,6 +16,7 @@ typedef enum {
     PAGE_ALARM_EDIT,
     PAGE_STOPWATCH,
     PAGE_TIMER,
+    PAGE_MUSIC,
     PAGE_GAMES,
     PAGE_GAME_DETAIL,
     PAGE_BREAKOUT,
@@ -368,6 +369,7 @@ void ui_core_draw_list_item(int16_t x, int16_t y, int16_t w, const char *label, 
 void ui_status_compose_header_tags(char *out, size_t out_size);
 void ui_status_compose_alarm_value(char *out, size_t out_size);
 void ui_status_compose_activity_value(char *out, size_t out_size);
+void ui_status_compose_music_value(char *out, size_t out_size);
 void ui_status_compose_sensor_value(char *out, size_t out_size);
 void ui_status_compose_storage_value(char *out, size_t out_size);
 void ui_status_compose_diag_value(char *out, size_t out_size);
@@ -393,6 +395,8 @@ void ui_page_stopwatch_render(PageId page, int16_t ox);
 bool ui_page_stopwatch_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
 void ui_page_timer_render(PageId page, int16_t ox);
 bool ui_page_timer_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
+void ui_page_music_render(PageId page, int16_t ox);
+bool ui_page_music_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
 void ui_page_games_menu_render(PageId page, int16_t ox);
 bool ui_page_games_menu_handle(PageId page, const KeyEvent *e, uint32_t now_ms);
 void ui_page_game_detail_render(PageId page, int16_t ox);

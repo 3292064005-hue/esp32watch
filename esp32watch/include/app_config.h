@@ -53,6 +53,9 @@
 #define VIBE_GPIO_Port                  PLATFORM_GPIOB
 #define VIBE_Pin                        PLATFORM_PIN_0
 
+/* ---------------- Passive buzzer ---------------- */
+#define BUZZER_GPIO                     ESP32_BUZZER_GPIO
+
 /* ---------------- MPU6050 ---------------- */
 #define MPU6050_I2C_HANDLE              platform_i2c_main
 #define MPU6050_I2C_ADDRESS_7BIT        0x68
