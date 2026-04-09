@@ -22,11 +22,13 @@ extern "C" {
 #include "services/sensor_service.h"
 #include "services/storage_service.h"
 #include "app_tuning.h"
+#include "system_init.h"
 }
 
 static const char *kHexDigits = "0123456789ABCDEF";
-static constexpr uint32_t kWebApiVersion = 3U;
-static constexpr uint32_t kWebStateVersion = 3U;
+static constexpr uint32_t kWebApiVersion = 4U;
+static constexpr uint32_t kWebStateVersion = 4U;
+static constexpr uint32_t kWebCommandCatalogVersion = 1U;
 
 static bool parse_key_id(const char *key_str, KeyId *out_id)
 {
@@ -79,28 +81,12 @@ static bool parse_key_event(const char *event_str, KeyEventType *out_event)
 
 static bool parse_command_type(const char *cmd_str, AppCommandType *out_type)
 {
-    if (!cmd_str || !out_type) {
+    const AppCommandDescriptor *descriptor = app_command_describe_by_name(cmd_str);
+    if (cmd_str == nullptr || out_type == nullptr || descriptor == nullptr || !descriptor->web_exposed) {
         return false;
     }
-
-    if (strcmp(cmd_str, "clearSafeMode") == 0) {
-        *out_type = APP_COMMAND_CLEAR_SAFE_MODE;
-        return true;
-    } else if (strcmp(cmd_str, "storageManualFlush") == 0) {
-        *out_type = APP_COMMAND_STORAGE_MANUAL_FLUSH;
-        return true;
-    } else if (strcmp(cmd_str, "sensorReinit") == 0) {
-        *out_type = APP_COMMAND_SENSOR_REINIT;
-        return true;
-    } else if (strcmp(cmd_str, "sensorCalibration") == 0) {
-        *out_type = APP_COMMAND_SENSOR_CALIBRATION;
-        return true;
-    } else if (strcmp(cmd_str, "restoreDefaults") == 0) {
-        *out_type = APP_COMMAND_RESTORE_DEFAULTS;
-        return true;
-    }
-
-    return false;
+    *out_type = descriptor->type;
+    return true;
 }
 
 static void send_json_error(AsyncWebServerRequest *request, int status, const char *message)
@@ -385,12 +371,62 @@ static bool require_control_auth(AsyncWebServerRequest *request)
     return true;
 }
 
-static void send_queue_ack(AsyncWebServerRequest *request)
+static void append_action_status_payload(String &response, const WebActionStatusSnapshot &status, bool append_ok_prefix)
 {
-    String response = "{\"ok\":true,\"message\":\"queued\",\"queueDepth\":";
-    response += web_action_queue_depth();
+    if (append_ok_prefix) {
+        response += "\"ok\":true,";
+    }
+    web_json_kv_u32(response, "actionId", status.id, false);
+    web_json_kv_u32(response, "requestId", status.id, false);
+    web_json_kv_str(response, "actionType", web_action_type_name(status.type), false);
+    web_json_kv_str(response, "status", web_action_status_name(status.status), false);
+    web_json_kv_str(response, "state", web_action_status_name(status.status), false);
+    web_json_kv_u32(response, "acceptedAtMs", status.accepted_at_ms, false);
+    web_json_kv_u32(response, "startedAtMs", status.started_at_ms, false);
+    web_json_kv_u32(response, "completedAtMs", status.completed_at_ms, false);
+    web_json_kv_str(response, "message", status.message, false);
+    if (status.type == WEB_ACTION_COMMAND) {
+        web_json_kv_bool(response, "commandOk", status.command_ok, false);
+        web_json_kv_str(response, "commandCode", app_command_result_code_name(status.command_code), true);
+    } else {
+        web_json_kv_str(response, "commandCode", "N/A", true);
+    }
+}
+
+static void send_queue_ack(AsyncWebServerRequest *request, uint32_t action_id, WebActionType type)
+{
+    String response = "{\"ok\":true,\"message\":\"accepted\",";
+    web_json_kv_u32(response, "actionId", action_id, false);
+    web_json_kv_u32(response, "requestId", action_id, false);
+    web_json_kv_str(response, "actionType", web_action_type_name(type), false);
+    response += "\"trackPath\":\"/api/actions/status?id=";
+    response += action_id;
+    response += "\",";
+    web_json_kv_u32(response, "queueDepth", web_action_queue_depth(), true);
     response += "}";
     request->send(200, "application/json", response);
+}
+
+static void append_command_catalog(String &response)
+{
+    size_t i;
+    response += "\"commandCatalogVersion\":";
+    response += kWebCommandCatalogVersion;
+    response += ",\"commands\":[";
+    for (i = 0; i < app_command_catalog_count(); ++i) {
+        const AppCommandDescriptor *descriptor = app_command_catalog_at(i);
+        if (descriptor == nullptr || !descriptor->web_exposed) {
+            continue;
+        }
+        if (response[response.length() - 1U] != '[') {
+            response += ',';
+        }
+        response += '{';
+        web_json_kv_str(response, "type", descriptor->wire_name, false);
+        web_json_kv_bool(response, "webExposed", descriptor->web_exposed, true);
+        response += '}';
+    }
+    response += ']';
 }
 
 static void append_capabilities(String &response)
@@ -400,7 +436,10 @@ static void append_capabilities(String &response)
     web_json_kv_bool(response, "securedProvisioningAp", true, false);
     web_json_kv_bool(response, "authToken", true, false);
     web_json_kv_bool(response, "overlayControl", true, false);
+    web_json_kv_bool(response, "trackedMutations", true, false);
     web_json_kv_bool(response, "stateSummary", true, false);
+    web_json_kv_bool(response, "stateDetail", true, false);
+    web_json_kv_bool(response, "stateRaw", true, false);
     web_json_kv_bool(response, "controlLockInProvisioningAp", true, true);
     response += "}";
 }
@@ -431,6 +470,23 @@ static void send_meta_response(AsyncWebServerRequest *request)
     web_json_kv_str(response, "weatherSyncStatus", network.weather_status, false);
     web_json_kv_bool(response, "weatherLastAttemptOk", network.weather_last_attempt_ok, false);
     web_json_kv_i32(response, "weatherLastHttpStatus", network.last_weather_http_status, false);
+    {
+        SystemStartupReport startup = {};
+        if (system_get_startup_report(&startup)) {
+            response += "\"startup\":{";
+            web_json_kv_bool(response, "ok", startup.startup_ok, false);
+            web_json_kv_bool(response, "degraded", startup.degraded, false);
+            web_json_kv_bool(response, "fatalStopRequested", startup.fatal_stop_requested, false);
+            web_json_kv_str(response, "failureStage", system_init_stage_name(startup.failure_stage), false);
+            web_json_kv_str(response, "lastCompletedStage", system_init_stage_name(startup.last_completed_stage), false);
+            web_json_kv_str(response, "recoveryStage", system_init_stage_name(startup.recovery_stage), false);
+            web_json_kv_str(response, "fatalCode", system_fatal_code_name(startup.fatal_code), false);
+            web_json_kv_str(response, "fatalPolicy", system_fatal_policy_name(startup.fatal_policy), true);
+            response += "},";
+        }
+    }
+    append_command_catalog(response);
+    response += ",";
     append_capabilities(response);
     response += "}";
     request->send(200, "application/json", response);
@@ -482,6 +538,212 @@ static void send_device_config_response(AsyncWebServerRequest *request)
     request->send(200, "application/json", response);
 }
 
+static void send_action_result_response(AsyncWebServerRequest *request, uint32_t action_id)
+{
+    WebActionStatusSnapshot result = {};
+    String response = "{";
+
+    if (!web_action_status_lookup(action_id, &result)) {
+        send_json_error(request, 404, "action id not found");
+        return;
+    }
+
+    append_action_status_payload(response, result, true);
+    response += "}";
+    request->send(200, "application/json", response);
+}
+
+static void send_latest_action_response(AsyncWebServerRequest *request)
+{
+    WebActionStatusSnapshot result = {};
+    String response = "{";
+
+    if (!web_action_status_latest(&result)) {
+        send_json_error(request, 404, "no tracked actions");
+        return;
+    }
+
+    append_action_status_payload(response, result, true);
+    response += "}";
+    request->send(200, "application/json", response);
+}
+
+static void send_state_detail_response(AsyncWebServerRequest *request)
+{
+    WebStateCoreSnapshot core;
+    WebStateDetailSnapshot detail;
+    String response;
+    response.reserve(3072);
+
+    if (!web_state_core_collect(&core) || !web_state_detail_collect(&detail)) {
+        request->send(500, "application/json", "{\"ok\":false,\"message\":\"snapshot unavailable\"}");
+        return;
+    }
+
+    response = "{";
+    response += "\"ok\":true,";
+    web_json_kv_u32(response, "apiVersion", kWebApiVersion, false);
+    web_json_kv_u32(response, "stateVersion", kWebStateVersion, false);
+    response += "\"activity\":{";
+    web_json_kv_u32(response, "steps", core.activity.steps, false);
+    web_json_kv_u32(response, "goal", core.activity.goal, false);
+    web_json_kv_u32(response, "goalPercent", core.activity.goal_percent, true);
+    response += "},";
+    response += "\"alarm\":{";
+    web_json_kv_u32(response, "nextIndex", detail.alarm.next_alarm_index, false);
+    web_json_kv_str(response, "nextTime", detail.alarm.next_time, false);
+    web_json_kv_bool(response, "enabled", detail.alarm.enabled, false);
+    web_json_kv_bool(response, "ringing", detail.alarm.ringing, false);
+    web_json_kv_str(response, "label", core.labels.alarm_label, true);
+    response += "},";
+    response += "\"music\":{";
+    web_json_kv_bool(response, "available", detail.music.available, false);
+    web_json_kv_bool(response, "playing", detail.music.playing, false);
+    web_json_kv_str(response, "state", detail.music.state, false);
+    web_json_kv_str(response, "song", detail.music.song, false);
+    web_json_kv_str(response, "label", core.labels.music_label, true);
+    response += "},";
+    response += "\"sensor\":{";
+    web_json_kv_bool(response, "online", detail.sensor.online, false);
+    web_json_kv_bool(response, "calibrated", detail.sensor.calibrated, false);
+    web_json_kv_bool(response, "staticNow", detail.sensor.static_now, false);
+    web_json_kv_str(response, "runtimeState", detail.sensor.runtime_state, false);
+    web_json_kv_str(response, "calibrationState", detail.sensor.calibration_state, false);
+    web_json_kv_u32(response, "quality", detail.sensor.quality, false);
+    web_json_kv_u32(response, "errorCode", detail.sensor.error_code, false);
+    web_json_kv_u32(response, "faultCount", detail.sensor.fault_count, false);
+    web_json_kv_u32(response, "reinitCount", detail.sensor.reinit_count, false);
+    web_json_kv_u32(response, "calibrationProgress", detail.sensor.calibration_progress, false);
+    web_json_kv_u32(response, "lastSampleMs", detail.sensor.last_sample_ms, false);
+    web_json_kv_u32(response, "stepsTotal", detail.sensor.steps_total, true);
+    response += "},";
+    response += "\"storage\":{";
+    web_json_kv_str(response, "backend", detail.storage.backend, false);
+    web_json_kv_str(response, "backendPhase", detail.storage.backend_phase, false);
+    web_json_kv_str(response, "commitState", detail.storage.commit_state, false);
+    web_json_kv_u32(response, "schemaVersion", detail.storage.schema_version, false);
+    web_json_kv_bool(response, "flashSupported", detail.storage.flash_supported, false);
+    web_json_kv_bool(response, "flashReady", detail.storage.flash_ready, false);
+    web_json_kv_bool(response, "migrationAttempted", detail.storage.migration_attempted, false);
+    web_json_kv_bool(response, "migrationOk", detail.storage.migration_ok, false);
+    web_json_kv_bool(response, "transactionActive", detail.storage.transaction_active, false);
+    web_json_kv_bool(response, "sleepFlushPending", detail.storage.sleep_flush_pending, true);
+    response += "},";
+    response += "\"diag\":{";
+    web_json_kv_bool(response, "safeModeActive", detail.diag.safe_mode_active, false);
+    web_json_kv_bool(response, "safeModeCanClear", detail.diag.safe_mode_can_clear, false);
+    web_json_kv_str(response, "safeModeReason", detail.diag.safe_mode_reason, false);
+    web_json_kv_bool(response, "hasLastFault", detail.diag.has_last_fault, false);
+    web_json_kv_str(response, "lastFaultName", detail.diag.last_fault_name, false);
+    web_json_kv_str(response, "lastFaultSeverity", detail.diag.last_fault_severity, false);
+    web_json_kv_u32(response, "lastFaultCount", detail.diag.last_fault_count, false);
+    web_json_kv_bool(response, "hasLastLog", detail.diag.has_last_log, false);
+    web_json_kv_str(response, "lastLogName", detail.diag.last_log_name, false);
+    web_json_kv_u32(response, "lastLogValue", detail.diag.last_log_value, false);
+    web_json_kv_u32(response, "lastLogAux", detail.diag.last_log_aux, true);
+    response += "},";
+    response += "\"display\":{";
+    web_json_kv_u32(response, "presentCount", detail.display.present_count, false);
+    web_json_kv_u32(response, "txFailCount", detail.display.tx_fail_count, true);
+    response += "},";
+    response += "\"weather\":{";
+    web_json_kv_bool(response, "valid", core.weather.valid, false);
+    web_json_kv_str(response, "location", core.weather.location, false);
+    web_json_kv_str(response, "text", core.weather.text, false);
+    web_json_kv_bool(response, "tlsVerified", core.weather.tls_verified, false);
+    web_json_kv_bool(response, "tlsCaLoaded", core.weather.tls_ca_loaded, false);
+    web_json_kv_str(response, "tlsMode", core.weather.tls_mode, false);
+    web_json_kv_str(response, "syncStatus", core.weather.sync_status, false);
+    web_json_kv_i32(response, "lastHttpStatus", core.weather.last_http_status, false);
+    web_json_kv_f32(response, "temperatureC", (float)core.weather.temperature_tenths_c / 10.0f, 1, false);
+    web_json_kv_u32(response, "updatedAtMs", core.weather.updated_at_ms, true);
+    response += "},";
+    response += "\"terminal\":{";
+    web_json_kv_str(response, "systemFace", core.system.system_face, false);
+    web_json_kv_str(response, "brightnessLabel", core.system.brightness_label, false);
+    web_json_kv_str(response, "activityLabel", core.activity.activity_label, false);
+    web_json_kv_str(response, "sensorLabel", core.labels.sensor_label, false);
+    web_json_kv_str(response, "networkLabel", core.weather.network_label, false);
+    web_json_kv_str(response, "storageLabel", core.labels.storage_label, true);
+    response += "},";
+    response += "\"overlay\":{";
+    web_json_kv_bool(response, "active", detail.overlay.active, false);
+    web_json_kv_str(response, "text", detail.overlay.text, false);
+    web_json_kv_u32(response, "expireAtMs", detail.overlay.expire_at_ms, true);
+    response += "}";
+    response += "}";
+    request->send(200, "application/json", response);
+}
+
+static void send_state_raw_response(AsyncWebServerRequest *request)
+{
+    WebStateDetailSnapshot detail;
+    SystemStartupReport startup = {};
+    String response;
+    response.reserve(2048);
+
+    if (!web_state_detail_collect(&detail)) {
+        request->send(500, "application/json", "{\"ok\":false,\"message\":\"snapshot unavailable\"}");
+        return;
+    }
+
+    response = "{";
+    response += "\"ok\":true,";
+    web_json_kv_u32(response, "apiVersion", kWebApiVersion, false);
+    web_json_kv_u32(response, "stateVersion", kWebStateVersion, false);
+    response += "\"startup\":{";
+    if (system_get_startup_report(&startup)) {
+        web_json_kv_bool(response, "ok", startup.startup_ok, false);
+        web_json_kv_bool(response, "degraded", startup.degraded, false);
+        web_json_kv_bool(response, "fatalStopRequested", startup.fatal_stop_requested, false);
+        web_json_kv_str(response, "failureStage", system_init_stage_name(startup.failure_stage), false);
+        web_json_kv_str(response, "lastCompletedStage", system_init_stage_name(startup.last_completed_stage), false);
+        web_json_kv_str(response, "recoveryStage", system_init_stage_name(startup.recovery_stage), false);
+        web_json_kv_str(response, "fatalCode", system_fatal_code_name(startup.fatal_code), false);
+        web_json_kv_str(response, "fatalPolicy", system_fatal_policy_name(startup.fatal_policy), true);
+    } else {
+        web_json_kv_bool(response, "ok", false, false);
+        web_json_kv_bool(response, "degraded", false, false);
+        web_json_kv_bool(response, "fatalStopRequested", false, false);
+        web_json_kv_str(response, "failureStage", "UNKNOWN", false);
+        web_json_kv_str(response, "lastCompletedStage", "UNKNOWN", false);
+        web_json_kv_str(response, "recoveryStage", "UNKNOWN", false);
+        web_json_kv_str(response, "fatalCode", "UNKNOWN", false);
+        web_json_kv_str(response, "fatalPolicy", "UNKNOWN", true);
+    }
+    response += "},";
+    response += "\"queue\":{";
+    web_json_kv_u32(response, "depth", web_action_queue_depth(), false);
+    web_json_kv_u32(response, "dropCount", web_action_queue_drop_count(), true);
+    response += "},";
+    response += "\"sensor\":{";
+    web_json_kv_i32(response, "ax", detail.sensor.ax, false);
+    web_json_kv_i32(response, "ay", detail.sensor.ay, false);
+    web_json_kv_i32(response, "az", detail.sensor.az, false);
+    web_json_kv_i32(response, "gx", detail.sensor.gx, false);
+    web_json_kv_i32(response, "gy", detail.sensor.gy, false);
+    web_json_kv_i32(response, "gz", detail.sensor.gz, false);
+    web_json_kv_i32(response, "accelNormMg", detail.sensor.accel_norm_mg, false);
+    web_json_kv_i32(response, "baselineMg", detail.sensor.baseline_mg, false);
+    web_json_kv_i32(response, "motionScore", detail.sensor.motion_score, false);
+    web_json_kv_f32(response, "pitchDeg", detail.sensor.pitch_deg, 2, false);
+    web_json_kv_f32(response, "rollDeg", detail.sensor.roll_deg, 2, true);
+    response += "},";
+    response += "\"storage\":{";
+    web_json_kv_str(response, "backend", detail.storage.backend, false);
+    web_json_kv_str(response, "backendPhase", detail.storage.backend_phase, false);
+    web_json_kv_str(response, "commitState", detail.storage.commit_state, false);
+    web_json_kv_bool(response, "transactionActive", detail.storage.transaction_active, false);
+    web_json_kv_bool(response, "sleepFlushPending", detail.storage.sleep_flush_pending, true);
+    response += "},";
+    response += "\"display\":{";
+    web_json_kv_u32(response, "presentCount", detail.display.present_count, false);
+    web_json_kv_u32(response, "txFailCount", detail.display.tx_fail_count, true);
+    response += "}";
+    response += "}";
+    request->send(200, "application/json", response);
+}
+
 void web_register_api_routes(AsyncWebServer &server)
 {
     server.on("/api/health", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -499,6 +761,45 @@ void web_register_api_routes(AsyncWebServer &server)
 
     server.on("/api/meta", HTTP_GET, [](AsyncWebServerRequest *request) {
         send_meta_response(request);
+    });
+
+    server.on("/api/actions/catalog", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String response = "{";
+        response += "\"ok\":true,";
+        append_command_catalog(response);
+        response += "}";
+        request->send(200, "application/json", response);
+    });
+
+    server.on("/api/actions/latest", HTTP_GET, [](AsyncWebServerRequest *request) {
+        send_latest_action_response(request);
+    });
+
+    server.on("/api/actions/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String id_str;
+        uint32_t action_id = 0U;
+        if (!read_form_field(request, "id", id_str) || !parse_strict_u32_field(id_str, &action_id) || action_id == 0U) {
+            send_json_error(request, 400, "missing or invalid action id");
+            return;
+        }
+        send_action_result_response(request, action_id);
+    });
+
+    server.on("/api/action/result", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String id_str;
+        uint32_t request_id = 0U;
+        if (!read_form_field(request, "id", id_str) && !request->hasParam("id")) {
+            send_json_error(request, 400, "missing request id");
+            return;
+        }
+        if (request->hasParam("id")) {
+            id_str = request->getParam("id")->value();
+        }
+        if (!parse_strict_u32_field(id_str, &request_id) || request_id == 0U) {
+            send_json_error(request, 400, "invalid request id");
+            return;
+        }
+        send_action_result_response(request, request_id);
     });
 
     server.on("/api/config/device", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -680,6 +981,11 @@ void web_register_api_routes(AsyncWebServer &server)
         response += "\"system\":{";
         web_json_kv_bool(response, "appReady", core.system.app_ready, false);
         web_json_kv_bool(response, "appDegraded", core.system.app_degraded, false);
+        web_json_kv_bool(response, "startupOk", core.system.startup_ok, false);
+        web_json_kv_bool(response, "startupDegraded", core.system.startup_degraded, false);
+        web_json_kv_bool(response, "fatalStopRequested", core.system.fatal_stop_requested, false);
+        web_json_kv_str(response, "startupFailureStage", core.system.startup_failure_stage, false);
+        web_json_kv_str(response, "startupRecoveryStage", core.system.startup_recovery_stage, false);
         web_json_kv_str(response, "page", core.system.current_page, false);
         web_json_kv_str(response, "timeSource", core.system.time_source, false);
         web_json_kv_str(response, "timeConfidence", core.system.time_confidence, false);
@@ -709,6 +1015,14 @@ void web_register_api_routes(AsyncWebServer &server)
         web_json_kv_f32(response, "temperatureC", (float)core.weather.temperature_tenths_c / 10.0f, 1, true);
         response += "}}";
         request->send(200, "application/json", response);
+    });
+
+    server.on("/api/state/detail", HTTP_GET, [](AsyncWebServerRequest *request) {
+        send_state_detail_response(request);
+    });
+
+    server.on("/api/state/raw", HTTP_GET, [](AsyncWebServerRequest *request) {
+        send_state_raw_response(request);
     });
 
     server.on("/api/state", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -744,6 +1058,11 @@ void web_register_api_routes(AsyncWebServer &server)
         web_json_kv_u32(response, "uptimeMs", core.system.uptime_ms, false);
         web_json_kv_bool(response, "appReady", core.system.app_ready, false);
         web_json_kv_bool(response, "appDegraded", core.system.app_degraded, false);
+        web_json_kv_bool(response, "startupOk", core.system.startup_ok, false);
+        web_json_kv_bool(response, "startupDegraded", core.system.startup_degraded, false);
+        web_json_kv_bool(response, "fatalStopRequested", core.system.fatal_stop_requested, false);
+        web_json_kv_str(response, "startupFailureStage", core.system.startup_failure_stage, false);
+        web_json_kv_str(response, "startupRecoveryStage", core.system.startup_recovery_stage, false);
         web_json_kv_str(response, "appInitStage", core.system.app_init_stage, false);
         web_json_kv_str(response, "page", core.system.current_page, false);
         web_json_kv_str(response, "timeSource", core.system.time_source, false);
@@ -990,12 +1309,13 @@ void web_register_api_routes(AsyncWebServer &server)
         action.data.key.id = key_id;
         action.data.key.event_type = event_type;
 
-        if (!web_action_enqueue(&action)) {
+        uint32_t action_id = 0U;
+        if (!web_action_enqueue_tracked(&action, platform_time_now_ms(), &action_id)) {
             send_json_error(request, 503, "action queue full");
             return;
         }
 
-        send_queue_ack(request);
+        send_queue_ack(request, action_id, action.type);
     }, nullptr, capture_request_body);
 
     server.on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -1032,12 +1352,13 @@ void web_register_api_routes(AsyncWebServer &server)
         action.data.command.type = cmd_type;
         action.data.command.data.u32 = 0;
 
-        if (!web_action_enqueue(&action)) {
+        uint32_t action_id = 0U;
+        if (!web_action_enqueue_tracked(&action, platform_time_now_ms(), &action_id)) {
             send_json_error(request, 503, "action queue full");
             return;
         }
 
-        send_queue_ack(request);
+        send_queue_ack(request, action_id, action.type);
     }, nullptr, capture_request_body);
 
     server.on("/api/display/overlay", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -1085,12 +1406,13 @@ void web_register_api_routes(AsyncWebServer &server)
         action.data.overlay.text[sizeof(action.data.overlay.text) - 1U] = '\0';
         action.data.overlay.duration_ms = duration_ms;
 
-        if (!web_action_enqueue(&action)) {
+        uint32_t action_id = 0U;
+        if (!web_action_enqueue_tracked(&action, platform_time_now_ms(), &action_id)) {
             send_json_error(request, 503, "action queue full");
             return;
         }
 
-        send_queue_ack(request);
+        send_queue_ack(request, action_id, action.type);
     }, nullptr, capture_request_body);
 
     server.on("/api/display/overlay/clear", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -1099,10 +1421,11 @@ void web_register_api_routes(AsyncWebServer &server)
             return;
         }
         action.type = WEB_ACTION_OVERLAY_CLEAR;
-        if (!web_action_enqueue(&action)) {
+        uint32_t action_id = 0U;
+        if (!web_action_enqueue_tracked(&action, platform_time_now_ms(), &action_id)) {
             send_json_error(request, 503, "action queue full");
             return;
         }
-        send_queue_ack(request);
+        send_queue_ack(request, action_id, action.type);
     }, nullptr, capture_request_body);
 }

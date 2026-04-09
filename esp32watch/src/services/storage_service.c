@@ -243,7 +243,7 @@ static void storage_commit_finalize_execution(void)
  * @return void
  * @throws None.
  */
-void storage_service_init(void)
+bool storage_service_init(void)
 {
     bool migration_needed;
     bool migration_ok;
@@ -262,6 +262,7 @@ void storage_service_init(void)
     g_storage.backend_degraded = !storage_backend_adapter_is_initialized();
     g_storage.verify_failed = !storage_recovery_verify_runtime_state(&g_storage);
     crash_capsule_note_storage(g_storage.commit_count, storage_scheduler_pending_mask(&g_storage));
+    return g_storage.last_commit_ok && !g_storage.verify_failed;
 }
 
 /**

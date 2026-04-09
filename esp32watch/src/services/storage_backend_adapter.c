@@ -56,7 +56,7 @@ StorageBackendType storage_backend_adapter_get_backend(void)
 
 const char *storage_backend_adapter_get_backend_name(void)
 {
-    return storage_backend_adapter_flash_ready() ? "FLASH" : "BKP";
+    return storage_backend_adapter_flash_ready() ? "FLASH_JOURNAL" : "NVS_EMULATED_BKP";
 }
 
 uint16_t storage_backend_adapter_get_stored_crc(void)
@@ -232,7 +232,7 @@ const char *storage_backend_adapter_commit_phase_name(StorageBackendCommitPhase 
     switch (phase) {
         case STORAGE_BACKEND_COMMIT_PHASE_PREPARE: return "PREP";
         case STORAGE_BACKEND_COMMIT_PHASE_FLASH: return "FLASH";
-        case STORAGE_BACKEND_COMMIT_PHASE_BKP_MIRROR: return "BKP";
+        case STORAGE_BACKEND_COMMIT_PHASE_BKP_MIRROR: return "NVS_MIRROR";
         case STORAGE_BACKEND_COMMIT_PHASE_VERIFY: return "VERIFY";
         default: return "IDLE";
     }

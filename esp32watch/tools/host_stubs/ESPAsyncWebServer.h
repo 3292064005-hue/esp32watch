@@ -17,8 +17,10 @@ public:
 };
 class AsyncWebServer {
 public:
+  explicit AsyncWebServer(int port = 80) { (void)port; }
   template<typename... Args>
   void on(const char*, int, Args...) {}
+  void begin() {}
 };
 #define HTTP_GET 0
 #define HTTP_POST 1

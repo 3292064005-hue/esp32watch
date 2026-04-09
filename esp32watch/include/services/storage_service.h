@@ -22,13 +22,12 @@ typedef struct {
 } StorageWearStats;
 
 /**
- * @brief Initialize storage backends, migration state and shadow copies.
+ * @brief Initialize storage backends, validate persisted data, and capture runtime shadow state.
  *
- * @param None.
- * @return void
- * @throws None.
+ * @return true when at least one persistent backend is usable for runtime operation;
+ *         false when initialization failed or persisted state could not be verified.
  */
-void storage_service_init(void);
+bool storage_service_init(void);
 bool storage_service_is_initialized(void);
 uint8_t storage_service_get_version(void);
 uint8_t storage_service_get_schema_version(void);

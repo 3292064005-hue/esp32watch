@@ -32,10 +32,10 @@ typedef struct {
  * Seeds the runtime snapshot, reconciles persisted provisioning data, and prepares
  * the service for later Wi-Fi-driven synchronization attempts.
  *
- * @return void
+ * @return true when the service initialized its internal snapshot successfully.
  * @throws None.
  */
-void network_sync_service_init(void);
+bool network_sync_service_init(void);
 
 /**
  * @brief Advance the network synchronization state machine.

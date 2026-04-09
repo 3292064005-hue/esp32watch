@@ -106,6 +106,18 @@ Main mutation endpoints:
 - `POST /api/display/overlay`
 - `POST /api/display/overlay/clear`
 
+Tracked mutation/result endpoints:
+- `GET /api/actions/catalog`
+- `GET /api/actions/latest`
+- `GET /api/actions/status?id=<actionId>`
+- legacy compatibility alias: `GET /api/action/result?id=<actionId>`
+
+State exposure is now split by contract surface:
+- `GET /api/state/summary`
+- `GET /api/state/detail`
+- `GET /api/state/raw`
+- compatibility aggregate: `GET /api/state`
+
 Mutation auth still uses `X-Auth-Token` and may also read a JSON `token` field for recovery workflows.
 
 ---
@@ -192,6 +204,9 @@ The script uploads LittleFS first, then rebuilds and uploads firmware.
 - time confidence/status exposure
 - JSON mutation API contract
 - web console alignment with new runtime fields
+- tracked action queue/result contract
+- summary/detail/raw state split
+- storage backend naming aligned to NVS-backed emulation semantics
 
 ### Host-side verification available
 Run:
@@ -205,6 +220,7 @@ This performs:
 - host C syntax check for portable C units
 - host C++ stub syntax check for changed Arduino-facing units
 - `./tools/verify_platformio_build.sh ${PIO_ENV_NAME:-esp32s3_n16r8_dev}` when PlatformIO is installed
+- `./tools/host_runtime_contract_check.py` to statically verify startup gating, tracked actions, and split-state endpoint presence
 
 ### Additional build pipeline assets
 - `.github/workflows/platformio-build.yml` builds firmware + LittleFS for both profiles and uploads artifacts

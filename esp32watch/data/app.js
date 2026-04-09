@@ -3,6 +3,7 @@ const OLED_HEIGHT = 64;
 const OLED_BUFFER_SIZE = (OLED_WIDTH * OLED_HEIGHT) / 8;
 const OLED_ON_RGBA = [158, 252, 136, 255];
 const OLED_OFF_RGBA = [8, 16, 12, 255];
+const ACTION_RESULT_TERMINAL_STATES = new Set(["APPLIED", "REJECTED", "FAILED"]);
 
 const state = {
   snapshot: null,
@@ -63,10 +64,38 @@ function apiPostJson(path, payload, authToken) {
   });
 }
 
+function delayMs(ms) {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
 function sanitizeNumber(value, digits = 6) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "0";
   return number.toFixed(digits);
+}
+
+function mergeStatePayloads(summary, detail) {
+  return {
+    ok: Boolean(summary?.ok && detail?.ok),
+    apiVersion: summary?.apiVersion || detail?.apiVersion || 0,
+    stateVersion: summary?.stateVersion || detail?.stateVersion || 0,
+    wifi: summary?.wifi || {},
+    system: summary?.system || {},
+    summary: summary?.summary || {},
+    weather: {
+      ...(summary?.weather || {}),
+      ...(detail?.weather || {})
+    },
+    activity: detail?.activity || {},
+    alarm: detail?.alarm || {},
+    music: detail?.music || {},
+    sensor: detail?.sensor || {},
+    storage: detail?.storage || {},
+    diag: detail?.diag || {},
+    display: detail?.display || {},
+    terminal: detail?.terminal || {},
+    overlay: detail?.overlay || {}
+  };
 }
 
 async function refreshState() {
@@ -74,16 +103,20 @@ async function refreshState() {
   state.polling = true;
 
   try {
-    const [snapshot, frame, config, meta] = await Promise.all([
-      api("/api/state"),
+    const [summary, detail, frame, config, meta] = await Promise.all([
+      api("/api/state/summary"),
+      api("/api/state/detail"),
       api("/api/display/frame"),
       api("/api/config/device"),
       api("/api/meta")
     ]);
 
-    state.snapshot = snapshot;
+    state.snapshot = mergeStatePayloads(summary, detail);
     state.frame = frame;
     state.config = config.config || null;
+    if (state.snapshot && state.config) {
+      state.snapshot.config = state.config;
+    }
     state.meta = meta || null;
     renderAll();
   } catch (err) {
@@ -91,6 +124,35 @@ async function refreshState() {
   } finally {
     state.polling = false;
   }
+}
+
+async function waitForActionResult(actionId, trackPath) {
+  let lastResult = null;
+  const statusPath = trackPath || `/api/actions/status?id=${actionId}`;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    lastResult = await api(statusPath);
+    if (ACTION_RESULT_TERMINAL_STATES.has(lastResult.status)) {
+      return lastResult;
+    }
+    await delayMs(100);
+  }
+  throw new Error(lastResult?.message || "action result timeout");
+}
+
+async function runTrackedAction(path, payload, successMessage) {
+  const ack = await apiPostJson(path, payload);
+  const actionId = ack.actionId || ack.requestId;
+  if (!actionId) {
+    throw new Error("missing action id");
+  }
+
+  const result = await waitForActionResult(actionId, ack.trackPath);
+  if (result.status !== "APPLIED") {
+    throw new Error(result.message || `${ack.actionType || "action"} failed`);
+  }
+
+  toast(successMessage || result.message || "Action applied", "success");
+  await refreshState();
 }
 
 function renderAll() {
@@ -118,8 +180,10 @@ function renderTopbar() {
   const timeSource = s.system?.timeSource || "-";
   const timeConfidence = s.system?.timeConfidence || "NONE";
   const wifi = s.wifi?.mode || "IDLE";
-  const safe = s.system?.safeMode ? "SAFE" : "OK";
-  const app = s.system?.appReady ? (s.system?.appDegraded ? "DEGRADED" : "READY") : `INIT:${s.system?.appInitStage || "-"}`;
+  const safe = s.diag?.safeModeActive ? "SAFE" : "OK";
+  const app = s.system?.appReady
+    ? (s.system?.appDegraded ? "DEGRADED" : "READY")
+    : `INIT:${s.system?.appInitStage || s.system?.startupFailureStage || "-"}`;
   const apiVersion = state.meta?.apiVersion || s.apiVersion || "-";
 
   document.getElementById("deviceMeta").textContent =
@@ -226,8 +290,8 @@ function renderDiag() {
   if (!s) return;
 
   const items = [
-    ["STATE", s.summary?.diagLabel || (s.system?.safeMode ? "SAFE" : "OK")],
-    ["SAFE", s.system?.safeMode ? "ACTIVE" : "CLEAR"],
+    ["STATE", s.summary?.diagLabel || (s.diag?.safeModeActive ? "SAFE" : "OK")],
+    ["SAFE", s.diag?.safeModeActive ? "ACTIVE" : "CLEAR"],
     ["FAULT", s.diag?.hasLastFault ? `${s.diag.lastFaultName}` : "NONE"],
     ["SEV", s.diag?.hasLastFault ? `${s.diag.lastFaultSeverity}` : "INFO"],
     ["LOG", s.diag?.hasLastLog ? `${s.diag.lastLogName}` : "NONE"]
@@ -247,7 +311,7 @@ function renderStorage() {
     ["BACKEND", s.storage?.backend || "-"],
     ["COMMIT", s.storage?.commitState || "-"],
     ["TXN", s.storage?.transactionActive ? "ACTIVE" : "IDLE"],
-    ["FS", s.config?.filesystemStatus || "-"]
+    ["FS", state.config?.filesystemStatus || "-"]
   ];
 
   document.getElementById("storagePanel").innerHTML = items
@@ -301,15 +365,11 @@ function formatUptime(ms) {
 }
 
 async function sendKey(key, eventType) {
-  await apiPostJson("/api/input/key", { key, event: eventType });
-  toast(`Key ${key}/${eventType}`, "success");
-  await refreshState();
+  await runTrackedAction("/api/input/key", { key, event: eventType }, `Key ${key}/${eventType}`);
 }
 
 async function sendCommand(type) {
-  await apiPostJson("/api/command", { type });
-  toast(`Command: ${type}`, "success");
-  await refreshState();
+  await runTrackedAction("/api/command", { type }, `Command applied: ${type}`);
 }
 
 function renderPreview(text) {
@@ -325,9 +385,7 @@ async function sendOverlay() {
   }
 
   try {
-    await apiPostJson("/api/display/overlay", { text, durationMs: 1500 });
-    toast("Overlay sent", "success");
-    await refreshState();
+    await runTrackedAction("/api/display/overlay", { text, durationMs: 1500 }, "Overlay sent");
   } catch (err) {
     toast(err.message, "error");
   }
@@ -335,9 +393,7 @@ async function sendOverlay() {
 
 async function clearOverlay() {
   try {
-    await apiPostJson("/api/display/overlay/clear", {});
-    toast("Overlay cleared", "success");
-    await refreshState();
+    await runTrackedAction("/api/display/overlay/clear", {}, "Overlay cleared");
   } catch (err) {
     toast(err.message, "error");
   }
@@ -518,8 +574,5 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("currentAuthToken").value = loadToken();
   document.getElementById("apiToken").value = loadToken();
   renderPreview("");
-  setInterval(() => {
-    refreshState().catch(err => toast(err.message, "error"));
-  }, 1000);
   refreshState().catch(err => toast(err.message, "error"));
 });

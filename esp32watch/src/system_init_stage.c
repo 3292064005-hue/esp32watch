@@ -3,7 +3,7 @@
 
 static bool system_init_stage_is_completable(SystemInitStage stage)
 {
-    return stage >= SYSTEM_INIT_STAGE_GPIO && stage <= SYSTEM_INIT_STAGE_IWDG;
+    return stage > SYSTEM_INIT_STAGE_NONE && stage <= SYSTEM_INIT_STAGE_APP;
 }
 
 void system_init_completion_reset(SystemInitCompletionState *state)
@@ -56,7 +56,9 @@ const char *system_init_stage_name_internal(SystemInitStage stage)
         case SYSTEM_INIT_STAGE_IWDG: return "IWDG";
         case SYSTEM_INIT_STAGE_CAPABILITY_PROBE: return "CAPS";
         case SYSTEM_INIT_STAGE_TIME_SERVICE: return "TIME_SVC";
+        case SYSTEM_INIT_STAGE_NETWORK_SYNC_SERVICE: return "NET_SYNC";
         case SYSTEM_INIT_STAGE_STORAGE_SERVICE: return "STOR_SVC";
+        case SYSTEM_INIT_STAGE_WEB_SERVER: return "WEB";
         case SYSTEM_INIT_STAGE_COMPANION_TRANSPORT: return "COMPANION";
         case SYSTEM_INIT_STAGE_APP: return "APP";
         default: return "NONE";

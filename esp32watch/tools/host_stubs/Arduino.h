@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <string>
 #include <math.h>
+#include "esp_system.h"
 class String {
 public:
   String() = default;
@@ -27,6 +28,7 @@ public:
 };
 class SerialStub {
 public:
+  void begin(unsigned long) {}
   void println(const char*) {}
   void printf(const char*, ...) {}
 };

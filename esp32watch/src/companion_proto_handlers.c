@@ -46,68 +46,40 @@ static bool companion_proto_build_set_command(const char *key, uint32_t value, A
         return false;
     }
 
+    AppCommandType type;
+
     *out = (AppCommand){
         .source = APP_COMMAND_SOURCE_COMPANION,
         .type = APP_COMMAND_NONE,
     };
 
-    if (companion_proto_token_eq(key, "BRIGHTNESS")) {
-        out->type = APP_COMMAND_SET_BRIGHTNESS;
-        out->data.u8 = (uint8_t)value;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "GOAL")) {
-        out->type = APP_COMMAND_SET_GOAL;
-        out->data.u32 = value;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "AUTOWAKE")) {
-        out->type = APP_COMMAND_SET_AUTO_WAKE;
-        out->data.enabled = value != 0U;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "AUTOSLEEP")) {
-        out->type = APP_COMMAND_SET_AUTO_SLEEP;
-        out->data.enabled = value != 0U;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "DND")) {
-        out->type = APP_COMMAND_SET_DND;
-        out->data.enabled = value != 0U;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "VIBRATE")) {
-        out->type = APP_COMMAND_SET_VIBRATE;
-        out->data.enabled = value != 0U;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "SECONDS")) {
-        out->type = APP_COMMAND_SET_SHOW_SECONDS;
-        out->data.enabled = value != 0U;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "ANIM")) {
-        out->type = APP_COMMAND_SET_ANIMATIONS;
-        out->data.enabled = value != 0U;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "FACE")) {
-        out->type = APP_COMMAND_SET_WATCHFACE;
-        out->data.u8 = (uint8_t)value;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "SENS")) {
-        out->type = APP_COMMAND_SET_SENSOR_SENSITIVITY;
-        out->data.u8 = (uint8_t)value;
-        return true;
-    }
-    if (companion_proto_token_eq(key, "TIMEOUT")) {
-        out->type = APP_COMMAND_SET_SCREEN_TIMEOUT_IDX;
-        out->data.u8 = (uint8_t)value;
-        return true;
+    if (!app_command_type_from_companion_key(key, &type)) {
+        return false;
     }
 
-    return false;
+    out->type = type;
+    switch (type) {
+        case APP_COMMAND_SET_BRIGHTNESS:
+        case APP_COMMAND_SET_WATCHFACE:
+        case APP_COMMAND_SET_SENSOR_SENSITIVITY:
+        case APP_COMMAND_SET_SCREEN_TIMEOUT_IDX:
+            out->data.u8 = (uint8_t)value;
+            return true;
+        case APP_COMMAND_SET_GOAL:
+            out->data.u32 = value;
+            return true;
+        case APP_COMMAND_SET_AUTO_WAKE:
+        case APP_COMMAND_SET_AUTO_SLEEP:
+        case APP_COMMAND_SET_DND:
+        case APP_COMMAND_SET_VIBRATE:
+        case APP_COMMAND_SET_SHOW_SECONDS:
+        case APP_COMMAND_SET_ANIMATIONS:
+            out->data.enabled = value != 0U;
+            return true;
+        default:
+            out->type = APP_COMMAND_NONE;
+            return false;
+    }
 }
 
 static size_t companion_proto_handle_set_key(const char *key, uint32_t value, char *out, size_t out_size)

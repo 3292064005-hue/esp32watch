@@ -385,7 +385,7 @@ static bool network_sync_fetch_weather(uint32_t now_ms, const DeviceConfigSnapsh
 }
 } // namespace
 
-extern "C" void network_sync_service_init(void)
+extern "C" bool network_sync_service_init(void)
 {
     DeviceConfigSnapshot cfg;
 
@@ -395,6 +395,7 @@ extern "C" void network_sync_service_init(void)
     cache_weather_profile(cfg);
     set_weather_status(cfg.weather_configured ? "PENDING" : "UNSET");
     update_tls_snapshot(true, weather_ca_bundle_ptr(nullptr) != nullptr);
+    return true;
 }
 
 extern "C" void network_sync_service_tick(uint32_t now_ms)

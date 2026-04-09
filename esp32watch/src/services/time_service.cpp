@@ -99,7 +99,7 @@ static void time_load_epoch(void)
     g_time_loaded = true;
 }
 
-extern "C" void time_service_init(void)
+extern "C" bool time_service_init(void)
 {
     uint32_t now_ms;
     uint32_t epoch;
@@ -110,6 +110,7 @@ extern "C" void time_service_init(void)
     epoch = time_service_get_epoch();
     valid = time_service_is_reasonable_epoch(epoch);
     time_update_snapshot(TIME_SOURCE_RECOVERY, epoch, valid, now_ms);
+    return true;
 }
 
 extern "C" bool time_service_is_datetime_valid(const DateTime *dt)

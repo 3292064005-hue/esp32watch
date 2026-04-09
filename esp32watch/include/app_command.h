@@ -2,6 +2,7 @@
 #define APP_COMMAND_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "model.h"
 
@@ -50,6 +51,27 @@ typedef enum {
     APP_COMMAND_CLEAR_SAFE_MODE
 } AppCommandType;
 
+typedef enum {
+    APP_COMMAND_RESULT_OK = 0,
+    APP_COMMAND_RESULT_INVALID_DESCRIPTOR,
+    APP_COMMAND_RESULT_INVALID_SOURCE,
+    APP_COMMAND_RESULT_OUT_OF_RANGE,
+    APP_COMMAND_RESULT_BLOCKED,
+    APP_COMMAND_RESULT_BACKEND_FAILURE,
+    APP_COMMAND_RESULT_UNSUPPORTED
+} AppCommandResultCode;
+
+typedef struct {
+    AppCommandType type;
+    const char *wire_name;
+    bool web_exposed;
+} AppCommandDescriptor;
+
+typedef struct {
+    bool ok;
+    AppCommandResultCode code;
+} AppCommandExecutionResult;
+
 typedef struct {
     AppCommandSource source;
     AppCommandType type;
@@ -82,13 +104,84 @@ typedef struct {
 } AppCommand;
 
 /**
+ * @brief Return the immutable descriptor for a command type.
+ *
+ * @param[in] type Command type to describe.
+ * @return Descriptor pointer when the command exists; NULL when the type is unsupported.
+ * @throws None.
+ */
+const AppCommandDescriptor *app_command_describe(AppCommandType type);
+
+/**
+ * @brief Look up a command descriptor by its stable wire name.
+ *
+ * @param[in] wire_name Stable external command name.
+ * @return Descriptor pointer when a matching command exists; NULL otherwise.
+ * @throws None.
+ */
+const AppCommandDescriptor *app_command_describe_by_name(const char *wire_name);
+
+/**
+ * @brief Resolve a companion SET key into a concrete command type.
+ *
+ * @param[in] companion_key Stable companion protocol key.
+ * @param[out] out_type Destination command type.
+ * @return true when the key maps to a supported command; false otherwise.
+ * @throws None.
+ */
+bool app_command_type_from_companion_key(const char *companion_key, AppCommandType *out_type);
+
+/**
+ * @brief Report the number of descriptors in the immutable command catalog.
+ *
+ * @param None.
+ * @return Catalog entry count.
+ * @throws None.
+ */
+size_t app_command_catalog_count(void);
+
+/**
+ * @brief Return the descriptor at the requested catalog index.
+ *
+ * @param[in] index Zero-based catalog index.
+ * @return Descriptor pointer when index is valid; NULL otherwise.
+ * @throws None.
+ */
+const AppCommandDescriptor *app_command_catalog_at(size_t index);
+
+/**
+ * @brief Return a stable printable name for a command execution result code.
+ *
+ * @param[in] code Result code to stringify.
+ * @return Stable result code string.
+ * @throws None.
+ */
+const char *app_command_result_code_name(AppCommandResultCode code);
+
+/**
  * @brief Execute a single user- or service-originated runtime command through the shared mutation ingress.
+ *
+ * This detailed entry point records whether the command was applied, blocked, rejected,
+ * or failed due to a backend/runtime error.
  *
  * @param[in] command Command descriptor to execute. Must not be NULL and must carry a supported source/type pair.
  * @param[in,out] last_sensor_sensitivity Optional mirror updated when the command changes sensor sensitivity.
+ * @param[out] out_result Optional detailed result destination.
  * @return true when the command executed or was intentionally accepted as a no-op; false when the descriptor is invalid or the command was blocked.
  * @throws None.
- * @boundary_behavior Returns false for NULL commands, unknown command sources, unknown command types, blocked safe-mode clear requests, or failed sensor reinitialization requests.
+ * @boundary_behavior Returns false for NULL commands, unknown command sources, unknown command types, blocked safe-mode clear requests, failed sensor reinitialization requests, or invalid indexed alarm mutations.
+ */
+bool app_command_execute_detailed(const AppCommand *command,
+                                  uint8_t *last_sensor_sensitivity,
+                                  AppCommandExecutionResult *out_result);
+
+/**
+ * @brief Execute a command using the legacy boolean-only result contract.
+ *
+ * @param[in] command Command descriptor to execute.
+ * @param[in,out] last_sensor_sensitivity Optional mirror updated when the command changes sensor sensitivity.
+ * @return true when the command executed successfully; false otherwise.
+ * @throws None.
  */
 bool app_command_execute(const AppCommand *command, uint8_t *last_sensor_sensitivity);
 

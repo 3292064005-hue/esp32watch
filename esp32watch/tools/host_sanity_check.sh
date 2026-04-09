@@ -34,6 +34,7 @@ print(f'[OK] host C syntax check passed for {len(files)} translation units')
 PY
 
 ./tools/host_cpp_sanity.sh
+./tools/host_runtime_contract_check.py
 
 if command -v pio >/dev/null 2>&1; then
   if [[ "${SKIP_PIO:-0}" == "1" ]]; then

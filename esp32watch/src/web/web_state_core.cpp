@@ -10,6 +10,7 @@ extern "C" {
 #include "services/time_service.h"
 #include "watch_app.h"
 #include "main.h"
+#include "system_init.h"
 }
 
 static const char *web_page_name(PageId page)
@@ -48,6 +49,7 @@ static void collect_system_snapshot(WebStateCoreSnapshot *out)
     UiRuntimeSnapshot ui_runtime;
     TimeSourceSnapshot time_snapshot;
     WatchAppInitReport init_report;
+    SystemStartupStatus startup_status;
 
     out->system.uptime_ms = web_state_bridge_uptime_ms();
     memset(&init_report, 0, sizeof(init_report));
@@ -83,6 +85,21 @@ static void collect_system_snapshot(WebStateCoreSnapshot *out)
     } else {
         strncpy(out->system.time_source, "UNKNOWN", sizeof(out->system.time_source) - 1U);
         strncpy(out->system.time_confidence, "NONE", sizeof(out->system.time_confidence) - 1U);
+    }
+
+    if (system_get_startup_status(&startup_status)) {
+        out->system.startup_ok = !startup_status.init_failed;
+        out->system.startup_degraded = startup_status.safe_mode_boot_recovery_pending;
+        out->system.fatal_stop_requested = startup_status.init_failed;
+        strncpy(out->system.startup_failure_stage,
+                system_init_stage_name(startup_status.last_stage),
+                sizeof(out->system.startup_failure_stage) - 1U);
+        strncpy(out->system.startup_recovery_stage,
+                system_init_stage_name(startup_status.safe_mode_boot_recovery_stage),
+                sizeof(out->system.startup_recovery_stage) - 1U);
+    } else {
+        strncpy(out->system.startup_failure_stage, "NONE", sizeof(out->system.startup_failure_stage) - 1U);
+        strncpy(out->system.startup_recovery_stage, "NONE", sizeof(out->system.startup_recovery_stage) - 1U);
     }
 }
 
