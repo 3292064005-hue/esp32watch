@@ -1,5 +1,6 @@
 #include "services/storage_service.h"
 #include "services/storage_service_internal.h"
+#include "app_config.h"
 #include "platform_api.h"
 #include <string.h>
 
@@ -87,6 +88,40 @@ bool storage_service_is_initialized(void)
 uint8_t storage_service_get_version(void)
 {
     return storage_backend_adapter_get_version();
+}
+
+uint8_t storage_service_get_schema_version(void)
+{
+    return APP_STORAGE_VERSION;
+}
+
+bool storage_service_flash_supported(void)
+{
+#if APP_STORAGE_USE_FLASH
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool storage_service_is_flash_backend_ready(void)
+{
+    return storage_backend_adapter_flash_ready();
+}
+
+bool storage_service_was_migration_attempted(void)
+{
+    return g_storage.migration_attempted;
+}
+
+bool storage_service_last_migration_ok(void)
+{
+    return g_storage.migration_succeeded;
+}
+
+const char *storage_service_backend_phase_name(void)
+{
+    return storage_backend_adapter_commit_phase_name(storage_backend_adapter_commit_phase());
 }
 
 StorageBackendType storage_service_get_backend(void)

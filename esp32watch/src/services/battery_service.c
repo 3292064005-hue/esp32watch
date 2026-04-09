@@ -2,12 +2,14 @@
 #include "app_config.h"
 #include "app_tuning.h"
 #include "board_features.h"
-#include "bsp_adc.h"
 #include "bsp_gpio.h"
 #include "model.h"
 #include "services/diag_service.h"
 #include "system_init.h"
 #include "platform_api.h"
+#if APP_FEATURE_BATTERY
+#include "platform_adc_sampling.h"
+#endif
 
 static bool g_battery_service_initialized;
 
@@ -133,7 +135,7 @@ void battery_service_sample_now(void)
     uint8_t valid_samples = 0U;
     uint16_t fault_code = 0U;
 
-    if (bsp_adc_sample_trimmed_mean(&platform_adc_main, 8U, 10U, &average, &valid_samples, &fault_code)) {
+    if (platform_adc_sample_trimmed_mean(&platform_adc_main, 8U, 10U, &average, &valid_samples, &fault_code)) {
         battery_publish(battery_adc_to_mv(average));
     } else {
         diag_service_note_battery_fault(fault_code != 0U ? fault_code : 0xFFFFU);

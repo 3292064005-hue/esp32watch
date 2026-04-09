@@ -14,7 +14,7 @@ static String web_fallback_index_html(void)
     html += "code{background:#222;padding:2px 6px;border-radius:6px}</style></head><body>";
     html += "<div class=\"card\"><h1>ESP32 Watch Console</h1>";
     html += "<p>LittleFS 里没有找到 <code>/index.html</code>。Web 服务已启动，但静态资源尚未写入分区。</p>";
-    html += "<p>请执行 <code>pio run -e esp32s3_n16r8 -t uploadfs</code> 上传 <code>data/</code> 目录，";
+    html += "<p>请执行 <code>pio run -e esp32s3_n16r8_dev -t uploadfs</code> 上传 <code>data/</code> 目录，";
     html += "或者先用这个兜底页确认设备在线。</p>";
     html += "<p>如果你刚刷过机，这通常只是文件系统还没上传，不一定是损坏。</p></div></body></html>";
     return html;

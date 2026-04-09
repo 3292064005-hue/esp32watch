@@ -306,12 +306,12 @@ void platform_uart_irq_handler(PlatformUartPort *port)
 
 PlatformStatus platform_flash_unlock(void)
 {
-    return PLATFORM_STATUS_OK;
+    return PLATFORM_STATUS_ERROR;
 }
 
 PlatformStatus platform_flash_lock(void)
 {
-    return PLATFORM_STATUS_OK;
+    return PLATFORM_STATUS_ERROR;
 }
 
 PlatformStatus platform_flash_erase_pages(PlatformFlashErasePlan *plan, uint32_t *page_error)
@@ -320,7 +320,7 @@ PlatformStatus platform_flash_erase_pages(PlatformFlashErasePlan *plan, uint32_t
     if (page_error != nullptr) {
         *page_error = 0U;
     }
-    return PLATFORM_STATUS_OK;
+    return PLATFORM_STATUS_ERROR;
 }
 
 PlatformStatus platform_flash_program_halfword(uint32_t program_type, uint32_t address, uint16_t value)
@@ -328,7 +328,7 @@ PlatformStatus platform_flash_program_halfword(uint32_t program_type, uint32_t a
     (void)program_type;
     (void)address;
     (void)value;
-    return PLATFORM_STATUS_OK;
+    return PLATFORM_STATUS_ERROR;
 }
 
 void platform_irq_set_priority(int irq, uint32_t priority, uint32_t subpriority)

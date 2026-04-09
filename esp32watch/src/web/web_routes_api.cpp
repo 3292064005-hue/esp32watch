@@ -1,21 +1,32 @@
 #include <ESPAsyncWebServer.h>
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include "web/web_action_queue.h"
 #include "web/web_state_bridge.h"
 #include "web/web_json.h"
 #include "web/web_wifi.h"
+#include "web/web_server.h"
+#include "web/web_api_config.h"
 #include <cstdlib>
 #include <cstring>
+#include <cctype>
+#include <cmath>
 
 extern "C" {
 #include "display_internal.h"
 #include "key.h"
 #include "app_command.h"
 #include "main.h"
+#include "services/device_config.h"
+#include "services/network_sync_service.h"
 #include "services/sensor_service.h"
+#include "services/storage_service.h"
+#include "app_tuning.h"
 }
 
 static const char *kHexDigits = "0123456789ABCDEF";
+static constexpr uint32_t kWebApiVersion = 3U;
+static constexpr uint32_t kWebStateVersion = 3U;
 
 static bool parse_key_id(const char *key_str, KeyId *out_id)
 {
@@ -92,6 +103,14 @@ static bool parse_command_type(const char *cmd_str, AppCommandType *out_type)
     return false;
 }
 
+static void send_json_error(AsyncWebServerRequest *request, int status, const char *message)
+{
+    String response = "{\"ok\":false,\"message\":\"";
+    web_json_escape_append(response, message != nullptr ? message : "error");
+    response += "\"}";
+    request->send(status, "application/json", response);
+}
+
 static bool read_json_body(AsyncWebServerRequest *request, String &body)
 {
     if (request == nullptr) {
@@ -116,6 +135,26 @@ static bool read_json_body(AsyncWebServerRequest *request, String &body)
     return false;
 }
 
+template <size_t N>
+static bool parse_json_body(AsyncWebServerRequest *request, StaticJsonDocument<N> &doc, String *out_body = nullptr)
+{
+    String body;
+
+    if (!read_json_body(request, body)) {
+        return false;
+    }
+    if (body.length() > WEB_API_MAX_BODY_BYTES) {
+        return false;
+    }
+    if (deserializeJson(doc, body)) {
+        return false;
+    }
+    if (out_body != nullptr) {
+        *out_body = body;
+    }
+    return true;
+}
+
 static bool read_form_field(AsyncWebServerRequest *request, const char *name, String &value)
 {
     if (request == nullptr || name == nullptr) {
@@ -134,14 +173,131 @@ static bool read_form_field(AsyncWebServerRequest *request, const char *name, St
     return true;
 }
 
+static bool parse_strict_float_field(const String &value, float *out_value)
+{
+    char *end_ptr = nullptr;
+    double parsed;
+
+    if (out_value == nullptr || value.length() == 0) {
+        return false;
+    }
+
+    parsed = strtod(value.c_str(), &end_ptr);
+    if (end_ptr == value.c_str() || end_ptr == nullptr) {
+        return false;
+    }
+    while (*end_ptr != '\0' && isspace((unsigned char)(*end_ptr)) != 0) {
+        ++end_ptr;
+    }
+    if (*end_ptr != '\0') {
+        return false;
+    }
+
+    *out_value = (float)parsed;
+    return std::isfinite((double)(*out_value));
+}
+
+static bool parse_strict_u32_field(const String &value, uint32_t *out_value)
+{
+    const char *cursor = value.c_str();
+    char *end_ptr = nullptr;
+    unsigned long parsed = 0UL;
+
+    if (out_value == nullptr || value.length() == 0) {
+        return false;
+    }
+
+    while (*cursor != '\0' && isspace((unsigned char)(*cursor)) != 0) {
+        ++cursor;
+    }
+    if (*cursor == '-' || *cursor == '+') {
+        return false;
+    }
+
+    parsed = strtoul(cursor, &end_ptr, 10);
+    if (end_ptr == cursor || end_ptr == nullptr) {
+        return false;
+    }
+    while (*end_ptr != '\0' && isspace((unsigned char)(*end_ptr)) != 0) {
+        ++end_ptr;
+    }
+    if (*end_ptr != '\0') {
+        return false;
+    }
+    if (parsed > 0xFFFFFFFFUL) {
+        return false;
+    }
+
+    *out_value = (uint32_t)parsed;
+    return true;
+}
+
+template <typename TRoot>
+static bool read_json_string_field(const TRoot &root, const char *name, String &value)
+{
+    JsonVariant field = root[name];
+    if (field.isNull() || !field.is<const char *>()) {
+        return false;
+    }
+    value = field.as<const char *>();
+    return true;
+}
+
+template <typename TRoot>
+static bool read_json_u32_field(const TRoot &root, const char *name, uint32_t *value)
+{
+    JsonVariant field = root[name];
+    if (value == nullptr || field.isNull()) {
+        return false;
+    }
+    if (field.is<int>()) {
+        int signed_value = field.as<int>();
+        if (signed_value < 0) {
+            return false;
+        }
+        *value = (uint32_t)signed_value;
+        return true;
+    }
+    if (field.is<unsigned int>()) {
+        *value = (uint32_t)field.as<unsigned int>();
+        return true;
+    }
+    if (field.is<uint32_t>()) {
+        *value = field.as<uint32_t>();
+        return true;
+    }
+    if (field.is<unsigned long>()) {
+        unsigned long raw = field.as<unsigned long>();
+        if (raw > 0xFFFFFFFFUL) {
+            return false;
+        }
+        *value = (uint32_t)raw;
+        return true;
+    }
+    return false;
+}
+
+template <typename TRoot>
+static bool read_json_float_field(const TRoot &root, const char *name, float *value)
+{
+    JsonVariant field = root[name];
+    if (value == nullptr || field.isNull()) {
+        return false;
+    }
+    if (!field.is<float>() && !field.is<double>() && !field.is<int>()) {
+        return false;
+    }
+    *value = field.as<float>();
+    return std::isfinite((double)(*value));
+}
+
 static void capture_request_body(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
     if (request == nullptr || data == nullptr || len == 0) {
         return;
     }
 
-    // The API payloads are tiny; keep a modest cap to avoid wasting RAM on bogus posts.
-    if (total > 1024U) {
+    if (total > WEB_API_MAX_BODY_BYTES) {
         return;
     }
 
@@ -164,6 +320,168 @@ static void append_hex_byte(String &out, uint8_t value)
     out += kHexDigits[value & 0x0F];
 }
 
+static bool auth_token_from_request(AsyncWebServerRequest *request, String &token)
+{
+    if (request == nullptr) {
+        return false;
+    }
+    if (request->hasHeader("X-Auth-Token")) {
+        token = request->getHeader("X-Auth-Token")->value();
+        if (token.length() > 0) {
+            return true;
+        }
+    }
+    if (read_form_field(request, "token", token)) {
+        return token.length() > 0;
+    }
+    if (request->hasParam("token")) {
+        token = request->getParam("token")->value();
+        return token.length() > 0;
+    }
+
+    StaticJsonDocument<128> doc;
+    if (parse_json_body(request, doc) && read_json_string_field(doc, "token", token)) {
+        return token.length() > 0;
+    }
+    return false;
+}
+
+static bool request_is_authorized(AsyncWebServerRequest *request)
+{
+    String token;
+    if (!device_config_has_api_token()) {
+        return true;
+    }
+    if (!auth_token_from_request(request, token)) {
+        return false;
+    }
+    return device_config_authenticate_token(token.c_str());
+}
+
+static bool control_is_locked_in_provisioning_ap(void)
+{
+    return !device_config_has_api_token() && web_wifi_access_point_active() && !web_wifi_connected();
+}
+
+static bool require_mutation_auth(AsyncWebServerRequest *request)
+{
+    if (request_is_authorized(request)) {
+        return true;
+    }
+    request->send(401, "application/json", "{\"ok\":false,\"message\":\"unauthorized\"}");
+    return false;
+}
+
+static bool require_control_auth(AsyncWebServerRequest *request)
+{
+    if (!request_is_authorized(request)) {
+        request->send(401, "application/json", "{\"ok\":false,\"message\":\"unauthorized\"}");
+        return false;
+    }
+    if (control_is_locked_in_provisioning_ap()) {
+        request->send(403, "application/json", "{\"ok\":false,\"message\":\"control locked until API token is configured or STA link is active\"}");
+        return false;
+    }
+    return true;
+}
+
+static void send_queue_ack(AsyncWebServerRequest *request)
+{
+    String response = "{\"ok\":true,\"message\":\"queued\",\"queueDepth\":";
+    response += web_action_queue_depth();
+    response += "}";
+    request->send(200, "application/json", response);
+}
+
+static void append_capabilities(String &response)
+{
+    response += "\"capabilities\":{";
+    web_json_kv_bool(response, "configProvisioning", true, false);
+    web_json_kv_bool(response, "securedProvisioningAp", true, false);
+    web_json_kv_bool(response, "authToken", true, false);
+    web_json_kv_bool(response, "overlayControl", true, false);
+    web_json_kv_bool(response, "stateSummary", true, false);
+    web_json_kv_bool(response, "controlLockInProvisioningAp", true, true);
+    response += "}";
+}
+
+static void send_meta_response(AsyncWebServerRequest *request)
+{
+    NetworkSyncSnapshot network = {};
+    String response = "{";
+
+    (void)network_sync_service_get_snapshot(&network);
+
+    response += "\"ok\":true,";
+    web_json_kv_u32(response, "apiVersion", kWebApiVersion, false);
+    web_json_kv_u32(response, "stateVersion", kWebStateVersion, false);
+    web_json_kv_u32(response, "storageSchemaVersion", APP_STORAGE_VERSION, false);
+    web_json_kv_bool(response, "flashStorageSupported", storage_service_flash_supported(), false);
+    web_json_kv_bool(response, "flashStorageReady", storage_service_is_flash_backend_ready(), false);
+    web_json_kv_bool(response, "storageMigrationAttempted", storage_service_was_migration_attempted(), false);
+    web_json_kv_bool(response, "storageMigrationOk", storage_service_last_migration_ok(), false);
+    web_json_kv_bool(response, "authRequired", device_config_has_api_token(), false);
+    web_json_kv_bool(response, "controlLockedInProvisioningAp", control_is_locked_in_provisioning_ap(), false);
+    web_json_kv_bool(response, "filesystemReady", web_server_filesystem_ready(), false);
+    web_json_kv_bool(response, "filesystemAssetsReady", web_server_filesystem_assets_ready(), false);
+    web_json_kv_str(response, "filesystemStatus", web_server_filesystem_status(), false);
+    web_json_kv_bool(response, "weatherTlsVerified", network.weather_tls_verified, false);
+    web_json_kv_bool(response, "weatherCaLoaded", network.weather_ca_loaded, false);
+    web_json_kv_str(response, "weatherTlsMode", network.weather_tls_mode, false);
+    web_json_kv_str(response, "weatherSyncStatus", network.weather_status, false);
+    web_json_kv_bool(response, "weatherLastAttemptOk", network.weather_last_attempt_ok, false);
+    web_json_kv_i32(response, "weatherLastHttpStatus", network.last_weather_http_status, false);
+    append_capabilities(response);
+    response += "}";
+    request->send(200, "application/json", response);
+}
+
+static void send_device_config_response(AsyncWebServerRequest *request)
+{
+    DeviceConfigSnapshot cfg;
+    NetworkSyncSnapshot network = {};
+    String response = "{";
+
+    device_config_init();
+    (void)device_config_get(&cfg);
+    (void)network_sync_service_get_snapshot(&network);
+
+    response += "\"ok\":true,";
+    web_json_kv_u32(response, "apiVersion", kWebApiVersion, false);
+    web_json_kv_u32(response, "stateVersion", kWebStateVersion, false);
+    response += "\"config\":{";
+    web_json_kv_u32(response, "version", cfg.version, false);
+    web_json_kv_bool(response, "wifiConfigured", cfg.wifi_configured, false);
+    web_json_kv_bool(response, "weatherConfigured", cfg.weather_configured, false);
+    web_json_kv_bool(response, "apiTokenConfigured", cfg.api_token_configured, false);
+    web_json_kv_bool(response, "authRequired", cfg.api_token_configured, false);
+    web_json_kv_str(response, "wifiSsid", cfg.wifi_ssid, false);
+    web_json_kv_str(response, "timezonePosix", cfg.timezone_posix, false);
+    web_json_kv_str(response, "timezoneId", cfg.timezone_id, false);
+    web_json_kv_f32(response, "latitude", cfg.latitude, 6, false);
+    web_json_kv_f32(response, "longitude", cfg.longitude, 6, false);
+    web_json_kv_str(response, "locationName", cfg.location_name, false);
+    web_json_kv_str(response, "wifiMode", web_wifi_mode_name(), false);
+    web_json_kv_str(response, "wifiStatus", web_wifi_status_name(), false);
+    web_json_kv_bool(response, "apActive", web_wifi_access_point_active(), false);
+    web_json_kv_str(response, "apSsid", web_wifi_access_point_ssid(), false);
+    web_json_kv_bool(response, "controlLockedInProvisioningAp", control_is_locked_in_provisioning_ap(), false);
+    web_json_kv_bool(response, "filesystemReady", web_server_filesystem_ready(), false);
+    web_json_kv_bool(response, "filesystemAssetsReady", web_server_filesystem_assets_ready(), false);
+    web_json_kv_str(response, "filesystemStatus", web_server_filesystem_status(), false);
+    web_json_kv_bool(response, "weatherTlsVerified", network.weather_tls_verified, false);
+    web_json_kv_bool(response, "weatherCaLoaded", network.weather_ca_loaded, false);
+    web_json_kv_str(response, "weatherTlsMode", network.weather_tls_mode, false);
+    web_json_kv_str(response, "weatherSyncStatus", network.weather_status, false);
+    web_json_kv_i32(response, "weatherLastHttpStatus", network.last_weather_http_status, false);
+    web_json_kv_str(response, "ip", web_wifi_ip_string(), true);
+    response += "},";
+    append_capabilities(response);
+    response += "}";
+
+    request->send(200, "application/json", response);
+}
+
 void web_register_api_routes(AsyncWebServer &server)
 {
     server.on("/api/health", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -176,140 +494,395 @@ void web_register_api_routes(AsyncWebServer &server)
         response += "\",\"uptimeMs\":";
         response += (uint64_t)millis();
         response += "}";
-
         request->send(200, "application/json", response);
     });
 
-    server.on("/api/state", HTTP_GET, [](AsyncWebServerRequest *request) {
-        WebStateSnapshot snap;
-        if (!web_state_snapshot_collect(&snap)) {
-            request->send(500, "application/json", "{\"ok\":false,\"message\":\"snapshot failed\"}");
+    server.on("/api/meta", HTTP_GET, [](AsyncWebServerRequest *request) {
+        send_meta_response(request);
+    });
+
+    server.on("/api/config/device", HTTP_GET, [](AsyncWebServerRequest *request) {
+        send_device_config_response(request);
+    });
+
+    server.on("/api/config/device", HTTP_POST, [](AsyncWebServerRequest *request) {
+        DeviceConfigSnapshot current_cfg;
+        DeviceConfigUpdate update = {};
+        StaticJsonDocument<512> json_doc;
+        String raw_body;
+        String ssid;
+        String password;
+        String timezone_posix;
+        String timezone_id;
+        String location_name;
+        String api_token;
+        char current_password[DEVICE_CONFIG_WIFI_PASSWORD_MAX_LEN + 1U] = {0};
+        float latitude = 0.0f;
+        float longitude = 0.0f;
+        bool has_json_body = false;
+        bool json_body_valid = false;
+        bool has_ssid_field = false;
+        bool has_password_field = false;
+        bool has_timezone_posix_field = false;
+        bool has_timezone_id_field = false;
+        bool has_latitude_field = false;
+        bool has_longitude_field = false;
+        bool has_location_field = false;
+        bool has_token_field = false;
+        bool wifi_saved = false;
+        bool network_saved = false;
+        bool token_saved = false;
+
+        if (!require_mutation_auth(request)) {
             return;
+        }
+
+        device_config_init();
+        (void)device_config_get(&current_cfg);
+        (void)device_config_get_wifi_password(current_password, sizeof(current_password));
+        latitude = current_cfg.latitude;
+        longitude = current_cfg.longitude;
+
+        has_json_body = read_json_body(request, raw_body);
+        if (has_json_body) {
+            json_body_valid = parse_json_body(request, json_doc);
+            if (!json_body_valid) {
+                send_json_error(request, 400, "invalid json body");
+                return;
+            }
+            has_ssid_field = read_json_string_field(json_doc, "ssid", ssid);
+            has_password_field = read_json_string_field(json_doc, "password", password);
+            has_timezone_posix_field = read_json_string_field(json_doc, "timezonePosix", timezone_posix);
+            has_timezone_id_field = read_json_string_field(json_doc, "timezoneId", timezone_id);
+            has_location_field = read_json_string_field(json_doc, "locationName", location_name);
+            has_token_field = read_json_string_field(json_doc, "apiToken", api_token);
+            has_latitude_field = read_json_float_field(json_doc, "latitude", &latitude);
+            has_longitude_field = read_json_float_field(json_doc, "longitude", &longitude);
+        } else {
+            String latitude_str;
+            String longitude_str;
+            has_ssid_field = read_form_field(request, "ssid", ssid);
+            has_password_field = read_form_field(request, "password", password);
+            has_timezone_posix_field = read_form_field(request, "timezonePosix", timezone_posix);
+            has_timezone_id_field = read_form_field(request, "timezoneId", timezone_id);
+            has_latitude_field = read_form_field(request, "latitude", latitude_str);
+            has_longitude_field = read_form_field(request, "longitude", longitude_str);
+            has_location_field = read_form_field(request, "locationName", location_name);
+            has_token_field = read_form_field(request, "apiToken", api_token);
+
+            if (has_latitude_field && !parse_strict_float_field(latitude_str, &latitude)) {
+                send_json_error(request, 400, "invalid latitude");
+                return;
+            }
+            if (has_longitude_field && !parse_strict_float_field(longitude_str, &longitude)) {
+                send_json_error(request, 400, "invalid longitude");
+                return;
+            }
+        }
+
+        if (!has_ssid_field && !has_password_field &&
+            !has_timezone_posix_field && !has_timezone_id_field &&
+            !has_latitude_field && !has_longitude_field && !has_location_field &&
+            !has_token_field) {
+            send_json_error(request, 400, "no config fields");
+            return;
+        }
+
+        if (has_ssid_field || has_password_field) {
+            update.set_wifi = true;
+            strncpy(update.wifi_ssid,
+                    has_ssid_field ? ssid.c_str() : current_cfg.wifi_ssid,
+                    sizeof(update.wifi_ssid) - 1U);
+            strncpy(update.wifi_password,
+                    has_password_field ? password.c_str() : current_password,
+                    sizeof(update.wifi_password) - 1U);
+        }
+
+        if (has_timezone_posix_field || has_timezone_id_field || has_latitude_field || has_longitude_field || has_location_field) {
+            update.set_network = true;
+            strncpy(update.timezone_posix,
+                    has_timezone_posix_field ? timezone_posix.c_str() : current_cfg.timezone_posix,
+                    sizeof(update.timezone_posix) - 1U);
+            strncpy(update.timezone_id,
+                    has_timezone_id_field ? timezone_id.c_str() : current_cfg.timezone_id,
+                    sizeof(update.timezone_id) - 1U);
+            strncpy(update.location_name,
+                    has_location_field ? location_name.c_str() : current_cfg.location_name,
+                    sizeof(update.location_name) - 1U);
+            update.latitude = latitude;
+            update.longitude = longitude;
+        }
+
+        if (has_token_field) {
+            update.set_api_token = true;
+            strncpy(update.api_token, api_token.c_str(), sizeof(update.api_token) - 1U);
+        }
+
+        if (!device_config_apply_update(&update)) {
+            send_json_error(request, 400, "invalid device config");
+            return;
+        }
+
+        wifi_saved = update.set_wifi;
+        network_saved = update.set_network;
+        token_saved = update.set_api_token;
+
+        if (wifi_saved) {
+            (void)web_wifi_reconfigure();
+        }
+        if (wifi_saved || network_saved) {
+            network_sync_service_on_config_changed();
         }
 
         String response = "{";
         response += "\"ok\":true,";
+        web_json_kv_bool(response, "wifiSaved", wifi_saved, false);
+        web_json_kv_bool(response, "networkSaved", network_saved, false);
+        web_json_kv_bool(response, "tokenSaved", token_saved, false);
+        web_json_kv_bool(response, "filesystemReady", web_server_filesystem_ready(), false);
+        web_json_kv_bool(response, "filesystemAssetsReady", web_server_filesystem_assets_ready(), false);
+        web_json_kv_str(response, "filesystemStatus", web_server_filesystem_status(), true);
+        response += "}";
+        request->send(200, "application/json", response);
+    }, nullptr, capture_request_body);
+
+    server.on("/api/config/device/reset", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!require_mutation_auth(request)) {
+            return;
+        }
+        if (!device_config_restore_defaults()) {
+            request->send(500, "application/json", "{\"ok\":false,\"message\":\"restore failed\"}");
+            return;
+        }
+        (void)web_wifi_reconfigure();
+        network_sync_service_on_config_changed();
+        request->send(200, "application/json", "{\"ok\":true,\"message\":\"defaults restored\"}");
+    }, nullptr, capture_request_body);
+
+    server.on("/api/state/summary", HTTP_GET, [](AsyncWebServerRequest *request) {
+        WebStateCoreSnapshot core;
+        if (!web_state_core_collect(&core)) {
+            request->send(500, "application/json", "{\"ok\":false,\"message\":\"snapshot unavailable\"}");
+            return;
+        }
+        String response = "{";
+        response += "\"ok\":true,";
+        web_json_kv_u32(response, "apiVersion", kWebApiVersion, false);
+        web_json_kv_u32(response, "stateVersion", kWebStateVersion, false);
+        response += "\"wifi\":{";
+        web_json_kv_bool(response, "connected", core.wifi.connected, false);
+        web_json_kv_bool(response, "provisioningApActive", core.wifi.provisioning_ap_active, false);
+        web_json_kv_str(response, "provisioningApSsid", core.wifi.provisioning_ap_ssid, false);
+        web_json_kv_str(response, "status", core.wifi.status, false);
+        web_json_kv_str(response, "mode", core.wifi.mode, false);
+        web_json_kv_str(response, "ip", core.wifi.ip, true);
+        response += "},";
+        response += "\"system\":{";
+        web_json_kv_bool(response, "appReady", core.system.app_ready, false);
+        web_json_kv_bool(response, "appDegraded", core.system.app_degraded, false);
+        web_json_kv_str(response, "page", core.system.current_page, false);
+        web_json_kv_str(response, "timeSource", core.system.time_source, false);
+        web_json_kv_str(response, "timeConfidence", core.system.time_confidence, false);
+        web_json_kv_bool(response, "timeValid", core.system.time_valid, false);
+        web_json_kv_bool(response, "timeAuthoritative", core.system.time_authoritative, false);
+        web_json_kv_u32(response, "timeSourceAgeMs", core.system.time_source_age_ms, false);
+        web_json_kv_u32(response, "uptimeMs", core.system.uptime_ms, true);
+        response += "},";
+        response += "\"summary\":{";
+        web_json_kv_str(response, "headerTags", core.system.header_tags, false);
+        web_json_kv_str(response, "networkLine", core.weather.network_line, false);
+        web_json_kv_str(response, "networkSubline", core.weather.network_subline, false);
+        web_json_kv_str(response, "sensorLabel", core.labels.sensor_label, false);
+        web_json_kv_str(response, "storageLabel", core.labels.storage_label, false);
+        web_json_kv_str(response, "diagLabel", core.labels.diag_label, false);
+        web_json_kv_str(response, "networkLabel", core.weather.network_label, true);
+        response += "},";
+        response += "\"weather\":{";
+        web_json_kv_bool(response, "valid", core.weather.valid, false);
+        web_json_kv_str(response, "location", core.weather.location, false);
+        web_json_kv_str(response, "text", core.weather.text, false);
+        web_json_kv_bool(response, "tlsVerified", core.weather.tls_verified, false);
+        web_json_kv_bool(response, "tlsCaLoaded", core.weather.tls_ca_loaded, false);
+        web_json_kv_str(response, "tlsMode", core.weather.tls_mode, false);
+        web_json_kv_str(response, "syncStatus", core.weather.sync_status, false);
+        web_json_kv_i32(response, "lastHttpStatus", core.weather.last_http_status, false);
+        web_json_kv_f32(response, "temperatureC", (float)core.weather.temperature_tenths_c / 10.0f, 1, true);
+        response += "}}";
+        request->send(200, "application/json", response);
+    });
+
+    server.on("/api/state", HTTP_GET, [](AsyncWebServerRequest *request) {
+        WebStateCoreSnapshot core;
+        WebStateDetailSnapshot detail;
+        DeviceConfigSnapshot cfg;
+        String response;
+        response.reserve(4096);
+
+        if (!web_state_core_collect(&core) || !web_state_detail_collect(&detail)) {
+            request->send(500, "application/json", "{\"ok\":false,\"message\":\"snapshot unavailable\"}");
+            return;
+        }
+        device_config_init();
+        (void)device_config_get(&cfg);
+
+        response = "{";
+        response += "\"ok\":true,";
+        web_json_kv_u32(response, "apiVersion", kWebApiVersion, false);
+        web_json_kv_u32(response, "stateVersion", kWebStateVersion, false);
 
         response += "\"wifi\":{";
-        web_json_kv_bool(response, "connected", snap.wifi_connected, false);
-        web_json_kv_str(response, "ip", snap.ip, false);
-        web_json_kv_i32(response, "rssi", snap.rssi, true);
+        web_json_kv_bool(response, "connected", core.wifi.connected, false);
+        web_json_kv_bool(response, "provisioningApActive", core.wifi.provisioning_ap_active, false);
+        web_json_kv_str(response, "provisioningApSsid", core.wifi.provisioning_ap_ssid, false);
+        web_json_kv_str(response, "mode", core.wifi.mode, false);
+        web_json_kv_str(response, "status", core.wifi.status, false);
+        web_json_kv_str(response, "ip", core.wifi.ip, false);
+        web_json_kv_i32(response, "rssi", core.wifi.rssi, true);
         response += "},";
 
         response += "\"system\":{";
-        web_json_kv_u32(response, "uptimeMs", snap.uptime_ms, false);
-        web_json_kv_str(response, "page", snap.current_page, false);
-        web_json_kv_str(response, "timeSource", snap.time_source, false);
-        web_json_kv_bool(response, "sleeping", snap.sleeping, false);
-        web_json_kv_bool(response, "animating", snap.animating, false);
-        web_json_kv_bool(response, "safeMode", snap.safe_mode_active, true);
+        web_json_kv_u32(response, "uptimeMs", core.system.uptime_ms, false);
+        web_json_kv_bool(response, "appReady", core.system.app_ready, false);
+        web_json_kv_bool(response, "appDegraded", core.system.app_degraded, false);
+        web_json_kv_str(response, "appInitStage", core.system.app_init_stage, false);
+        web_json_kv_str(response, "page", core.system.current_page, false);
+        web_json_kv_str(response, "timeSource", core.system.time_source, false);
+        web_json_kv_str(response, "timeConfidence", core.system.time_confidence, false);
+        web_json_kv_bool(response, "timeValid", core.system.time_valid, false);
+        web_json_kv_bool(response, "timeAuthoritative", core.system.time_authoritative, false);
+        web_json_kv_u32(response, "timeSourceAgeMs", core.system.time_source_age_ms, false);
+        web_json_kv_bool(response, "sleeping", core.system.sleeping, false);
+        web_json_kv_bool(response, "animating", core.system.animating, false);
+        web_json_kv_bool(response, "safeMode", detail.diag.safe_mode_active, true);
+        response += "},";
+
+        response += "\"config\":{";
+        web_json_kv_bool(response, "wifiConfigured", cfg.wifi_configured, false);
+        web_json_kv_bool(response, "weatherConfigured", cfg.weather_configured, false);
+        web_json_kv_bool(response, "authRequired", cfg.api_token_configured, false);
+        web_json_kv_str(response, "wifiSsid", cfg.wifi_ssid, false);
+        web_json_kv_str(response, "timezoneId", cfg.timezone_id, false);
+        web_json_kv_bool(response, "filesystemReady", web_server_filesystem_ready(), false);
+        web_json_kv_bool(response, "filesystemAssetsReady", web_server_filesystem_assets_ready(), false);
+        web_json_kv_str(response, "filesystemStatus", web_server_filesystem_status(), false);
+        web_json_kv_str(response, "locationName", cfg.location_name, true);
         response += "},";
 
         response += "\"activity\":{";
-        web_json_kv_u32(response, "steps", snap.steps, false);
-        web_json_kv_u32(response, "goal", snap.goal, false);
-        web_json_kv_u32(response, "goalPercent", snap.goal_percent, true);
+        web_json_kv_u32(response, "steps", core.activity.steps, false);
+        web_json_kv_u32(response, "goal", core.activity.goal, false);
+        web_json_kv_u32(response, "goalPercent", core.activity.goal_percent, true);
         response += "},";
 
         response += "\"alarm\":{";
-        web_json_kv_u32(response, "nextIndex", snap.next_alarm_index, false);
-        web_json_kv_str(response, "nextTime", snap.alarm_time, false);
-        web_json_kv_bool(response, "enabled", snap.alarm_enabled, false);
-        web_json_kv_bool(response, "ringing", snap.alarm_ringing, false);
-        web_json_kv_str(response, "label", snap.alarm_label, true);
+        web_json_kv_u32(response, "nextIndex", detail.alarm.next_alarm_index, false);
+        web_json_kv_str(response, "nextTime", detail.alarm.next_time, false);
+        web_json_kv_bool(response, "enabled", detail.alarm.enabled, false);
+        web_json_kv_bool(response, "ringing", detail.alarm.ringing, false);
+        web_json_kv_str(response, "label", core.labels.alarm_label, true);
         response += "},";
 
         response += "\"music\":{";
-        web_json_kv_bool(response, "available", snap.music_available, false);
-        web_json_kv_bool(response, "playing", snap.music_playing, false);
-        web_json_kv_str(response, "state", snap.music_state, false);
-        web_json_kv_str(response, "song", snap.music_song, false);
-        web_json_kv_str(response, "label", snap.music_label, true);
+        web_json_kv_bool(response, "available", detail.music.available, false);
+        web_json_kv_bool(response, "playing", detail.music.playing, false);
+        web_json_kv_str(response, "state", detail.music.state, false);
+        web_json_kv_str(response, "song", detail.music.song, false);
+        web_json_kv_str(response, "label", core.labels.music_label, true);
         response += "},";
 
         response += "\"sensor\":{";
-        web_json_kv_bool(response, "online", snap.sensor_online, false);
-        web_json_kv_bool(response, "calibrated", snap.sensor_calibrated, false);
-        web_json_kv_bool(response, "staticNow", snap.sensor_static_now, false);
-        web_json_kv_str(response, "runtimeState", snap.sensor_runtime_state, false);
-        web_json_kv_str(response, "calibrationState", snap.sensor_calibration_state, false);
-        web_json_kv_u32(response, "quality", snap.sensor_quality, false);
-        web_json_kv_u32(response, "errorCode", snap.sensor_error_code, false);
-        web_json_kv_u32(response, "faultCount", snap.sensor_fault_count, false);
-        web_json_kv_u32(response, "reinitCount", snap.sensor_reinit_count, false);
-        web_json_kv_u32(response, "calibrationProgress", snap.sensor_calibration_progress, false);
-        web_json_kv_i32(response, "ax", snap.sensor_ax, false);
-        web_json_kv_i32(response, "ay", snap.sensor_ay, false);
-        web_json_kv_i32(response, "az", snap.sensor_az, false);
-        web_json_kv_i32(response, "gx", snap.sensor_gx, false);
-        web_json_kv_i32(response, "gy", snap.sensor_gy, false);
-        web_json_kv_i32(response, "gz", snap.sensor_gz, false);
-        web_json_kv_i32(response, "accelNormMg", snap.sensor_accel_norm_mg, false);
-        web_json_kv_i32(response, "baselineMg", snap.sensor_baseline_mg, false);
-        web_json_kv_i32(response, "motionScore", snap.sensor_motion_score, false);
-        web_json_kv_u32(response, "lastSampleMs", snap.sensor_last_sample_ms, false);
-        web_json_kv_u32(response, "stepsTotal", snap.sensor_steps_total, false);
-        web_json_kv_f32(response, "pitchDeg", snap.pitch_deg, 2, false);
-        web_json_kv_f32(response, "rollDeg", snap.roll_deg, 2, true);
+        web_json_kv_bool(response, "online", detail.sensor.online, false);
+        web_json_kv_bool(response, "calibrated", detail.sensor.calibrated, false);
+        web_json_kv_bool(response, "staticNow", detail.sensor.static_now, false);
+        web_json_kv_str(response, "runtimeState", detail.sensor.runtime_state, false);
+        web_json_kv_str(response, "calibrationState", detail.sensor.calibration_state, false);
+        web_json_kv_u32(response, "quality", detail.sensor.quality, false);
+        web_json_kv_u32(response, "errorCode", detail.sensor.error_code, false);
+        web_json_kv_u32(response, "faultCount", detail.sensor.fault_count, false);
+        web_json_kv_u32(response, "reinitCount", detail.sensor.reinit_count, false);
+        web_json_kv_u32(response, "calibrationProgress", detail.sensor.calibration_progress, false);
+        web_json_kv_i32(response, "ax", detail.sensor.ax, false);
+        web_json_kv_i32(response, "ay", detail.sensor.ay, false);
+        web_json_kv_i32(response, "az", detail.sensor.az, false);
+        web_json_kv_i32(response, "gx", detail.sensor.gx, false);
+        web_json_kv_i32(response, "gy", detail.sensor.gy, false);
+        web_json_kv_i32(response, "gz", detail.sensor.gz, false);
+        web_json_kv_i32(response, "accelNormMg", detail.sensor.accel_norm_mg, false);
+        web_json_kv_i32(response, "baselineMg", detail.sensor.baseline_mg, false);
+        web_json_kv_i32(response, "motionScore", detail.sensor.motion_score, false);
+        web_json_kv_u32(response, "lastSampleMs", detail.sensor.last_sample_ms, false);
+        web_json_kv_u32(response, "stepsTotal", detail.sensor.steps_total, false);
+        web_json_kv_f32(response, "pitchDeg", detail.sensor.pitch_deg, 2, false);
+        web_json_kv_f32(response, "rollDeg", detail.sensor.roll_deg, 2, true);
         response += "},";
 
         response += "\"storage\":{";
-        web_json_kv_str(response, "backend", snap.storage_backend, false);
-        web_json_kv_str(response, "commitState", snap.storage_commit_state, false);
-        web_json_kv_bool(response, "transactionActive", snap.storage_transaction_active, false);
-        web_json_kv_bool(response, "sleepFlushPending", snap.storage_sleep_flush_pending, true);
+        web_json_kv_str(response, "backend", detail.storage.backend, false);
+        web_json_kv_str(response, "backendPhase", detail.storage.backend_phase, false);
+        web_json_kv_str(response, "commitState", detail.storage.commit_state, false);
+        web_json_kv_u32(response, "schemaVersion", detail.storage.schema_version, false);
+        web_json_kv_bool(response, "flashSupported", detail.storage.flash_supported, false);
+        web_json_kv_bool(response, "flashReady", detail.storage.flash_ready, false);
+        web_json_kv_bool(response, "migrationAttempted", detail.storage.migration_attempted, false);
+        web_json_kv_bool(response, "migrationOk", detail.storage.migration_ok, false);
+        web_json_kv_bool(response, "transactionActive", detail.storage.transaction_active, false);
+        web_json_kv_bool(response, "sleepFlushPending", detail.storage.sleep_flush_pending, true);
         response += "},";
 
         response += "\"diag\":{";
-        web_json_kv_bool(response, "hasLastFault", snap.has_last_fault, false);
-        web_json_kv_str(response, "lastFaultName", snap.last_fault_name, false);
-        web_json_kv_str(response, "lastFaultSeverity", snap.last_fault_severity, false);
-        web_json_kv_u32(response, "lastFaultCount", snap.last_fault_count, false);
-        web_json_kv_bool(response, "hasLastLog", snap.has_last_log, false);
-        web_json_kv_str(response, "lastLogName", snap.last_log_name, false);
-        web_json_kv_u32(response, "lastLogValue", snap.last_log_value, false);
-        web_json_kv_u32(response, "lastLogAux", snap.last_log_aux, true);
+        web_json_kv_bool(response, "hasLastFault", detail.diag.has_last_fault, false);
+        web_json_kv_str(response, "lastFaultName", detail.diag.last_fault_name, false);
+        web_json_kv_str(response, "lastFaultSeverity", detail.diag.last_fault_severity, false);
+        web_json_kv_u32(response, "lastFaultCount", detail.diag.last_fault_count, false);
+        web_json_kv_bool(response, "hasLastLog", detail.diag.has_last_log, false);
+        web_json_kv_str(response, "lastLogName", detail.diag.last_log_name, false);
+        web_json_kv_u32(response, "lastLogValue", detail.diag.last_log_value, false);
+        web_json_kv_u32(response, "lastLogAux", detail.diag.last_log_aux, true);
         response += "},";
 
         response += "\"display\":{";
-        web_json_kv_u32(response, "presentCount", snap.display_present_count, false);
-        web_json_kv_u32(response, "txFailCount", snap.display_tx_fail_count, true);
+        web_json_kv_u32(response, "presentCount", detail.display.present_count, false);
+        web_json_kv_u32(response, "txFailCount", detail.display.tx_fail_count, true);
         response += "},";
 
         response += "\"weather\":{";
-        web_json_kv_bool(response, "valid", snap.weather_valid, false);
-        web_json_kv_str(response, "location", snap.weather_location, false);
-        web_json_kv_str(response, "text", snap.weather_text, false);
-        web_json_kv_f32(response, "temperatureC", (float)snap.weather_temperature_tenths_c / 10.0f, 1, false);
-        web_json_kv_u32(response, "updatedAtMs", snap.weather_updated_at_ms, true);
+        web_json_kv_bool(response, "valid", core.weather.valid, false);
+        web_json_kv_str(response, "location", core.weather.location, false);
+        web_json_kv_str(response, "text", core.weather.text, false);
+        web_json_kv_bool(response, "tlsVerified", core.weather.tls_verified, false);
+        web_json_kv_bool(response, "tlsCaLoaded", core.weather.tls_ca_loaded, false);
+        web_json_kv_str(response, "tlsMode", core.weather.tls_mode, false);
+        web_json_kv_str(response, "syncStatus", core.weather.sync_status, false);
+        web_json_kv_i32(response, "lastHttpStatus", core.weather.last_http_status, false);
+        web_json_kv_f32(response, "temperatureC", (float)core.weather.temperature_tenths_c / 10.0f, 1, false);
+        web_json_kv_u32(response, "updatedAtMs", core.weather.updated_at_ms, true);
         response += "},";
 
         response += "\"summary\":{";
-        web_json_kv_str(response, "headerTags", snap.header_tags, false);
-        web_json_kv_str(response, "networkLine", snap.network_line, false);
-        web_json_kv_str(response, "networkSubline", snap.network_subline, false);
-        web_json_kv_str(response, "sensorLabel", snap.sensor_label, false);
-        web_json_kv_str(response, "storageLabel", snap.storage_label, false);
-        web_json_kv_str(response, "diagLabel", snap.diag_label, true);
+        web_json_kv_str(response, "headerTags", core.system.header_tags, false);
+        web_json_kv_str(response, "networkLine", core.weather.network_line, false);
+        web_json_kv_str(response, "networkSubline", core.weather.network_subline, false);
+        web_json_kv_str(response, "sensorLabel", core.labels.sensor_label, false);
+        web_json_kv_str(response, "storageLabel", core.labels.storage_label, false);
+        web_json_kv_str(response, "diagLabel", core.labels.diag_label, true);
         response += "},";
 
         response += "\"terminal\":{";
-        web_json_kv_str(response, "systemFace", snap.system_face, false);
-        web_json_kv_str(response, "brightnessLabel", snap.brightness_label, false);
-        web_json_kv_str(response, "activityLabel", snap.activity_label, false);
-        web_json_kv_str(response, "sensorLabel", snap.sensor_label, false);
-        web_json_kv_str(response, "networkLabel", snap.network_label, false);
-        web_json_kv_str(response, "storageLabel", snap.storage_label, true);
+        web_json_kv_str(response, "systemFace", core.system.system_face, false);
+        web_json_kv_str(response, "brightnessLabel", core.system.brightness_label, false);
+        web_json_kv_str(response, "activityLabel", core.activity.activity_label, false);
+        web_json_kv_str(response, "sensorLabel", core.labels.sensor_label, false);
+        web_json_kv_str(response, "networkLabel", core.weather.network_label, false);
+        web_json_kv_str(response, "storageLabel", core.labels.storage_label, true);
         response += "},";
 
         response += "\"overlay\":{";
-        web_json_kv_bool(response, "active", snap.overlay_active, false);
-        web_json_kv_str(response, "text", snap.last_overlay_text, false);
-        web_json_kv_u32(response, "expireAtMs", snap.overlay_expire_at_ms, true);
+        web_json_kv_bool(response, "active", detail.overlay.active, false);
+        web_json_kv_str(response, "text", detail.overlay.text, false);
+        web_json_kv_u32(response, "expireAtMs", detail.overlay.expire_at_ms, true);
         response += "}";
 
         response += "}";
-
         request->send(200, "application/json", response);
     });
 
@@ -367,255 +940,169 @@ void web_register_api_routes(AsyncWebServer &server)
             append_hex_byte(response, g_oled_buffer[i]);
         }
         response += "\"}";
-
         request->send(200, "application/json", response);
     });
 
     server.on("/api/input/key", HTTP_POST, [](AsyncWebServerRequest *request) {
-        String key_str;
+        StaticJsonDocument<256> json_doc;
+                String key_str;
         String event_str;
-        if (read_form_field(request, "key", key_str) && read_form_field(request, "event", event_str)) {
-            KeyId key_id = KEY_ID_UP;
-            KeyEventType event_type = KEY_EVENT_SHORT;
-
-            if (!parse_key_id(key_str.c_str(), &key_id)) {
-                request->send(400, "application/json", "{\"ok\":false,\"message\":\"invalid key\"}");
-                return;
-            }
-            if (!parse_key_event(event_str.c_str(), &event_type)) {
-                request->send(400, "application/json", "{\"ok\":false,\"message\":\"invalid event\"}");
-                return;
-            }
-
-            WebAction action;
-            action.type = WEB_ACTION_KEY;
-            action.data.key.id = key_id;
-            action.data.key.event_type = event_type;
-
-            if (!web_action_enqueue(&action)) {
-                request->send(503, "application/json", "{\"ok\":false,\"message\":\"action queue full\"}");
-                return;
-            }
-
-            String response = "{\"ok\":true,\"message\":\"queued\",\"queueDepth\":";
-            response += web_action_queue_depth();
-            response += "}";
-
-            request->send(200, "application/json", response);
-            return;
-        }
-
-        String body;
-        if (!read_json_body(request, body)) {
-            request->send(400, "application/json", "{\"ok\":false,\"message\":\"no body\"}");
-            return;
-        }
-
         KeyId key_id = KEY_ID_UP;
         KeyEventType event_type = KEY_EVENT_SHORT;
-        bool key_valid = false;
+        bool parsed = false;
 
-        int key_start = body.indexOf("\"key\":");
-        if (key_start >= 0) {
-            int quote_start = body.indexOf("\"", key_start + 6);
-            int quote_end = body.indexOf("\"", quote_start + 1);
-            if (quote_start >= 0 && quote_end > quote_start) {
-                String key_str = body.substring(quote_start + 1, quote_end);
-                key_valid = parse_key_id(key_str.c_str(), &key_id);
-            }
-        }
-
-        int event_start = body.indexOf("\"event\":");
-        if (event_start >= 0) {
-            int quote_start = body.indexOf("\"", event_start + 8);
-            int quote_end = body.indexOf("\"", quote_start + 1);
-            if (quote_start >= 0 && quote_end > quote_start) {
-                String event_str = body.substring(quote_start + 1, quote_end);
-                parse_key_event(event_str.c_str(), &event_type);
-            }
-        }
-
-        if (!key_valid) {
-            request->send(400, "application/json", "{\"ok\":false,\"message\":\"invalid key\"}");
+        if (!require_control_auth(request)) {
             return;
         }
 
-        WebAction action;
+        if (read_form_field(request, "key", key_str)) {
+            parsed = parse_key_id(key_str.c_str(), &key_id);
+            if (read_form_field(request, "event", event_str) && event_str.length() > 0U) {
+                if (!parse_key_event(event_str.c_str(), &event_type)) {
+                    send_json_error(request, 400, "invalid key event");
+                    return;
+                }
+            }
+        } else if (parse_json_body(request, json_doc)) {
+                        if (!read_json_string_field(json_doc, "key", key_str)) {
+                send_json_error(request, 400, "missing key");
+                return;
+            }
+            parsed = parse_key_id(key_str.c_str(), &key_id);
+            if (read_json_string_field(json_doc, "event", event_str) && event_str.length() > 0U) {
+                if (!parse_key_event(event_str.c_str(), &event_type)) {
+                    send_json_error(request, 400, "invalid key event");
+                    return;
+                }
+            }
+        } else {
+            send_json_error(request, 400, "missing key payload");
+            return;
+        }
+
+        if (!parsed) {
+            send_json_error(request, 400, "invalid key");
+            return;
+        }
+
+        WebAction action = {};
         action.type = WEB_ACTION_KEY;
         action.data.key.id = key_id;
         action.data.key.event_type = event_type;
 
         if (!web_action_enqueue(&action)) {
-            request->send(503, "application/json", "{\"ok\":false,\"message\":\"action queue full\"}");
+            send_json_error(request, 503, "action queue full");
             return;
         }
 
-        String response = "{\"ok\":true,\"message\":\"queued\",\"queueDepth\":";
-        response += web_action_queue_depth();
-        response += "}";
-
-        request->send(200, "application/json", response);
+        send_queue_ack(request);
     }, nullptr, capture_request_body);
 
     server.on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request) {
-        String cmd_str;
-        if (read_form_field(request, "type", cmd_str)) {
-            AppCommandType cmd_type = (AppCommandType)0;
-            if (!parse_command_type(cmd_str.c_str(), &cmd_type) || cmd_type == 0) {
-                request->send(400, "application/json", "{\"ok\":false,\"message\":\"invalid command\"}");
-                return;
-            }
-
-            WebAction action;
-            action.type = WEB_ACTION_COMMAND;
-            action.data.command.source = APP_COMMAND_SOURCE_UI;
-            action.data.command.type = cmd_type;
-            action.data.command.data.u32 = 0;
-
-            if (!web_action_enqueue(&action)) {
-                request->send(503, "application/json", "{\"ok\":false,\"message\":\"action queue full\"}");
-                return;
-            }
-
-            String response = "{\"ok\":true,\"message\":\"queued\",\"queueDepth\":";
-            response += web_action_queue_depth();
-            response += "}";
-
-            request->send(200, "application/json", response);
-            return;
-        }
-
-        String body;
-        if (!read_json_body(request, body)) {
-            request->send(400, "application/json", "{\"ok\":false,\"message\":\"no body\"}");
-            return;
-        }
-
+        StaticJsonDocument<256> json_doc;
+                String cmd_str;
         AppCommandType cmd_type = (AppCommandType)0;
-        int type_start = body.indexOf("\"type\":");
-        if (type_start >= 0) {
-            int quote_start = body.indexOf("\"", type_start + 7);
-            int quote_end = body.indexOf("\"", quote_start + 1);
-            if (quote_start >= 0 && quote_end > quote_start) {
-                String cmd_str = body.substring(quote_start + 1, quote_end);
-                parse_command_type(cmd_str.c_str(), &cmd_type);
-            }
-        }
 
-        if (cmd_type == 0) {
-            request->send(400, "application/json", "{\"ok\":false,\"message\":\"invalid command\"}");
+        if (!require_control_auth(request)) {
             return;
         }
 
-        WebAction action;
+        if (read_form_field(request, "type", cmd_str)) {
+            if (!parse_command_type(cmd_str.c_str(), &cmd_type) || cmd_type == 0) {
+                send_json_error(request, 400, "invalid command");
+                return;
+            }
+        } else if (parse_json_body(request, json_doc)) {
+                        if (!read_json_string_field(json_doc, "type", cmd_str)) {
+                send_json_error(request, 400, "missing command type");
+                return;
+            }
+            if (!parse_command_type(cmd_str.c_str(), &cmd_type) || cmd_type == 0) {
+                send_json_error(request, 400, "invalid command");
+                return;
+            }
+        } else {
+            send_json_error(request, 400, "missing command payload");
+            return;
+        }
+
+        WebAction action = {};
         action.type = WEB_ACTION_COMMAND;
         action.data.command.source = APP_COMMAND_SOURCE_UI;
         action.data.command.type = cmd_type;
         action.data.command.data.u32 = 0;
 
         if (!web_action_enqueue(&action)) {
-            request->send(503, "application/json", "{\"ok\":false,\"message\":\"action queue full\"}");
+            send_json_error(request, 503, "action queue full");
             return;
         }
 
-        String response = "{\"ok\":true,\"message\":\"queued\",\"queueDepth\":";
-        response += web_action_queue_depth();
-        response += "}";
-
-        request->send(200, "application/json", response);
+        send_queue_ack(request);
     }, nullptr, capture_request_body);
 
     server.on("/api/display/overlay", HTTP_POST, [](AsyncWebServerRequest *request) {
+        StaticJsonDocument<256> json_doc;
         String overlay_text;
         String duration_str;
+        uint32_t duration_ms = WEB_API_DEFAULT_OVERLAY_DURATION_MS;
+
+        if (!require_control_auth(request)) {
+            return;
+        }
+
         if (read_form_field(request, "text", overlay_text)) {
-            if (!read_form_field(request, "durationMs", duration_str)) {
-                duration_str = "1500";
+            if (read_form_field(request, "durationMs", duration_str) && duration_str.length() > 0U) {
+                if (!parse_strict_u32_field(duration_str, &duration_ms)) {
+                    send_json_error(request, 400, "invalid overlay duration");
+                    return;
+                }
             }
-
-            uint32_t duration_ms = (uint32_t)duration_str.toInt();
-            if (overlay_text.length() == 0 || overlay_text.length() > 63 || duration_ms == 0) {
-                request->send(400, "application/json", "{\"ok\":false,\"message\":\"invalid overlay params\"}");
+        } else if (parse_json_body(request, json_doc)) {
+            if (!read_json_string_field(json_doc, "text", overlay_text)) {
+                send_json_error(request, 400, "missing overlay text");
                 return;
             }
-
-            WebAction action;
-            action.type = WEB_ACTION_OVERLAY_TEXT;
-            strncpy(action.data.overlay.text, overlay_text.c_str(), sizeof(action.data.overlay.text) - 1);
-            action.data.overlay.text[sizeof(action.data.overlay.text) - 1] = '\0';
-            action.data.overlay.duration_ms = duration_ms;
-
-            if (!web_action_enqueue(&action)) {
-                request->send(503, "application/json", "{\"ok\":false,\"message\":\"action queue full\"}");
+            if (!json_doc["durationMs"].isNull() && !read_json_u32_field(json_doc, "durationMs", &duration_ms)) {
+                send_json_error(request, 400, "invalid overlay duration");
                 return;
             }
-
-            String response = "{\"ok\":true,\"message\":\"queued\"}";
-            request->send(200, "application/json", response);
+        } else {
+            send_json_error(request, 400, "missing overlay payload");
             return;
         }
 
-        String body;
-        if (!read_json_body(request, body)) {
-            request->send(400, "application/json", "{\"ok\":false,\"message\":\"no body\"}");
+        if (overlay_text.length() == 0U ||
+            overlay_text.length() > WEB_API_OVERLAY_MAX_TEXT_LEN ||
+            duration_ms == 0U ||
+            duration_ms > WEB_API_MAX_OVERLAY_DURATION_MS) {
+            send_json_error(request, 400, "invalid overlay params");
             return;
         }
 
-        overlay_text.clear();
-        uint32_t duration_ms = 1500;
-
-        int text_start = body.indexOf("\"text\":");
-        if (text_start >= 0) {
-            int quote_start = body.indexOf("\"", text_start + 7);
-            int quote_end = body.indexOf("\"", quote_start + 1);
-            if (quote_start >= 0 && quote_end > quote_start) {
-                overlay_text = body.substring(quote_start + 1, quote_end);
-            }
-        }
-
-        int dur_start = body.indexOf("\"durationMs\":");
-        if (dur_start >= 0) {
-            int num_start = dur_start + 13;
-            int num_end = body.indexOf(",", num_start);
-            if (num_end < 0) {
-                num_end = body.indexOf("}", num_start);
-            }
-            if (num_start < num_end) {
-                String dur_str = body.substring(num_start, num_end);
-                duration_ms = dur_str.toInt();
-            }
-        }
-
-        if (overlay_text.length() == 0 || overlay_text.length() > 63 || duration_ms == 0) {
-            request->send(400, "application/json", "{\"ok\":false,\"message\":\"invalid overlay params\"}");
-            return;
-        }
-
-        WebAction action;
+        WebAction action = {};
         action.type = WEB_ACTION_OVERLAY_TEXT;
-        strncpy(action.data.overlay.text, overlay_text.c_str(), sizeof(action.data.overlay.text) - 1);
-        action.data.overlay.text[sizeof(action.data.overlay.text) - 1] = '\0';
+        strncpy(action.data.overlay.text, overlay_text.c_str(), sizeof(action.data.overlay.text) - 1U);
+        action.data.overlay.text[sizeof(action.data.overlay.text) - 1U] = '\0';
         action.data.overlay.duration_ms = duration_ms;
 
         if (!web_action_enqueue(&action)) {
-            request->send(503, "application/json", "{\"ok\":false,\"message\":\"action queue full\"}");
+            send_json_error(request, 503, "action queue full");
             return;
         }
 
-        String response = "{\"ok\":true,\"message\":\"queued\"}";
-        request->send(200, "application/json", response);
+        send_queue_ack(request);
     }, nullptr, capture_request_body);
 
     server.on("/api/display/overlay/clear", HTTP_POST, [](AsyncWebServerRequest *request) {
-        WebAction action;
-        action.type = WEB_ACTION_OVERLAY_CLEAR;
-
-        if (!web_action_enqueue(&action)) {
-            request->send(503, "application/json", "{\"ok\":false,\"message\":\"action queue full\"}");
+        WebAction action = {};
+        if (!require_control_auth(request)) {
             return;
         }
-
-        String response = "{\"ok\":true,\"message\":\"queued\"}";
-        request->send(200, "application/json", response);
-    });
+        action.type = WEB_ACTION_OVERLAY_CLEAR;
+        if (!web_action_enqueue(&action)) {
+            send_json_error(request, 503, "action queue full");
+            return;
+        }
+        send_queue_ack(request);
+    }, nullptr, capture_request_body);
 }

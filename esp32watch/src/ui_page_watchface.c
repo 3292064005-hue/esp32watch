@@ -73,6 +73,7 @@ void ui_page_watchface_render(PageId page, int16_t ox)
         snprintf(hint, sizeof(hint), "OK Hub  BK Quick");
         ui_core_draw_footer_hint(ox, hint);
     } else {
+        pct = (uint8_t)APP_CLAMP((domain_state.activity.goal == 0U) ? 0U : (domain_state.activity.steps * 100UL) / domain_state.activity.goal, 0U, 100U);
         ui_core_draw_card(ox + 8, 14, 112, 37, "HEALTH");
         if (domain_state.time_valid) {
             snprintf(line, sizeof(line), "%02u:%02u:%02u", domain_state.now.hour, domain_state.now.minute, domain_state.now.second);

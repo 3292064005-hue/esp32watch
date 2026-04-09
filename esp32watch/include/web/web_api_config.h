@@ -1,0 +1,20 @@
+#ifndef WEB_API_CONFIG_H
+#define WEB_API_CONFIG_H
+
+#ifndef WEB_API_MAX_BODY_BYTES
+#define WEB_API_MAX_BODY_BYTES                       1024U
+#endif
+
+#ifndef WEB_API_OVERLAY_MAX_TEXT_LEN
+#define WEB_API_OVERLAY_MAX_TEXT_LEN                63U
+#endif
+
+#ifndef WEB_API_DEFAULT_OVERLAY_DURATION_MS
+#define WEB_API_DEFAULT_OVERLAY_DURATION_MS         1500U
+#endif
+
+#ifndef WEB_API_MAX_OVERLAY_DURATION_MS
+#define WEB_API_MAX_OVERLAY_DURATION_MS             60000U
+#endif
+
+#endif

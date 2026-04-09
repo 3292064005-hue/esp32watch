@@ -61,6 +61,8 @@ typedef struct {
     StorageCommitReason inflight_commit_reason;
     bool inflight_commit_ok;
     bool inflight_previously_transaction_active;
+    bool migration_attempted;
+    bool migration_succeeded;
     SettingsState settings;
     AlarmState alarms[APP_MAX_ALARMS];
     SensorCalibrationData calibration;

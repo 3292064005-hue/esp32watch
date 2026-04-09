@@ -7,18 +7,36 @@ const OLED_OFF_RGBA = [8, 16, 12, 255];
 const state = {
   snapshot: null,
   frame: null,
-  polling: false
+  config: null,
+  meta: null,
+  polling: false,
+  formDirty: false
 };
 
 let oledContext = null;
 let oledImageData = null;
 
+function loadToken() {
+  return window.localStorage.getItem("esp32watch.apiToken") || "";
+}
+
+function saveToken(token) {
+  if (token) {
+    window.localStorage.setItem("esp32watch.apiToken", token);
+  } else {
+    window.localStorage.removeItem("esp32watch.apiToken");
+  }
+}
+
 async function api(path, options = {}) {
+  const { authToken: overrideToken, headers: extraHeaders, ...fetchOptions } = options;
+  const authToken = overrideToken !== undefined ? overrideToken : loadToken();
   const res = await fetch(path, {
-    ...options,
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {})
+      ...(authToken ? { "X-Auth-Token": authToken } : {}),
+      ...(extraHeaders || {})
     }
   });
 
@@ -37,18 +55,36 @@ async function api(path, options = {}) {
   return data;
 }
 
+function apiPostJson(path, payload, authToken) {
+  return api(path, {
+    method: "POST",
+    body: JSON.stringify(payload || {}),
+    authToken
+  });
+}
+
+function sanitizeNumber(value, digits = 6) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0";
+  return number.toFixed(digits);
+}
+
 async function refreshState() {
   if (state.polling) return;
   state.polling = true;
 
   try {
-    const [snapshot, frame] = await Promise.all([
+    const [snapshot, frame, config, meta] = await Promise.all([
       api("/api/state"),
-      api("/api/display/frame")
+      api("/api/display/frame"),
+      api("/api/config/device"),
+      api("/api/meta")
     ]);
 
     state.snapshot = snapshot;
     state.frame = frame;
+    state.config = config.config || null;
+    state.meta = meta || null;
     renderAll();
   } catch (err) {
     toast(err.message, "error");
@@ -63,6 +99,7 @@ function renderAll() {
   renderHub();
   renderDiag();
   renderStorage();
+  renderConfig();
   renderOLEDFrame();
 }
 
@@ -79,11 +116,14 @@ function renderTopbar() {
 
   const page = s.system?.page || "-";
   const timeSource = s.system?.timeSource || "-";
-  const wifi = s.wifi?.connected ? "WIFI" : "OFFLINE";
+  const timeConfidence = s.system?.timeConfidence || "NONE";
+  const wifi = s.wifi?.mode || "IDLE";
   const safe = s.system?.safeMode ? "SAFE" : "OK";
+  const app = s.system?.appReady ? (s.system?.appDegraded ? "DEGRADED" : "READY") : `INIT:${s.system?.appInitStage || "-"}`;
+  const apiVersion = state.meta?.apiVersion || s.apiVersion || "-";
 
   document.getElementById("deviceMeta").textContent =
-    `PAGE ${page}  TIME ${timeSource}  NET ${wifi}  SYS ${safe}`;
+    `PAGE ${page}  TIME ${timeSource}/${timeConfidence}  NET ${wifi}  APP ${app}  SYS ${safe}  API v${apiVersion}`;
 
   const tags = splitTags(s.summary?.headerTags);
   document.getElementById("tagBar").innerHTML = tags
@@ -99,7 +139,7 @@ function renderTerminal() {
     {
       title: "System",
       value: `${s.system?.page ?? "-"}  ${s.terminal?.systemFace ?? "-"}`,
-      meta: `BR ${s.terminal?.brightnessLabel ?? "-"}  ${s.system?.safeMode ? "SAFE" : "READY"}`
+      meta: `APP ${s.system?.appReady ? "READY" : s.system?.appInitStage ?? "INIT"}  BR ${s.terminal?.brightnessLabel ?? "-"}`
     },
     {
       title: "Activity",
@@ -119,7 +159,7 @@ function renderTerminal() {
     {
       title: "Network",
       value: s.summary?.networkLine || "SYNC NEEDED",
-      meta: s.summary?.networkSubline || "-"
+      meta: `${s.weather?.syncStatus || "-"}  TLS ${s.weather?.tlsMode || "-"}`
     }
   ];
 
@@ -147,7 +187,7 @@ function renderHub() {
     {
       title: "Activity",
       tag: s.terminal?.activityLabel || "0%",
-      body: `${s.activity?.steps ?? 0} steps  /  ${(s.activity?.goal ?? 0)}`
+      body: `${s.activity?.steps ?? 0} steps / ${s.activity?.goal ?? 0}`
     },
     {
       title: "Alarm",
@@ -162,7 +202,9 @@ function renderHub() {
     {
       title: "Network",
       tag: s.terminal?.networkLabel || "SYNC",
-      body: s.summary?.networkSubline || "-"
+      body: s.wifi?.provisioningApActive
+        ? `AP ${s.wifi?.provisioningApSsid || "-"}`
+        : `${s.weather?.syncStatus || "-"}  TLS ${s.weather?.tlsMode || "-"}`
     }
   ];
 
@@ -205,12 +247,45 @@ function renderStorage() {
     ["BACKEND", s.storage?.backend || "-"],
     ["COMMIT", s.storage?.commitState || "-"],
     ["TXN", s.storage?.transactionActive ? "ACTIVE" : "IDLE"],
-    ["FLUSH", s.storage?.sleepFlushPending ? "PENDING" : "CLEAR"]
+    ["FS", s.config?.filesystemStatus || "-"]
   ];
 
   document.getElementById("storagePanel").innerHTML = items
     .map(([k, v]) => `<div class="mini-item"><span>${k}</span><strong>${v}</strong></div>`)
     .join("");
+}
+
+function populateConfigForm() {
+  if (!state.config || state.formDirty) return;
+  document.getElementById("wifiSsid").value = state.config.wifiSsid || "";
+  document.getElementById("wifiPassword").value = "";
+  document.getElementById("timezonePosix").value = state.config.timezonePosix || "UTC0";
+  document.getElementById("timezoneId").value = state.config.timezoneId || "Etc/UTC";
+  document.getElementById("latitude").value = state.config.latitude ?? 0;
+  document.getElementById("longitude").value = state.config.longitude ?? 0;
+  document.getElementById("locationName").value = state.config.locationName || "UNSET";
+  document.getElementById("currentAuthToken").value = loadToken();
+  document.getElementById("apiToken").value = loadToken();
+}
+
+function renderConfig() {
+  const snapshot = state.snapshot;
+  const config = state.config;
+  if (!snapshot || !config) return;
+
+  populateConfigForm();
+  document.getElementById("wifiProvisionState").textContent = snapshot.wifi?.provisioningApActive
+    ? `AP ${snapshot.wifi?.provisioningApSsid || "ACTIVE"}`
+    : `${snapshot.wifi?.mode || "IDLE"} / ${snapshot.wifi?.status || "-"}`;
+  document.getElementById("configHint").textContent = snapshot.wifi?.provisioningApActive
+    ? `Provisioning active on ${config.apSsid || snapshot.wifi?.provisioningApSsid || "device AP"}. FS ${config.filesystemStatus || "-"}.`
+    : `SSID ${config.wifiSsid || "UNSET"}  LOC ${config.locationName || "UNSET"}  IP ${config.ip || snapshot.wifi?.ip || "-"}  FS ${config.filesystemStatus || "-"}`;
+  document.getElementById("authHint").textContent = config.authRequired
+    ? "Auth: token required for writes"
+    : (config.controlLockedInProvisioningAp ? "Auth: control locked until token or STA" : "Auth: open");
+  document.getElementById("provisioningHint").textContent = snapshot.wifi?.provisioningApActive
+    ? `Provisioning AP password is shown on the device serial log during AP startup.`
+    : `API v${state.meta?.apiVersion || state.snapshot?.apiVersion || "-"}  State v${state.meta?.stateVersion || state.snapshot?.stateVersion || "-"}  TLS ${config.weatherTlsMode || "-"}  SYNC ${config.weatherSyncStatus || "-"}`;
 }
 
 function formatUptime(ms) {
@@ -225,22 +300,14 @@ function formatUptime(ms) {
   return `${s}s`;
 }
 
-function formPost(params) {
-  return {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-    body: new URLSearchParams(params)
-  };
-}
-
 async function sendKey(key, eventType) {
-  await api("/api/input/key", formPost({ key, event: eventType }));
+  await apiPostJson("/api/input/key", { key, event: eventType });
   toast(`Key ${key}/${eventType}`, "success");
   await refreshState();
 }
 
 async function sendCommand(type) {
-  await api("/api/command", formPost({ type }));
+  await apiPostJson("/api/command", { type });
   toast(`Command: ${type}`, "success");
   await refreshState();
 }
@@ -258,7 +325,7 @@ async function sendOverlay() {
   }
 
   try {
-    await api("/api/display/overlay", formPost({ text, durationMs: "1500" }));
+    await apiPostJson("/api/display/overlay", { text, durationMs: 1500 });
     toast("Overlay sent", "success");
     await refreshState();
   } catch (err) {
@@ -268,12 +335,47 @@ async function sendOverlay() {
 
 async function clearOverlay() {
   try {
-    await api("/api/display/overlay/clear", formPost({}));
+    await apiPostJson("/api/display/overlay/clear", {});
     toast("Overlay cleared", "success");
     await refreshState();
   } catch (err) {
     toast(err.message, "error");
   }
+}
+
+async function saveConfig() {
+  const currentToken = document.getElementById("currentAuthToken").value.trim() || loadToken();
+  const newToken = document.getElementById("apiToken").value.trim();
+  const payload = {
+    ssid: document.getElementById("wifiSsid").value.trim(),
+    password: document.getElementById("wifiPassword").value,
+    timezonePosix: document.getElementById("timezonePosix").value.trim(),
+    timezoneId: document.getElementById("timezoneId").value.trim(),
+    latitude: Number(sanitizeNumber(document.getElementById("latitude").value)),
+    longitude: Number(sanitizeNumber(document.getElementById("longitude").value)),
+    locationName: document.getElementById("locationName").value.trim(),
+    apiToken: newToken,
+    token: currentToken
+  };
+
+  await apiPostJson("/api/config/device", payload, currentToken);
+  saveToken(newToken);
+  document.getElementById("currentAuthToken").value = newToken;
+  state.formDirty = false;
+  document.getElementById("wifiPassword").value = "";
+  toast("Configuration saved", "success");
+  await refreshState();
+}
+
+async function resetConfig() {
+  const currentToken = document.getElementById("currentAuthToken").value.trim() || loadToken();
+  await apiPostJson("/api/config/device/reset", { token: currentToken }, currentToken);
+  saveToken("");
+  document.getElementById("currentAuthToken").value = "";
+  document.getElementById("apiToken").value = "";
+  state.formDirty = false;
+  toast("Configuration reset", "success");
+  await refreshState();
 }
 
 function getOledContext() {
@@ -396,11 +498,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("sendOverlayBtn").addEventListener("click", sendOverlay);
   document.getElementById("clearOverlayBtn").addEventListener("click", clearOverlay);
+  document.getElementById("saveConfigBtn").addEventListener("click", () => {
+    saveConfig().catch(err => toast(err.message, "error"));
+  });
+  document.getElementById("resetConfigBtn").addEventListener("click", () => {
+    resetConfig().catch(err => toast(err.message, "error"));
+  });
 
   document.getElementById("overlayText").addEventListener("input", e => {
     renderPreview(e.target.value);
   });
 
+  ["wifiSsid", "wifiPassword", "timezonePosix", "timezoneId", "latitude", "longitude", "locationName", "currentAuthToken", "apiToken"].forEach(id => {
+    document.getElementById(id).addEventListener("input", () => {
+      state.formDirty = true;
+    });
+  });
+
+  document.getElementById("currentAuthToken").value = loadToken();
+  document.getElementById("apiToken").value = loadToken();
   renderPreview("");
   setInterval(() => {
     refreshState().catch(err => toast(err.message, "error"));

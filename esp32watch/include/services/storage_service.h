@@ -31,6 +31,12 @@ typedef struct {
 void storage_service_init(void);
 bool storage_service_is_initialized(void);
 uint8_t storage_service_get_version(void);
+uint8_t storage_service_get_schema_version(void);
+bool storage_service_flash_supported(void);
+bool storage_service_is_flash_backend_ready(void);
+bool storage_service_was_migration_attempted(void);
+bool storage_service_last_migration_ok(void);
+const char *storage_service_backend_phase_name(void);
 StorageBackendType storage_service_get_backend(void);
 const char *storage_service_get_backend_name(void);
 bool storage_service_is_crc_valid(void);

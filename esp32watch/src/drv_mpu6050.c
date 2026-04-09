@@ -1,7 +1,7 @@
 #include "drv_mpu6050.h"
 #include "app_config.h"
 #include "board_manifest.h"
-#include "bsp_i2c.h"
+#include "platform_i2c_recovery.h"
 #if defined(APP_BOARD_PROFILE_ESP32S3_WATCH)
 #include "esp32_mpu_i2c.h"
 #endif
@@ -38,14 +38,14 @@ DrvMpu6050Status drv_mpu6050_write_reg(uint8_t reg, uint8_t value)
     if (manifest == NULL || manifest->i2c_port == NULL) {
         return DRV_MPU6050_STATUS_INVALID_ARG;
     }
-    return bsp_i2c_master_transmit_recoverable(&MPU6050_I2C_HANDLE,
-                                               manifest->i2c_port,
-                                               manifest->i2c_scl_pin,
-                                               manifest->i2c_sda_pin,
-                                               MPU6050_I2C_ADDRESS,
-                                               packet,
-                                               2U,
-                                               MPU6050_TIMEOUT_MS) == PLATFORM_STATUS_OK
+    return platform_i2c_master_transmit_recoverable(&MPU6050_I2C_HANDLE,
+                                                    manifest->i2c_port,
+                                                    manifest->i2c_scl_pin,
+                                                    manifest->i2c_sda_pin,
+                                                    MPU6050_I2C_ADDRESS,
+                                                    packet,
+                                                    2U,
+                                                    MPU6050_TIMEOUT_MS) == PLATFORM_STATUS_OK
                ? DRV_MPU6050_STATUS_OK
                : DRV_MPU6050_STATUS_IO;
 #endif
@@ -77,16 +77,16 @@ DrvMpu6050Status drv_mpu6050_read_block(uint8_t reg, uint8_t *buf, uint16_t len)
     if (buf == NULL || len == 0U || manifest == NULL || manifest->i2c_port == NULL) {
         return DRV_MPU6050_STATUS_INVALID_ARG;
     }
-    return bsp_i2c_mem_read_recoverable(&MPU6050_I2C_HANDLE,
-                                        manifest->i2c_port,
-                                        manifest->i2c_scl_pin,
-                                        manifest->i2c_sda_pin,
-                                        MPU6050_I2C_ADDRESS,
-                                        reg,
-                                        I2C_MEMADD_SIZE_8BIT,
-                                        buf,
-                                        len,
-                                        MPU6050_TIMEOUT_MS) == PLATFORM_STATUS_OK
+    return platform_i2c_mem_read_recoverable(&MPU6050_I2C_HANDLE,
+                                             manifest->i2c_port,
+                                             manifest->i2c_scl_pin,
+                                             manifest->i2c_sda_pin,
+                                             MPU6050_I2C_ADDRESS,
+                                             reg,
+                                             I2C_MEMADD_SIZE_8BIT,
+                                             buf,
+                                             len,
+                                             MPU6050_TIMEOUT_MS) == PLATFORM_STATUS_OK
                ? DRV_MPU6050_STATUS_OK
                : DRV_MPU6050_STATUS_IO;
 #endif

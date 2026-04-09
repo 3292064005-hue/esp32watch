@@ -1,0 +1,32 @@
+name: platformio-build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env_name: [esp32s3_n16r8_dev, esp32s3_n16r8_release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PlatformIO
+        run: python -m pip install --upgrade pip platformio==6.1.19
+      - name: Build firmware
+        run: pio run -e ${{ matrix.env_name }}
+      - name: Build LittleFS image
+        run: pio run -e ${{ matrix.env_name }} -t buildfs
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.env_name }}-artifacts
+          path: |
+            .pio/build/${{ matrix.env_name }}/firmware.bin
+            .pio/build/${{ matrix.env_name }}/firmware.elf
+            .pio/build/${{ matrix.env_name }}/firmware.map
+            .pio/build/${{ matrix.env_name }}/littlefs.bin

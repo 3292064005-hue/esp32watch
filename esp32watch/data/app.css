@@ -450,3 +450,58 @@ button.ghost {
     grid-template-columns: 1fr;
   }
 }
+
+
+.subpanel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.subpanel-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field-block {
+  display: grid;
+  gap: 8px;
+}
+
+.field-block label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.field-span-2 {
+  grid-column: span 2;
+}
+
+.split-meta {
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.button-row-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 640px) {
+  .config-grid,
+  .button-row-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .field-span-2 {
+    grid-column: span 1;
+  }
+}

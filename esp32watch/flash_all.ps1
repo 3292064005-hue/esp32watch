@@ -1,5 +1,5 @@
 param(
-    [string]$EnvName = 'esp32s3_n16r8'
+    [string]$EnvName = 'esp32s3_n16r8_dev'
 )
 
 $ErrorActionPreference = 'Stop'

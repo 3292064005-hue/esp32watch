@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ESP32 Watch Terminal</title>
-  <link rel="stylesheet" href="/app.css?v=20260408_1" />
+  <link rel="stylesheet" href="/app.css?v=20260409_4" />
 </head>
 <body>
   <div class="app-shell">
@@ -84,7 +84,7 @@
         <div class="section-head">
           <div>
             <p class="section-kicker">Control</p>
-            <h2>Actions & Diagnostics</h2>
+            <h2>Actions, Config & Diagnostics</h2>
           </div>
         </div>
 
@@ -110,6 +110,63 @@
               <button data-command="sensorCalibration">Calibrate</button>
               <button data-command="storageManualFlush">Flush</button>
               <button data-command="clearSafeMode">Clear Safe</button>
+              <button data-command="restoreDefaults">Factory Defaults</button>
+            </div>
+          </section>
+
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Provisioning</h3>
+              <span id="wifiProvisionState" class="subpanel-note">Loading...</span>
+            </div>
+            <div class="config-grid">
+              <div class="field-block">
+                <label for="wifiSsid">Wi-Fi SSID</label>
+                <input id="wifiSsid" type="text" maxlength="32" autocomplete="off" />
+              </div>
+              <div class="field-block">
+                <label for="wifiPassword">Wi-Fi Password</label>
+                <input id="wifiPassword" type="password" maxlength="63" autocomplete="new-password" />
+              </div>
+              <div class="field-block field-span-2">
+                <label for="currentAuthToken">Current Auth Token</label>
+                <input id="currentAuthToken" type="password" maxlength="32" autocomplete="current-password" placeholder="Needed if auth is enabled and this browser lost its saved token" />
+              </div>
+              <div class="field-block field-span-2">
+                <label for="apiToken">New API Token</label>
+                <input id="apiToken" type="password" maxlength="32" autocomplete="new-password" placeholder="Leave blank to disable auth" />
+              </div>
+              <div class="field-block">
+                <label for="timezonePosix">TZ POSIX</label>
+                <input id="timezonePosix" type="text" maxlength="31" placeholder="e.g. JST-9" />
+              </div>
+              <div class="field-block">
+                <label for="timezoneId">TZ ID</label>
+                <input id="timezoneId" type="text" maxlength="31" placeholder="e.g. Asia/Tokyo" />
+              </div>
+              <div class="field-block">
+                <label for="latitude">Latitude</label>
+                <input id="latitude" type="number" step="0.000001" min="-90" max="90" />
+              </div>
+              <div class="field-block">
+                <label for="longitude">Longitude</label>
+                <input id="longitude" type="number" step="0.000001" min="-180" max="180" />
+              </div>
+              <div class="field-block field-span-2">
+                <label for="locationName">Location</label>
+                <input id="locationName" type="text" maxlength="23" placeholder="e.g. Tokyo" />
+              </div>
+            </div>
+            <div class="form-meta split-meta">
+              <span id="configHint">Provisioning state unavailable.</span>
+              <span id="authHint">Auth: open</span>
+            </div>
+            <div class="form-meta">
+              <span id="provisioningHint">Provisioning AP details unavailable.</span>
+            </div>
+            <div class="button-row button-row-2">
+              <button id="saveConfigBtn">Save Config</button>
+              <button id="resetConfigBtn" class="ghost">Reset Config</button>
             </div>
           </section>
 
@@ -129,6 +186,6 @@
   </div>
 
   <div id="toastHost" class="toast-host"></div>
-  <script src="/app.js?v=20260408_1"></script>
+  <script src="/app.js?v=20260409_4"></script>
 </body>
 </html>

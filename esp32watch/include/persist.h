@@ -7,6 +7,10 @@
 #include "model.h"
 #include "sensor.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void persist_init(void);
 bool persist_is_initialized(void);
 uint8_t persist_get_version(void);
@@ -20,5 +24,9 @@ void persist_save_game_stats(const GameStatsState *stats);
 void persist_load_game_stats(GameStatsState *stats);
 void persist_save_sensor_calibration(const SensorCalibrationData *cal);
 void persist_load_sensor_calibration(SensorCalibrationData *cal);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

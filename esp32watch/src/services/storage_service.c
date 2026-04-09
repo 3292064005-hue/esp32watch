@@ -245,10 +245,16 @@ static void storage_commit_finalize_execution(void)
  */
 void storage_service_init(void)
 {
+    bool migration_needed;
+    bool migration_ok;
+
     memset(&g_storage, 0, sizeof(g_storage));
     persist_init();
     persist_flash_init();
-    (void)storage_backend_adapter_migrate_from_bkp_to_flash();
+    migration_needed = storage_backend_adapter_flash_ready() == false && storage_backend_adapter_bkp_ready();
+    migration_ok = storage_backend_adapter_migrate_from_bkp_to_flash();
+    g_storage.migration_attempted = migration_needed;
+    g_storage.migration_succeeded = (!migration_needed) || migration_ok;
     g_storage.last_commit_reason = STORAGE_COMMIT_REASON_NONE;
     g_storage.last_commit_ok = false;
     storage_backend_adapter_capture_shadows(&g_storage);
