@@ -390,39 +390,39 @@ static bool parse_strict_u32_field(const String &value, uint32_t *out_value)
 template <typename TRoot>
 static bool read_json_string_field(const TRoot &root, const char *name, String &value)
 {
-    JsonVariant field = root[name];
-    if (field.isNull() || !field.is<const char *>()) {
+    auto field = root[name];
+    if (field.isNull() || !field.template is<const char *>()) {
         return false;
     }
-    value = field.as<const char *>();
+    value = field.template as<const char *>();
     return true;
 }
 
 template <typename TRoot>
 static bool read_json_u32_field(const TRoot &root, const char *name, uint32_t *value)
 {
-    JsonVariant field = root[name];
+    auto field = root[name];
     if (value == nullptr || field.isNull()) {
         return false;
     }
-    if (field.is<int>()) {
-        int signed_value = field.as<int>();
+    if (field.template is<int>()) {
+        int signed_value = field.template as<int>();
         if (signed_value < 0) {
             return false;
         }
         *value = (uint32_t)signed_value;
         return true;
     }
-    if (field.is<unsigned int>()) {
-        *value = (uint32_t)field.as<unsigned int>();
+    if (field.template is<unsigned int>()) {
+        *value = (uint32_t)field.template as<unsigned int>();
         return true;
     }
-    if (field.is<uint32_t>()) {
-        *value = field.as<uint32_t>();
+    if (field.template is<uint32_t>()) {
+        *value = field.template as<uint32_t>();
         return true;
     }
-    if (field.is<unsigned long>()) {
-        unsigned long raw = field.as<unsigned long>();
+    if (field.template is<unsigned long>()) {
+        unsigned long raw = field.template as<unsigned long>();
         if (raw > 0xFFFFFFFFUL) {
             return false;
         }
@@ -435,25 +435,25 @@ static bool read_json_u32_field(const TRoot &root, const char *name, uint32_t *v
 template <typename TRoot>
 static bool read_json_float_field(const TRoot &root, const char *name, float *value)
 {
-    JsonVariant field = root[name];
+    auto field = root[name];
     if (value == nullptr || field.isNull()) {
         return false;
     }
-    if (!field.is<float>() && !field.is<double>() && !field.is<int>()) {
+    if (!field.template is<float>() && !field.template is<double>() && !field.template is<int>()) {
         return false;
     }
-    *value = field.as<float>();
+    *value = field.template as<float>();
     return std::isfinite((double)(*value));
 }
 
 template <typename TRoot>
 static bool read_json_bool_field(const TRoot &root, const char *name, bool *value)
 {
-    JsonVariant field = root[name];
-    if (value == nullptr || field.isNull() || !field.is<bool>()) {
+    auto field = root[name];
+    if (value == nullptr || field.isNull() || !field.template is<bool>()) {
         return false;
     }
-    *value = field.as<bool>();
+    *value = field.template as<bool>();
     return true;
 }
 

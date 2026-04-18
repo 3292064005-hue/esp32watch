@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include "sensor.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void sensor_service_init(void);
 void sensor_service_tick(uint32_t now_ms);
 const SensorSnapshot *sensor_service_get_snapshot(void);
@@ -19,5 +23,9 @@ const char *sensor_service_runtime_state_name(void);
 const char *sensor_service_calibration_state_name(void);
 
 bool sensor_service_is_initialized(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

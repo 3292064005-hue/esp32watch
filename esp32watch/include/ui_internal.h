@@ -8,6 +8,10 @@
 #include "model.h"
 #include "sensor.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     PAGE_WATCHFACE = 0,
     PAGE_QUICK,
@@ -577,5 +581,9 @@ void ui_sync_sensor_setting_from_model(void);
  * @throws None.
  */
 void ui_restore_defaults_and_sync_services(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

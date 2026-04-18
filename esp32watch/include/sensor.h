@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include "model.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     SENSOR_STATE_UNINIT = 0,
     SENSOR_STATE_INITING,
@@ -81,5 +85,9 @@ void sensor_note_calibration_persisted(void);
 void sensor_note_calibration_persist_failed(void);
 void sensor_load_calibration(const SensorCalibrationData *cal);
 bool sensor_take_calibration_dirty(SensorCalibrationData *out);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

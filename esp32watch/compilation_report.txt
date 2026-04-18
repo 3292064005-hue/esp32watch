@@ -1,0 +1,55 @@
+﻿========== ESP32 WATCH COMPILATION REPORT ==========
+
+Command: pio run -e esp32s3_n16r8_dev
+Status: FAILED
+Exit Code: 1
+Duration: ~23.92 seconds
+
+========== COMPILATION WARNINGS ==========
+
+1. Unused Variable Warning (web_routes_api.cpp:2460)
+   - Variable: handle_device_config_reset
+   - Issue: Set but not used
+   - Severity: Warning
+   
+2. Unused Function Warning (web_routes_api.cpp:2222)
+   - Function: send_state_summary_response(AsyncWebServerRequest*)
+   - Issue: Defined but not used
+   - Severity: Warning
+
+========== COMPILATION ERRORS ==========
+
+1. CRITICAL ERROR: Invalid Type Conversion (ArduinoJson Library)
+   Location: src/web/web_routes_api.cpp:404
+   
+   Error Details:
+   - Invalid use of incomplete type 'class ArduinoJson::V6215PB2::detail::InvalidConversion'
+   - Attempting to convert JsonVariantConst to JsonVariant (not allowed)
+   - Error in function: read_json_u32_field()
+   - Called from: src/web/web_routes_api.cpp:482
+   
+   Error Chain:
+   src/web/web_routes_api.cpp:404:17 -> 
+   .pio/libdeps/esp32s3_n16r8_dev/ArduinoJson/src/ArduinoJson/Variant/JsonVariantConst.hpp:90:18 ->
+   .pio/libdeps/esp32s3_n16r8_dev/ArduinoJson/src/ArduinoJson/Variant/JsonVariantConst.hpp:75:34
+   
+   Reference: https://arduinojson.org/v6/invalid-conversion/
+
+========== BUILD CONFIGURATION ==========
+Platform: Espressif 32 (6.10.0)
+Board: ESP32-S3 N16R8 (16MB Flash, 8MB PSRAM)
+Framework: Arduino
+Compiler: xtensa-esp32s3 (8.4.0+2021r2-patch5)
+Build Mode: Release
+
+========== KEY DEPENDENCIES ==========
+- framework-arduinoespressif32 @ 3.20017.241212
+- ArduinoJson @ 6.21.5
+- ESPAsyncWebServer @ 3.9.3
+- Adafruit SSD1306 @ 2.5.7
+- Adafruit NeoPixel @ 1.11.0
+
+========== RECOMMENDATION ==========
+Fix the ArduinoJson type conversion issue in src/web/web_routes_api.cpp at line 404.
+The function read_json_u32_field() is attempting an invalid conversion that the ArduinoJson 
+library does not allow. Consult https://arduinojson.org/v6/invalid-conversion/ for details.

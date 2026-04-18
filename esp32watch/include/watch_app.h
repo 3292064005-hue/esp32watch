@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     WATCH_APP_STAGE_INPUT = 0,
     WATCH_APP_STAGE_SENSOR,
@@ -119,5 +123,9 @@ const char *watch_app_stage_name(WatchAppStageId id);
 bool watch_app_get_stage_telemetry(WatchAppStageId id, WatchAppStageTelemetry *out);
 uint8_t watch_app_get_stage_history_count(void);
 bool watch_app_get_stage_history_recent(uint8_t reverse_index, WatchAppStageHistoryEntry *out);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include "app_limits.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef MODEL_ENABLE_LEGACY_PROJECTION
 #define MODEL_ENABLE_LEGACY_PROJECTION 0
 #endif
@@ -450,5 +454,9 @@ const char *model_wake_reason_name(WakeReason reason);
 const char *model_sleep_reason_name(SleepReason reason);
 const char *model_storage_commit_reason_name(StorageCommitReason reason);
 const char *model_time_state_name(TimeState state);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
