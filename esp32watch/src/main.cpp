@@ -5,8 +5,6 @@ extern "C" {
 #include "system_init.h"
 #include "crash_capsule.h"
 #include "companion_transport.h"
-#include "services/network_sync_service.h"
-#include "web/web_server.h"
 }
 
 extern "C" void system_fatal_trap(uint8_t trap_id, uint16_t value, uint8_t aux)
@@ -77,8 +75,6 @@ void loop()
 #if APP_FEATURE_COMPANION_UART
     companion_transport_poll();
 #endif
-    web_server_poll(platform_time_now_ms());
-    network_sync_service_tick(platform_time_now_ms());
     watch_app_task();
     delay(1);
 }

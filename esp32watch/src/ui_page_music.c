@@ -32,7 +32,7 @@ void ui_page_music_render(PageId page, int16_t ox)
     state = melody_get_state();
     current_song = melody_get_current_song();
 
-    ui_core_draw_header(ox, "Music");
+    ui_core_draw_header(ox, "Melody");
     snprintf(status_line, sizeof(status_line), "%s", melody_is_available() ? melody_state_name(state) : "UNAVAILABLE");
     ui_core_draw_card(ox + 8, 14, 112, 14, status_line);
     snprintf(selected_line, sizeof(selected_line), "SEL %s", ui_music_selected_name());

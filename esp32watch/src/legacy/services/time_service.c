@@ -53,7 +53,7 @@ static void rtc_counter_set_raw(uint32_t value)
 
 void time_service_init(void)
 {
-    g_time_source_snapshot.source = TIME_SOURCE_RTC;
+    g_time_source_snapshot.source = TIME_SOURCE_DEVICE_CLOCK;
     g_time_source_snapshot.epoch = rtc_counter_get_raw();
     g_time_source_snapshot.valid = time_service_is_reasonable_epoch(g_time_source_snapshot.epoch);
     g_time_source_snapshot.updated_at_ms = platform_time_now_ms();
@@ -134,7 +134,7 @@ uint32_t time_service_get_epoch(void)
 {
     uint32_t epoch = rtc_counter_get_raw();
 
-    if (g_time_source_snapshot.source == TIME_SOURCE_RTC) {
+    if (g_time_source_snapshot.source == TIME_SOURCE_DEVICE_CLOCK) {
         g_time_source_snapshot.epoch = epoch;
         g_time_source_snapshot.valid = time_service_is_reasonable_epoch(epoch);
     }
@@ -189,7 +189,7 @@ bool time_service_get_source_snapshot(TimeSourceSnapshot *out)
     if (out == NULL) {
         return false;
     }
-    if (g_time_source_snapshot.source == TIME_SOURCE_RTC) {
+    if (g_time_source_snapshot.source == TIME_SOURCE_DEVICE_CLOCK) {
         g_time_source_snapshot.epoch = rtc_counter_get_raw();
         g_time_source_snapshot.valid = time_service_is_reasonable_epoch(g_time_source_snapshot.epoch);
     }
@@ -200,7 +200,7 @@ bool time_service_get_source_snapshot(TimeSourceSnapshot *out)
 const char *time_service_source_name(TimeSourceType source)
 {
     switch (source) {
-        case TIME_SOURCE_RTC: return "RTC";
+        case TIME_SOURCE_DEVICE_CLOCK: return "DEVICE_CLOCK";
         case TIME_SOURCE_HOST_SYNC: return "HOST";
         case TIME_SOURCE_COMPANION_SYNC: return "COMPANION";
         case TIME_SOURCE_RECOVERY: return "RECOVERY";

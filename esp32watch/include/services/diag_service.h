@@ -35,7 +35,7 @@ typedef enum {
     DIAG_FAULT_STORAGE_COMMIT,
     DIAG_FAULT_SENSOR,
     DIAG_FAULT_DISPLAY_TX,
-    DIAG_FAULT_RTC_INVALID,
+    DIAG_FAULT_TIME_INVALID,
     DIAG_FAULT_BATTERY_ADC,
     DIAG_FAULT_WDT_RESET
 } DiagFaultCode;
@@ -45,7 +45,7 @@ typedef enum {
     DIAG_FAULT_OWNER_STORAGE,
     DIAG_FAULT_OWNER_SENSOR,
     DIAG_FAULT_OWNER_DISPLAY,
-    DIAG_FAULT_OWNER_RTC,
+    DIAG_FAULT_OWNER_TIME,
     DIAG_FAULT_OWNER_BATTERY,
     DIAG_FAULT_OWNER_WDT
 } DiagFaultOwner;
@@ -70,7 +70,8 @@ typedef enum {
     DIAG_SAFE_MODE_WDT_RESET,
     DIAG_SAFE_MODE_STORAGE_FAULT,
     DIAG_SAFE_MODE_SENSOR_FAULT,
-    DIAG_SAFE_MODE_INIT_FAILURE
+    DIAG_SAFE_MODE_INIT_FAILURE,
+    DIAG_SAFE_MODE_BOOT_LOOP
 } DiagSafeModeReason;
 
 typedef struct {
@@ -105,6 +106,9 @@ typedef struct {
     uint32_t wdt_pet_count;
     bool previous_boot_incomplete;
     uint8_t previous_init_failed_stage;
+    uint8_t consecutive_incomplete_boots;
+    uint32_t boot_count;
+    uint32_t previous_boot_count;
 } DiagExportSnapshot;
 
 void diag_service_init(void);
@@ -123,7 +127,7 @@ void diag_service_note_battery_sample(uint16_t mv, uint8_t percent);
 void diag_service_note_wdt_init(void);
 void diag_service_note_wdt_pet(void);
 void diag_service_note_checkpoint_timeout(uint8_t checkpoint, uint16_t loop_ms);
-void diag_service_note_rtc_invalid(void);
+void diag_service_note_time_invalid(void);
 void diag_service_note_battery_fault(uint16_t status);
 
 uint16_t diag_service_get_log_count(void);

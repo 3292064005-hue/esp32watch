@@ -1,5 +1,6 @@
 #include "services/sensor_service.h"
 #include "services/storage_service.h"
+#include "services/storage_facade.h"
 #include <stddef.h>
 
 static bool g_sensor_service_initialized;
@@ -8,7 +9,7 @@ void sensor_service_init(void)
 {
     SensorCalibrationData cal;
     sensor_init();
-    storage_service_load_sensor_calibration(&cal);
+    storage_facade_load_sensor_calibration(&cal);
     sensor_load_calibration(&cal);
     g_sensor_service_initialized = sensor_get_snapshot() != NULL;
 }
@@ -18,7 +19,7 @@ void sensor_service_tick(uint32_t now_ms)
     SensorCalibrationData cal;
     sensor_tick(now_ms);
     if (sensor_take_calibration_dirty(&cal)) {
-        storage_service_save_sensor_calibration(&cal);
+        storage_facade_save_sensor_calibration(&cal);
         storage_service_request_commit(STORAGE_COMMIT_REASON_CALIBRATION);
     }
 }

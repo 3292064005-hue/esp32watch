@@ -66,6 +66,13 @@ typedef struct {
     uint32_t page_count;
 } PlatformFlashErasePlan;
 
+typedef struct {
+    bool rtc_reset_domain_supported;
+    bool idle_light_sleep_supported;
+    bool watchdog_supported;
+    bool flash_journal_supported;
+} PlatformSupportSnapshot;
+
 /* Transitional field aliases used while old struct-member names are being removed. */
 #define Pin pin_mask
 #define Mode mode
@@ -187,6 +194,20 @@ void platform_irq_disable_all(void);
 void platform_irq_enable_all(void);
 
 uint32_t platform_cpu_hz(void);
+bool platform_get_support_snapshot(PlatformSupportSnapshot *out);
+/**
+ * @brief Enter platform-managed light sleep for a bounded idle interval.
+ *
+ * @param[in] duration_ms Requested sleep interval in milliseconds. Values of
+ *            zero are treated as no-op and return false.
+ * @return true when the platform entered light sleep and resumed normally;
+ *         false when the interval was invalid or the platform rejected the
+ *         request.
+ * @throws None.
+ * @boundary_behavior Implementations may clamp the requested interval to the
+ *                    hardware-supported minimum/maximum window.
+ */
+bool platform_light_sleep_for(uint32_t duration_ms);
 void platform_reset_system(void);
 
 #ifdef __cplusplus

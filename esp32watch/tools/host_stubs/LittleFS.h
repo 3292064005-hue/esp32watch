@@ -1,4 +1,19 @@
 #pragma once
+#include <stddef.h>
+#include "Arduino.h"
+
+class File {
+public:
+  File() = default;
+  explicit File(bool valid) : valid_(valid) {}
+  explicit operator bool() const { return valid_; }
+  int available() const { return 0; }
+  int read() { return -1; }
+  void close() {}
+private:
+  bool valid_ = true;
+};
+
 class LittleFSClass {
 public:
   bool begin(bool formatOnFail = false,
@@ -13,5 +28,6 @@ public:
   }
   bool format() { return true; }
   bool exists(const char*) const { return true; }
+  File open(const char*, const char* = "r") const { return File(true); }
 };
 static LittleFSClass LittleFS;

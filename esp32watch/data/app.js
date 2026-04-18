@@ -4,18 +4,220 @@ const OLED_BUFFER_SIZE = (OLED_WIDTH * OLED_HEIGHT) / 8;
 const OLED_ON_RGBA = [158, 252, 136, 255];
 const OLED_OFF_RGBA = [8, 16, 12, 255];
 const ACTION_RESULT_TERMINAL_STATES = new Set(["APPLIED", "REJECTED", "FAILED"]);
+const BOOTSTRAP_CONTRACT_PATH = "/contract-bootstrap.json";
+const MINIMAL_CONTRACT = {
+  routes: {
+    contract: "/api/contract"
+  }
+};
 
 const state = {
   snapshot: null,
   frame: null,
   config: null,
+  health: null,
   meta: null,
+  commandCatalog: null,
+  contract: MINIMAL_CONTRACT,
+  storageSemantics: null,
   polling: false,
   formDirty: false
 };
 
 let oledContext = null;
 let oledImageData = null;
+
+function contractRoute(name) {
+  return state.contract?.routes?.[name] || null;
+}
+
+function loadCachedContract() {
+  try {
+    const raw = window.localStorage.getItem("esp32watch.contractCache");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.routes ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveCachedContract(contract) {
+  try {
+    if (contract?.routes) {
+      window.localStorage.setItem("esp32watch.contractCache", JSON.stringify(contract));
+    }
+  } catch (_) {
+  }
+}
+
+function mergeContract(base, overrideContract) {
+  if (!overrideContract?.routes) {
+    return base;
+  }
+  return {
+    ...base,
+    ...overrideContract,
+    routes: {
+      ...(base?.routes || {}),
+      ...(overrideContract.routes || {})
+    },
+    stateSchemas: {
+      ...(base?.stateSchemas || {}),
+      ...(overrideContract.stateSchemas || {})
+    },
+    apiSchemas: {
+      ...(base?.apiSchemas || {}),
+      ...(overrideContract.apiSchemas || {})
+    },
+    routeSchemas: {
+      ...(base?.routeSchemas || {}),
+      ...(overrideContract.routeSchemas || {})
+    },
+    releaseValidation: {
+      ...(base?.releaseValidation || {}),
+      ...(overrideContract.releaseValidation || {})
+    }
+  };
+}
+
+function contractStateSchema(viewName) {
+  const schema = state.contract?.stateSchemas?.[viewName];
+  return Array.isArray(schema) ? schema : null;
+}
+
+function contractApiSchema(name) {
+  const schema = state.contract?.apiSchemas?.[name];
+  return schema && typeof schema === "object" ? schema : null;
+}
+
+function contractRouteSchema(routeKey) {
+  const schema = state.contract?.routeSchemas?.[routeKey];
+  return schema && typeof schema === "object" ? schema : null;
+}
+
+function validateRoutePayload(routeKey, payload, errorMessage) {
+  const routeSchema = contractRouteSchema(routeKey);
+  if (!routeSchema) return payload;
+  if (routeSchema.kind === "state") {
+    if (!payloadHasDeclaredSections(payload, routeSchema.name)) {
+      throw new Error(errorMessage || `${routeKey} payload does not match runtime contract state schema`);
+    }
+    return payload;
+  }
+  return validateApiPayload(payload, routeSchema.name, errorMessage || `${routeKey} payload does not match runtime contract schema`);
+}
+
+function validateContractCatalogCoverage() {
+  const routes = state.contract?.routes || {};
+  const routeSchemas = state.contract?.routeSchemas || {};
+  const apiSchemas = state.contract?.apiSchemas || {};
+  const stateSchemas = state.contract?.stateSchemas || {};
+  Object.keys(routes).forEach(key => {
+    if (!routeSchemas[key]) {
+      throw new Error(`runtime contract missing route schema for ${key}`);
+    }
+  });
+  Object.keys(routeSchemas).forEach(key => {
+    if (!routes[key]) {
+      throw new Error(`runtime contract route schema without route for ${key}`);
+    }
+    const schema = routeSchemas[key];
+    if (schema.kind === "api") {
+      if (!apiSchemas[schema.name]) {
+        throw new Error(`runtime contract missing api schema ${schema.name} for ${key}`);
+      }
+    } else if (schema.kind === "state") {
+      if (!stateSchemas[schema.name]) {
+        throw new Error(`runtime contract missing state schema ${schema.name} for ${key}`);
+      }
+    } else {
+      throw new Error(`runtime contract route schema ${key} has unsupported kind ${schema.kind}`);
+    }
+  });
+  return true;
+}
+
+function validateApiPayload(payload, schemaName, errorMessage) {
+  if (!payloadHasRequiredKeys(payload, schemaName) || !payloadHasDeclaredApiSections(payload, schemaName)) {
+    throw new Error(errorMessage || `${schemaName} payload does not match runtime contract schema`);
+  }
+  return payload;
+}
+
+async function apiWithSchema(routeKey, fallbackPath, schemaName, options = {}) {
+  const payload = await api(contractRoute(routeKey) || fallbackPath, options);
+  return schemaName
+    ? validateApiPayload(payload, schemaName, `${routeKey} payload does not match runtime contract schema`)
+    : validateRoutePayload(routeKey, payload, `${routeKey} payload does not match runtime contract schema`);
+}
+
+function payloadHasRequiredKeys(payload, schemaName) {
+  const schema = contractApiSchema(schemaName);
+  if (!schema?.required) return true;
+  return schema.required.every(key => Object.prototype.hasOwnProperty.call(payload || {}, key));
+}
+
+function payloadHasDeclaredSections(payload, viewName) {
+  const schema = contractStateSchema(viewName);
+  if (!schema) return true;
+  return schema.every(entry => Object.prototype.hasOwnProperty.call(payload || {}, entry.section));
+}
+
+function payloadHasDeclaredApiSections(payload, schemaName) {
+  const schema = contractApiSchema(schemaName);
+  if (!schema?.sections) return true;
+  return schema.sections.every(entry => Object.prototype.hasOwnProperty.call(payload || {}, entry));
+}
+
+function canonicalActionStatus(payload) {
+  return payload?.actionStatus && typeof payload.actionStatus === 'object'
+    ? { ...payload.actionStatus, id: payload.actionStatus.id ?? payload.id ?? payload.actionId, type: payload.actionStatus.type ?? payload.type ?? payload.actionType, status: payload.actionStatus.status ?? payload.status }
+    : { ...payload, id: payload?.id ?? payload?.actionId, type: payload?.type ?? payload?.actionType, status: payload?.status };
+}
+
+function canonicalRuntimeReload(payload) {
+  return payload?.runtimeReload && typeof payload.runtimeReload === 'object' ? payload.runtimeReload : payload;
+}
+
+async function loadContract() {
+  let contract = loadCachedContract() || MINIMAL_CONTRACT;
+  try {
+    const bootstrapRes = await fetch(BOOTSTRAP_CONTRACT_PATH, { cache: "no-store" });
+    if (bootstrapRes.ok) {
+      const bootstrap = await bootstrapRes.json();
+      contract = mergeContract(contract, bootstrap);
+    }
+  } catch (_) {
+  }
+
+  try {
+    const payload = await api((contract.routes?.contract || MINIMAL_CONTRACT.routes.contract), { authToken: "" });
+    validateApiPayload(payload, "contractDocument", "runtime contract payload does not match runtime contract schema");
+    if (payload?.contract?.routes) {
+      contract = mergeContract(contract, payload.contract);
+      saveCachedContract(contract);
+    }
+  } catch (err) {
+    if (String(err?.message || err).includes("runtime contract")) {
+      throw err;
+    }
+  }
+
+  state.contract = contract;
+  validateContractCatalogCoverage();
+}
+
+async function loadStorageSemantics() {
+  state.storageSemantics = await apiWithSchema("storageSemantics", "/api/storage/semantics", "storageSemantics");
+  return state.storageSemantics;
+}
+
+async function refreshCommandCatalog() {
+  const payload = await apiWithSchema("actionsCatalog", "/api/actions/catalog", "actionsCatalog", {});
+  const commands = payload.commandCatalog?.commands || payload.commands || [];
+  state.commandCatalog = Array.isArray(commands) ? commands : [];
+}
 
 function loadToken() {
   return window.localStorage.getItem("esp32watch.apiToken") || "";
@@ -74,49 +276,28 @@ function sanitizeNumber(value, digits = 6) {
   return number.toFixed(digits);
 }
 
-function mergeStatePayloads(summary, detail) {
-  return {
-    ok: Boolean(summary?.ok && detail?.ok),
-    apiVersion: summary?.apiVersion || detail?.apiVersion || 0,
-    stateVersion: summary?.stateVersion || detail?.stateVersion || 0,
-    wifi: summary?.wifi || {},
-    system: summary?.system || {},
-    summary: summary?.summary || {},
-    weather: {
-      ...(summary?.weather || {}),
-      ...(detail?.weather || {})
-    },
-    activity: detail?.activity || {},
-    alarm: detail?.alarm || {},
-    music: detail?.music || {},
-    sensor: detail?.sensor || {},
-    storage: detail?.storage || {},
-    diag: detail?.diag || {},
-    display: detail?.display || {},
-    terminal: detail?.terminal || {},
-    overlay: detail?.overlay || {}
-  };
-}
 
 async function refreshState() {
   if (state.polling) return;
   state.polling = true;
 
   try {
-    const [summary, detail, frame, config, meta] = await Promise.all([
-      api("/api/state/summary"),
-      api("/api/state/detail"),
-      api("/api/display/frame"),
-      api("/api/config/device"),
-      api("/api/meta")
+    const [aggregate, frame, meta, health, configReadback] = await Promise.all([
+      api(contractRoute("stateAggregate") || "/api/state/aggregate"),
+      apiWithSchema("displayFrame", "/api/display/frame", "displayFrame"),
+      apiWithSchema("meta", "/api/meta", "meta"),
+      apiWithSchema("health", "/api/health", "health"),
+      apiWithSchema("configDevice", "/api/config/device", "configDeviceReadback")
     ]);
 
-    state.snapshot = mergeStatePayloads(summary, detail);
-    state.frame = frame;
-    state.config = config.config || null;
-    if (state.snapshot && state.config) {
-      state.snapshot.config = state.config;
+    if (!payloadHasDeclaredSections(aggregate, "aggregate")) {
+      throw new Error("state aggregate payload does not match runtime contract schema");
     }
+
+    state.snapshot = aggregate || null;
+    state.frame = frame;
+    state.health = health || null;
+    state.config = configReadback?.config || aggregate?.config || null;
     state.meta = meta || null;
     renderAll();
   } catch (err) {
@@ -128,19 +309,21 @@ async function refreshState() {
 
 async function waitForActionResult(actionId, trackPath) {
   let lastResult = null;
-  const statusPath = trackPath || `/api/actions/status?id=${actionId}`;
+  const statusBasePath = contractRoute("actionsStatus") || "/api/actions/status";
+  const statusPath = trackPath || `${statusBasePath}?id=${actionId}`; // legacy shape: /api/actions/status?id=123
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    lastResult = await api(statusPath);
-    if (ACTION_RESULT_TERMINAL_STATES.has(lastResult.status)) {
-      return lastResult;
+    lastResult = validateApiPayload(await api(statusPath), "actionsStatus", "action status payload does not match runtime contract schema");
+    const canonical = canonicalActionStatus(lastResult);
+    if (ACTION_RESULT_TERMINAL_STATES.has(canonical.status)) {
+      return { ...lastResult, ...canonical };
     }
     await delayMs(100);
   }
-  throw new Error(lastResult?.message || "action result timeout");
+  throw new Error(lastResult?.message || lastResult?.actionStatus?.message || "action result timeout");
 }
 
 async function runTrackedAction(path, payload, successMessage) {
-  const ack = await apiPostJson(path, payload);
+  const ack = validateApiPayload(await apiPostJson(path, payload), "trackedActionAccepted", "tracked action ack payload does not match runtime contract schema");
   const actionId = ack.actionId || ack.requestId;
   if (!actionId) {
     throw new Error("missing action id");
@@ -161,6 +344,7 @@ function renderAll() {
   renderHub();
   renderDiag();
   renderStorage();
+  renderPerf();
   renderConfig();
   renderOLEDFrame();
 }
@@ -185,9 +369,16 @@ function renderTopbar() {
     ? (s.system?.appDegraded ? "DEGRADED" : "READY")
     : `INIT:${s.system?.appInitStage || s.system?.startupFailureStage || "-"}`;
   const apiVersion = state.meta?.apiVersion || s.apiVersion || "-";
+  const expectedAssetVersion = state.contract?.assetContractVersion || state.meta?.assetContractVersion || 0;
+  const observedAssetVersion = state.meta?.assetContractVersion || 0;
+  const assetStatus = state.meta?.assetContractReady
+    ? ((expectedAssetVersion !== 0 && observedAssetVersion === expectedAssetVersion) ? "ASSET OK" : "ASSET MISMATCH")
+    : ((observedAssetVersion && expectedAssetVersion && observedAssetVersion !== expectedAssetVersion)
+        ? "ASSET MISMATCH"
+        : "ASSET MISSING");
 
   document.getElementById("deviceMeta").textContent =
-    `PAGE ${page}  TIME ${timeSource}/${timeConfidence}  NET ${wifi}  APP ${app}  SYS ${safe}  API v${apiVersion}`;
+    `PAGE ${page}  TIME ${timeSource}/${timeConfidence}  NET ${wifi}  APP ${app}  SYS ${safe}  API v${apiVersion}  ${assetStatus}`;
 
   const tags = splitTags(s.summary?.headerTags);
   document.getElementById("tagBar").innerHTML = tags
@@ -294,7 +485,8 @@ function renderDiag() {
     ["SAFE", s.diag?.safeModeActive ? "ACTIVE" : "CLEAR"],
     ["FAULT", s.diag?.hasLastFault ? `${s.diag.lastFaultName}` : "NONE"],
     ["SEV", s.diag?.hasLastFault ? `${s.diag.lastFaultSeverity}` : "INFO"],
-    ["LOG", s.diag?.hasLastLog ? `${s.diag.lastLogName}` : "NONE"]
+    ["LOG", s.diag?.hasLastLog ? `${s.diag.lastLogName}` : "NONE"],
+    ["BOOT", `${s.diag?.consecutiveIncompleteBoots ?? 0}`]
   ];
 
   document.getElementById("diagPanel").innerHTML = items
@@ -302,21 +494,76 @@ function renderDiag() {
     .join("");
 }
 
+
+function renderPerf() {
+  const s = state.snapshot;
+  if (!s) return;
+
+  const perf = s.perf || {};
+  const stages = Array.isArray(perf.stages) ? perf.stages : [];
+  const history = Array.isArray(perf.history) ? perf.history : [];
+
+  const perfSummary = [
+    ["LOOPS", perf.loopCount ?? 0],
+    ["MAX", `${perf.maxLoopMs ?? 0}ms`],
+    ["WDT", `${perf.lastCheckpoint || '-'} / ${perf.lastCheckpointResult || '-'}`],
+    ["QUEUE", `${perf.actionQueueDepth ?? 0} / DROP ${perf.actionQueueDropCount ?? 0}`]
+  ];
+
+  document.getElementById("perfPanel").innerHTML = perfSummary
+    .map(([k, v]) => `<div class="mini-item"><span>${k}</span><strong>${v}</strong></div>`)
+    .join("");
+
+  document.getElementById("perfStagePanel").innerHTML = stages
+    .map(stage => `
+      <div class="perf-row">
+        <div>
+          <strong>${stage.name || '-'}</strong>
+          <span>${stage.lastDurationMs ?? 0} / ${stage.budgetMs ?? 0} ms</span>
+        </div>
+        <em>OVER ${stage.overBudgetCount ?? 0} · DEF ${stage.deferredCount ?? 0}</em>
+      </div>
+    `)
+    .join("") || '<div class="perf-empty">No stage telemetry</div>';
+
+  document.getElementById("perfHistoryPanel").innerHTML = history
+    .map(entry => `
+      <div class="perf-row perf-history-row">
+        <div>
+          <strong>${entry.stage || '-'}</strong>
+          <span>${entry.event || '-'} · ${entry.durationMs ?? 0}/${entry.budgetMs ?? 0} ms</span>
+        </div>
+        <em>#${entry.loopCounter ?? 0}</em>
+      </div>
+    `)
+    .join("") || '<div class="perf-empty">No recent perf events</div>';
+}
+
 function renderStorage() {
   const s = state.snapshot;
   if (!s) return;
 
+  const semantics = Array.isArray(state.storageSemantics?.objects) ? state.storageSemantics.objects : [];
+  const appObjects = semantics.filter(obj => ["APP_SETTINGS", "APP_ALARMS", "SENSOR_CAL", "GAME_STATS"].includes(obj?.name));
+  const semanticsRows = appObjects.length > 0
+    ? appObjects.map(obj => `<div class="perf-row"><div><strong>${obj.name}</strong><span>${obj.owner || '-'} · ${obj.namespace || '-'}</span></div><em>${obj.durability || '-'} / ${obj.resetBehavior || '-'}</em></div>`).join("")
+    : '<div class="perf-empty">Storage semantics unavailable</div>';
+
   const items = [
     ["STATE", s.summary?.storageLabel || "OK"],
     ["BACKEND", s.storage?.backend || "-"],
+    ["APP", s.storage?.appStateBackend || "-"],
     ["COMMIT", s.storage?.commitState || "-"],
     ["TXN", s.storage?.transactionActive ? "ACTIVE" : "IDLE"],
+    ["DUR", s.storage?.appStateDurability || state.config?.appStateDurability || "-"],
+    ["PWR", s.storage?.appStatePowerLossGuaranteed ? "GUARANTEED" : "PARTIAL"],
+    ["CFG", "AUTHORITY / RELOAD"],
     ["FS", state.config?.filesystemStatus || "-"]
   ];
 
-  document.getElementById("storagePanel").innerHTML = items
-    .map(([k, v]) => `<div class="mini-item"><span>${k}</span><strong>${v}</strong></div>`)
-    .join("");
+  document.getElementById("storagePanel").innerHTML =
+    items.map(([k, v]) => `<div class="mini-item"><span>${k}</span><strong>${v}</strong></div>`).join("") +
+    `<div class="perf-stage-panel">${semanticsRows}</div>`;
 }
 
 function populateConfigForm() {
@@ -343,13 +590,15 @@ function renderConfig() {
     : `${snapshot.wifi?.mode || "IDLE"} / ${snapshot.wifi?.status || "-"}`;
   document.getElementById("configHint").textContent = snapshot.wifi?.provisioningApActive
     ? `Provisioning active on ${config.apSsid || snapshot.wifi?.provisioningApSsid || "device AP"}. FS ${config.filesystemStatus || "-"}.`
-    : `SSID ${config.wifiSsid || "UNSET"}  LOC ${config.locationName || "UNSET"}  IP ${config.ip || snapshot.wifi?.ip || "-"}  FS ${config.filesystemStatus || "-"}`;
+    : `SSID ${config.wifiSsid || "UNSET"}  LOC ${config.locationName || "UNSET"}  IP ${config.ip || snapshot.wifi?.ip || "-"}  FS ${config.filesystemStatus || "-"}  APP ${config.appStateDurability || snapshot.storage?.appStateDurability || "-"}`;
   document.getElementById("authHint").textContent = config.authRequired
     ? "Auth: token required for writes"
     : (config.controlLockedInProvisioningAp ? "Auth: control locked until token or STA" : "Auth: open");
   document.getElementById("provisioningHint").textContent = snapshot.wifi?.provisioningApActive
-    ? `Provisioning AP password is shown on the device serial log during AP startup.`
-    : `API v${state.meta?.apiVersion || state.snapshot?.apiVersion || "-"}  State v${state.meta?.stateVersion || state.snapshot?.stateVersion || "-"}  TLS ${config.weatherTlsMode || "-"}  SYNC ${config.weatherSyncStatus || "-"}`;
+    ? (state.meta?.provisioningSerialPasswordLogEnabled
+        ? `Provisioning AP password is shown on the device serial log during AP startup.`
+        : `Provisioning AP password serial logging is disabled in this build.`)
+    : `API v${state.contract?.apiVersion || state.meta?.apiVersion || state.snapshot?.apiVersion || "-"}  State v${state.contract?.stateVersion || state.meta?.stateVersion || state.snapshot?.stateVersion || "-"}  Asset v${state.meta?.assetContractVersion || "-"}/${state.contract?.assetContractVersion || "-"}  TLS ${config.weatherTlsMode || "-"}  SYNC ${config.weatherSyncStatus || "-"}  CFG ${snapshot.storage?.deviceConfigDurability || "DURABLE"}`;
 }
 
 function formatUptime(ms) {
@@ -365,11 +614,35 @@ function formatUptime(ms) {
 }
 
 async function sendKey(key, eventType) {
-  await runTrackedAction("/api/input/key", { key, event: eventType }, `Key ${key}/${eventType}`);
+  await runTrackedAction(contractRoute("inputKey"), { key, event: eventType }, `Key ${key}/${eventType}`);
 }
 
 async function sendCommand(type) {
-  await runTrackedAction("/api/command", { type }, `Command applied: ${type}`);
+  const knownCommands = Array.isArray(state.commandCatalog) ? state.commandCatalog.map(entry => entry?.type).filter(Boolean) : [];
+  if (knownCommands.length > 0 && !knownCommands.includes(type)) {
+    throw new Error(`unsupported command type: ${type}`);
+  }
+  const message = type === "resetAppState" ? "App state reset"
+    : (type === "factoryReset" ? "Factory reset completed" : `Command applied: ${type}`);
+  await runTrackedAction(contractRoute("command"), { type }, message);
+}
+
+async function postReset(path, successMessage, failureMessage) {
+  const currentToken = document.getElementById("currentAuthToken").value.trim() || loadToken();
+  const result = validateApiPayload(await apiPostJson(path, { token: currentToken }, currentToken), "resetActionResponse", "reset action payload does not match runtime contract schema");
+  const runtimeReload = canonicalRuntimeReload(result);
+  if (path === contractRoute("resetDeviceConfig") || path === contractRoute("resetFactory")) {
+    saveToken("");
+    document.getElementById("currentAuthToken").value = "";
+    document.getElementById("apiToken").value = "";
+  }
+  state.formDirty = false;
+  if (runtimeReload.runtimeReloadRequested && !runtimeReload.runtimeReloaded) {
+    toast(result.message || failureMessage, "error");
+  } else {
+    toast(successMessage, "success");
+  }
+  await refreshState();
 }
 
 function renderPreview(text) {
@@ -385,7 +658,7 @@ async function sendOverlay() {
   }
 
   try {
-    await runTrackedAction("/api/display/overlay", { text, durationMs: 1500 }, "Overlay sent");
+    await runTrackedAction(contractRoute("displayOverlay"), { text, durationMs: 1500 }, "Overlay sent");
   } catch (err) {
     toast(err.message, "error");
   }
@@ -393,7 +666,7 @@ async function sendOverlay() {
 
 async function clearOverlay() {
   try {
-    await runTrackedAction("/api/display/overlay/clear", {}, "Overlay cleared");
+    await runTrackedAction(contractRoute("displayOverlayClear"), {}, "Overlay cleared");
   } catch (err) {
     toast(err.message, "error");
   }
@@ -414,24 +687,22 @@ async function saveConfig() {
     token: currentToken
   };
 
-  await apiPostJson("/api/config/device", payload, currentToken);
+  const result = validateApiPayload(await apiPostJson(contractRoute("configDevice"), payload, currentToken), "deviceConfigUpdate", "device config update payload does not match runtime contract schema");
+  const runtimeReload = canonicalRuntimeReload(result);
   saveToken(newToken);
   document.getElementById("currentAuthToken").value = newToken;
   state.formDirty = false;
   document.getElementById("wifiPassword").value = "";
-  toast("Configuration saved", "success");
+  if (runtimeReload.runtimeReloadRequested && !runtimeReload.runtimeReloaded) {
+    toast(result.message || "Configuration saved, but runtime reload failed", "error");
+  } else {
+    toast("Configuration saved", "success");
+  }
   await refreshState();
 }
 
 async function resetConfig() {
-  const currentToken = document.getElementById("currentAuthToken").value.trim() || loadToken();
-  await apiPostJson("/api/config/device/reset", { token: currentToken }, currentToken);
-  saveToken("");
-  document.getElementById("currentAuthToken").value = "";
-  document.getElementById("apiToken").value = "";
-  state.formDirty = false;
-  toast("Configuration reset", "success");
-  await refreshState();
+  await postReset(contractRoute("resetDeviceConfig"), "Device config reset", "Device config reset, but runtime reload failed");
 }
 
 function getOledContext() {
@@ -543,6 +814,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  loadContract().then(() => loadStorageSemantics()).catch(err => toast(err.message, "error")).finally(() => {
   document.getElementById("refreshBtn").addEventListener("click", () => {
     refreshState().catch(err => toast(err.message, "error"));
   });
@@ -574,5 +846,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("currentAuthToken").value = loadToken();
   document.getElementById("apiToken").value = loadToken();
   renderPreview("");
+  refreshCommandCatalog().catch(err => toast(err.message, "error"));
   refreshState().catch(err => toast(err.message, "error"));
+  window.setInterval(() => {
+    refreshState().catch(err => toast(err.message, "error"));
+  }, 2000);
+  });
 });

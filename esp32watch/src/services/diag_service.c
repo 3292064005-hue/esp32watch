@@ -4,6 +4,7 @@
 #include "reset_reason.h"
 #include "system_init.h"
 #include "platform_api.h"
+#include "app_limits.h"
 #include <string.h>
 
 #define DIAG_SENSOR_SAFE_MODE_THRESHOLD 8U
@@ -18,7 +19,7 @@ static uint16_t diag_fault_cooldown_ms(DiagFaultCode code)
         case DIAG_FAULT_STORAGE_COMMIT: return 4000U;
         case DIAG_FAULT_SENSOR: return 5000U;
         case DIAG_FAULT_DISPLAY_TX:
-        case DIAG_FAULT_RTC_INVALID:
+        case DIAG_FAULT_TIME_INVALID:
         case DIAG_FAULT_BATTERY_ADC: return 2000U;
         case DIAG_FAULT_WDT_RESET: return DIAG_SAFE_MODE_CLEAR_HOLDOFF_MS;
         default: return 0U;
@@ -31,7 +32,7 @@ static DiagFaultOwner diag_fault_owner(DiagFaultCode code)
         case DIAG_FAULT_STORAGE_COMMIT: return DIAG_FAULT_OWNER_STORAGE;
         case DIAG_FAULT_SENSOR: return DIAG_FAULT_OWNER_SENSOR;
         case DIAG_FAULT_DISPLAY_TX: return DIAG_FAULT_OWNER_DISPLAY;
-        case DIAG_FAULT_RTC_INVALID: return DIAG_FAULT_OWNER_RTC;
+        case DIAG_FAULT_TIME_INVALID: return DIAG_FAULT_OWNER_TIME;
         case DIAG_FAULT_BATTERY_ADC: return DIAG_FAULT_OWNER_BATTERY;
         case DIAG_FAULT_WDT_RESET: return DIAG_FAULT_OWNER_WDT;
         default: return DIAG_FAULT_OWNER_NONE;
@@ -44,7 +45,7 @@ static uint8_t diag_fault_retry_budget(DiagFaultCode code)
         case DIAG_FAULT_STORAGE_COMMIT: return 2U;
         case DIAG_FAULT_SENSOR: return 3U;
         case DIAG_FAULT_DISPLAY_TX:
-        case DIAG_FAULT_RTC_INVALID:
+        case DIAG_FAULT_TIME_INVALID:
         case DIAG_FAULT_BATTERY_ADC: return 1U;
         case DIAG_FAULT_WDT_RESET: return 0U;
         default: return 0U;
@@ -60,7 +61,7 @@ DiagFaultSeverity diag_service_fault_severity(DiagFaultCode code)
         case DIAG_FAULT_WDT_RESET:
             return DIAG_FAULT_SEVERITY_FATAL;
         case DIAG_FAULT_DISPLAY_TX:
-        case DIAG_FAULT_RTC_INVALID:
+        case DIAG_FAULT_TIME_INVALID:
         case DIAG_FAULT_BATTERY_ADC:
             return DIAG_FAULT_SEVERITY_RECOVERABLE;
         default:
@@ -183,6 +184,8 @@ void diag_service_init(void)
     previous = crash_capsule_has_previous() ? crash_capsule_get_previous() : NULL;
     if (system_safe_mode_boot_recovery_pending()) {
         diag_service_request_safe_mode(DIAG_SAFE_MODE_INIT_FAILURE, DIAG_FAULT_NONE);
+    } else if (crash_capsule_consecutive_incomplete_boots() >= APP_BOOT_LOOP_SAFE_MODE_THRESHOLD) {
+        diag_service_request_safe_mode(DIAG_SAFE_MODE_BOOT_LOOP, DIAG_FAULT_NONE);
     } else if (previous != NULL &&
                previous->init_failed_stage != 0U &&
                previous->init_failed_policy == (uint8_t)SYSTEM_FATAL_POLICY_SAFE_MODE) {
@@ -339,9 +342,14 @@ void diag_service_note_checkpoint_timeout(uint8_t checkpoint, uint16_t loop_ms)
     diag_service_log(DIAG_EVT_WDT_STARVED, loop_ms, checkpoint);
 }
 
-void diag_service_note_rtc_invalid(void)
+static void diag_service_record_time_invalid_fault(void)
 {
-    diag_service_note_fault_internal(DIAG_FAULT_RTC_INVALID, 0U, 0U);
+    diag_service_note_fault_internal(DIAG_FAULT_TIME_INVALID, 0U, 0U);
+}
+
+void diag_service_note_time_invalid(void)
+{
+    diag_service_record_time_invalid_fault();
 }
 
 void diag_service_clear_safe_mode(void)

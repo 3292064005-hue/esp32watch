@@ -39,6 +39,7 @@ typedef struct {
     uint8_t last_storage_pending_mask;
     uint8_t init_failed_stage;
     uint8_t init_failed_policy;
+    uint8_t consecutive_incomplete_boots;
 } CrashCapsuleSnapshot;
 
 void crash_capsule_init(ResetReason reset_reason);
@@ -55,6 +56,7 @@ void crash_capsule_note_loop_start(uint32_t now_ms);
 const CrashCapsuleSnapshot *crash_capsule_get_current(void);
 const CrashCapsuleSnapshot *crash_capsule_get_previous(void);
 bool crash_capsule_has_previous(void);
+uint8_t crash_capsule_consecutive_incomplete_boots(void);
 
 #ifdef __cplusplus
 }

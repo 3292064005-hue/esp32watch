@@ -29,3 +29,8 @@ extern "C" bool web_state_detail_collect(WebStateDetailSnapshot *out)
 {
     return web_state_detail_collect_impl(out);
 }
+
+extern "C" bool web_state_perf_collect(WebStatePerfSnapshot *out)
+{
+    return web_state_perf_collect_impl(out);
+}

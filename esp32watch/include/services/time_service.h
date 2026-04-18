@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 typedef enum {
-    TIME_SOURCE_RTC = 0,
+    TIME_SOURCE_DEVICE_CLOCK = 0,
     TIME_SOURCE_HOST_SYNC,
     TIME_SOURCE_NETWORK_SYNC,
     TIME_SOURCE_COMPANION_SYNC,
@@ -50,6 +50,20 @@ uint32_t time_service_datetime_to_epoch(const DateTime *dt);
 void time_service_epoch_to_datetime(uint32_t epoch, DateTime *out);
 uint32_t time_service_get_epoch(void);
 void time_service_refresh(DateTime *out);
+/**
+ * @brief Capture a consistent datetime view together with the active source snapshot.
+ *
+ * The service computes the current runtime epoch once, derives the structured
+ * DateTime view from that epoch, and returns the matching source metadata so
+ * callers do not need to stitch together separate epoch/source reads.
+ *
+ * @param[out] out Optional destination for the current datetime.
+ * @param[out] source_out Optional destination for the current source snapshot.
+ * @return true when at least one output buffer was populated; false when both are NULL.
+ * @throws None.
+ * @boundary_behavior Returns false without mutating state when both outputs are NULL.
+ */
+bool time_service_get_datetime_snapshot(DateTime *out, TimeSourceSnapshot *source_out);
 bool time_service_set_epoch_from_source(uint32_t epoch, TimeSourceType source);
 bool time_service_try_set_datetime(const DateTime *dt, TimeSourceType source);
 void time_service_set_datetime(const DateTime *dt);

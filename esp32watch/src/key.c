@@ -1,5 +1,6 @@
 #include "key.h"
 #include "app_config.h"
+#include "board_manifest.h"
 #include "platform_api.h"
 #include "common/ringbuf.h"
 
@@ -24,6 +25,24 @@ static KeyState g_keys[KEY_ID_COUNT];
 static KeyEvent g_queue_storage[KEY_QUEUE_SIZE];
 static RingBuf g_queue;
 
+static void key_configure_input(const KeyState *key)
+{
+    PlatformGpioConfig gpio = {0};
+
+    if (key == NULL || key->port == NULL || key->pin == 0U) {
+        return;
+    }
+    if (board_manifest_resolve_native_gpio(key->port, key->pin) < 0) {
+        return;
+    }
+
+    gpio.pin_mask = key->pin;
+    gpio.mode = PLATFORM_GPIO_MODE_INPUT;
+    gpio.pull = key->active_low ? PLATFORM_GPIO_PULL_UP : PLATFORM_GPIO_NO_PULL;
+    gpio.speed = PLATFORM_GPIO_SPEED_LOW;
+    platform_gpio_init(key->port, &gpio);
+}
+
 static void key_push_event(KeyId id, KeyEventType type)
 {
     KeyEvent event;
@@ -45,6 +64,9 @@ void key_init(void)
     g_keys[KEY_ID_DOWN] = (KeyState){KEY_DOWN_GPIO_Port, KEY_DOWN_Pin, true, false, false, 0, 0, false};
     g_keys[KEY_ID_OK]   = (KeyState){KEY_OK_GPIO_Port, KEY_OK_Pin, true, false, false, 0, 0, false};
     g_keys[KEY_ID_BACK] = (KeyState){KEY_BACK_GPIO_Port, KEY_BACK_Pin, true, false, false, 0, 0, false};
+    for (uint8_t i = 0U; i < KEY_ID_COUNT; ++i) {
+        key_configure_input(&g_keys[i]);
+    }
     ringbuf_init(&g_queue, g_queue_storage, KEY_QUEUE_SIZE, sizeof(KeyEvent));
 }
 

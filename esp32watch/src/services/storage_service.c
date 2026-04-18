@@ -5,6 +5,7 @@
 #include "persist.h"
 #include "persist_flash.h"
 #include "services/diag_service.h"
+#include "services/runtime_event_service.h"
 #include "platform_api.h"
 #include <string.h>
 
@@ -231,6 +232,7 @@ static void storage_commit_finalize_execution(void)
     storage_tx_finish_commit(&g_storage, &tx_ctx, g_storage.inflight_commit_ok);
     crash_capsule_note_storage(g_storage.commit_count, storage_scheduler_pending_mask(&g_storage));
     diag_service_note_storage_commit(g_storage.inflight_commit_reason, g_storage.last_commit_ok, g_storage.commit_count);
+    (void)runtime_event_service_publish_notify(RUNTIME_SERVICE_EVENT_STORAGE_COMMIT_FINISHED);
     g_storage.inflight_commit_reason = STORAGE_COMMIT_REASON_NONE;
     g_storage.inflight_commit_ok = false;
     storage_commit_apply_event(STORAGE_COMMIT_EVENT_FINALIZE);

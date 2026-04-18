@@ -7,7 +7,7 @@
 static const char * const settings_items[] = {
     "Bright", "RaiseWake", "AutoSleep", "DND", "Goal", "Face",
     "Seconds", "Anim", "Timeout", "Sens", "Calibrate", "Input Test",
-    "Storage", "Time Set", "Restore"
+    "Storage", "Time Set", "Reset App"
 };
 
 static const char *setting_label(uint8_t idx)
@@ -27,7 +27,7 @@ static const char *setting_label(uint8_t idx)
         case 11U: return "Input Test";
         case 12U: return "Storage";
         case 13U: return "Time Set";
-        default: return "Restore";
+        default: return "Reset App";
     }
 }
 

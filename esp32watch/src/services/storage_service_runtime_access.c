@@ -109,6 +109,11 @@ bool storage_service_is_flash_backend_ready(void)
     return storage_backend_adapter_flash_ready();
 }
 
+bool storage_service_app_state_durable_ready(void)
+{
+    return storage_backend_adapter_app_state_durable_ready() || storage_backend_adapter_flash_ready();
+}
+
 bool storage_service_was_migration_attempted(void)
 {
     return g_storage.migration_attempted;

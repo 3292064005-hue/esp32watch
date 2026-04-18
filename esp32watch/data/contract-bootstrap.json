@@ -1,0 +1,461 @@
+{
+  "runtimeContractVersion": 11,
+  "apiVersion": 17,
+  "stateVersion": 11,
+  "commandCatalogVersion": 3,
+  "assetContractVersion": 11,
+  "routes": {
+    "contract": "/api/contract",
+    "health": "/api/health",
+    "meta": "/api/meta",
+    "actionsCatalog": "/api/actions/catalog",
+    "actionsLatest": "/api/actions/latest",
+    "actionsStatus": "/api/actions/status",
+    "stateSummary": "/api/state/summary",
+    "stateDetail": "/api/state/detail",
+    "statePerf": "/api/state/perf",
+    "stateRaw": "/api/state/raw",
+    "stateAggregate": "/api/state/aggregate",
+    "displayFrame": "/api/display/frame",
+    "displayOverlay": "/api/display/overlay",
+    "displayOverlayClear": "/api/display/overlay/clear",
+    "configDevice": "/api/config/device",
+    "inputKey": "/api/input/key",
+    "command": "/api/command",
+    "resetAppState": "/api/reset/app-state",
+    "resetDeviceConfig": "/api/reset/device-config",
+    "resetFactory": "/api/reset/factory",
+    "storageSemantics": "/api/storage/semantics"
+  },
+  "routeSchemas": {
+    "contract": {
+      "kind": "api",
+      "name": "contractDocument"
+    },
+    "health": {
+      "kind": "api",
+      "name": "health"
+    },
+    "meta": {
+      "kind": "api",
+      "name": "meta"
+    },
+    "actionsCatalog": {
+      "kind": "api",
+      "name": "actionsCatalog"
+    },
+    "actionsLatest": {
+      "kind": "api",
+      "name": "actionsStatus"
+    },
+    "actionsStatus": {
+      "kind": "api",
+      "name": "actionsStatus"
+    },
+    "stateSummary": {
+      "kind": "state",
+      "name": "summary"
+    },
+    "stateDetail": {
+      "kind": "state",
+      "name": "detail"
+    },
+    "statePerf": {
+      "kind": "state",
+      "name": "perf"
+    },
+    "stateRaw": {
+      "kind": "state",
+      "name": "raw"
+    },
+    "stateAggregate": {
+      "kind": "state",
+      "name": "aggregate"
+    },
+    "displayFrame": {
+      "kind": "api",
+      "name": "displayFrame"
+    },
+    "displayOverlay": {
+      "kind": "api",
+      "name": "trackedActionAccepted"
+    },
+    "displayOverlayClear": {
+      "kind": "api",
+      "name": "trackedActionAccepted"
+    },
+    "configDevice": {
+      "kind": "api",
+      "name": "configDeviceReadback"
+    },
+    "inputKey": {
+      "kind": "api",
+      "name": "trackedActionAccepted"
+    },
+    "command": {
+      "kind": "api",
+      "name": "trackedActionAccepted"
+    },
+    "resetAppState": {
+      "kind": "api",
+      "name": "resetActionResponse"
+    },
+    "resetDeviceConfig": {
+      "kind": "api",
+      "name": "resetActionResponse"
+    },
+    "resetFactory": {
+      "kind": "api",
+      "name": "resetActionResponse"
+    },
+    "storageSemantics": {
+      "kind": "api",
+      "name": "storageSemantics"
+    }
+  },
+  "stateSchemas": {
+    "summary": [
+      {
+        "section": "wifi",
+        "flags": []
+      },
+      {
+        "section": "system",
+        "flags": []
+      },
+      {
+        "section": "summary",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_SUMMARY_INCLUDE_NETWORK_LABEL"
+        ]
+      },
+      {
+        "section": "weather",
+        "flags": []
+      }
+    ],
+    "detail": [
+      {
+        "section": "activity",
+        "flags": []
+      },
+      {
+        "section": "alarm",
+        "flags": []
+      },
+      {
+        "section": "music",
+        "flags": []
+      },
+      {
+        "section": "sensor",
+        "flags": []
+      },
+      {
+        "section": "storage",
+        "flags": []
+      },
+      {
+        "section": "diag",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_DIAG_INCLUDE_SAFE_MODE_FIELDS"
+        ]
+      },
+      {
+        "section": "display",
+        "flags": []
+      },
+      {
+        "section": "weather",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_WEATHER_INCLUDE_UPDATED_AT"
+        ]
+      },
+      {
+        "section": "terminal",
+        "flags": []
+      },
+      {
+        "section": "overlay",
+        "flags": []
+      },
+      {
+        "section": "perf",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_PERF_INCLUDE_HISTORY"
+        ]
+      }
+    ],
+    "perf": [
+      {
+        "section": "perf",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_PERF_INCLUDE_HISTORY"
+        ]
+      }
+    ],
+    "raw": [
+      {
+        "section": "startupRaw",
+        "flags": []
+      },
+      {
+        "section": "queueRaw",
+        "flags": []
+      },
+      {
+        "section": "sensor",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_SENSOR_INCLUDE_RAW_AXES"
+        ]
+      },
+      {
+        "section": "storage",
+        "flags": []
+      },
+      {
+        "section": "display",
+        "flags": []
+      },
+      {
+        "section": "perf",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_PERF_INCLUDE_HISTORY"
+        ]
+      }
+    ],
+    "aggregate": [
+      {
+        "section": "wifi",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_WIFI_INCLUDE_RSSI"
+        ]
+      },
+      {
+        "section": "system",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_SYSTEM_INCLUDE_APP_INIT_STAGE",
+          "WEB_STATE_SECTION_FLAG_SYSTEM_INCLUDE_SLEEP_STATE",
+          "WEB_STATE_SECTION_FLAG_SYSTEM_INCLUDE_SAFE_MODE"
+        ]
+      },
+      {
+        "section": "config",
+        "flags": []
+      },
+      {
+        "section": "activity",
+        "flags": []
+      },
+      {
+        "section": "alarm",
+        "flags": []
+      },
+      {
+        "section": "music",
+        "flags": []
+      },
+      {
+        "section": "sensor",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_SENSOR_INCLUDE_RAW_AXES"
+        ]
+      },
+      {
+        "section": "storage",
+        "flags": []
+      },
+      {
+        "section": "diag",
+        "flags": []
+      },
+      {
+        "section": "display",
+        "flags": []
+      },
+      {
+        "section": "weather",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_WEATHER_INCLUDE_UPDATED_AT"
+        ]
+      },
+      {
+        "section": "summary",
+        "flags": []
+      },
+      {
+        "section": "terminal",
+        "flags": []
+      },
+      {
+        "section": "overlay",
+        "flags": []
+      },
+      {
+        "section": "perf",
+        "flags": [
+          "WEB_STATE_SECTION_FLAG_PERF_INCLUDE_HISTORY"
+        ]
+      }
+    ]
+  },
+  "releaseValidation": {
+    "candidateBundleKind": "candidate",
+    "verifiedBundleKind": "verified",
+    "hostReportType": "HOST_VALIDATION_REPORT",
+    "deviceReportType": "DEVICE_SMOKE_REPORT",
+    "validationSchemaVersion": 6
+  },
+  "apiSchemas": {
+    "health": {
+      "type": "object",
+      "required": [
+        "ok",
+        "wifiConnected",
+        "ip",
+        "uptimeMs",
+        "filesystemReady",
+        "assetContractReady"
+      ],
+      "sections": [
+        "healthStatus"
+      ]
+    },
+    "meta": {
+      "type": "object",
+      "required": [
+        "ok",
+        "apiVersion",
+        "stateVersion",
+        "storageSchemaVersion"
+      ],
+      "sections": [
+        "versions",
+        "storageRuntime",
+        "assetContract",
+        "runtimeEvents",
+        "platformSupport",
+        "deviceIdentity",
+        "capabilities"
+      ]
+    },
+    "displayFrame": {
+      "type": "object",
+      "required": [
+        "ok",
+        "width",
+        "height",
+        "presentCount",
+        "bufferHex"
+      ],
+      "sections": [
+        "displayFrame"
+      ]
+    },
+    "trackedActionAccepted": {
+      "type": "object",
+      "required": [
+        "ok",
+        "actionId",
+        "requestId",
+        "actionType",
+        "trackPath",
+        "queueDepth"
+      ],
+      "sections": [
+        "trackedActionAccepted"
+      ]
+    },
+    "actionsStatus": {
+      "type": "object",
+      "required": [
+        "ok",
+        "id",
+        "status",
+        "type"
+      ],
+      "sections": [
+        "actionStatus"
+      ]
+    },
+    "actionsCatalog": {
+      "type": "object",
+      "required": [
+        "ok",
+        "commands"
+      ],
+      "sections": [
+        "commandCatalog"
+      ]
+    },
+    "resetActionResponse": {
+      "type": "object",
+      "required": [
+        "ok",
+        "message",
+        "resetKind",
+        "runtimeReload"
+      ],
+      "sections": [
+        "resetAction",
+        "runtimeReload"
+      ]
+    },
+    "deviceConfigUpdate": {
+      "type": "object",
+      "required": [
+        "ok",
+        "runtimeReload"
+      ],
+      "sections": [
+        "deviceConfigUpdate",
+        "runtimeReload"
+      ]
+    },
+    "configDeviceReadback": {
+      "type": "object",
+      "required": [
+        "ok",
+        "config"
+      ],
+      "sections": [
+        "deviceConfigReadback",
+        "capabilities"
+      ]
+    },
+    "contractDocument": {
+      "type": "object",
+      "required": [
+        "ok",
+        "contract"
+      ],
+      "sections": [
+        "contract"
+      ]
+    },
+    "storageSemantics": {
+      "type": "object",
+      "required": [
+        "ok",
+        "apiVersion",
+        "objects"
+      ],
+      "sections": [
+        "storageSemantics"
+      ]
+    },
+    "releaseValidation": {
+      "type": "object",
+      "required": [
+        "candidateBundleKind",
+        "verifiedBundleKind",
+        "hostReportType",
+        "deviceReportType",
+        "validationSchemaVersion"
+      ],
+      "sections": [
+        "releaseValidation"
+      ]
+    }
+  }
+}

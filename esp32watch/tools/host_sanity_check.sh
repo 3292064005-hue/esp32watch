@@ -3,8 +3,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 trap 'rm -rf .pio' EXIT
 
+python3 ./tools/generate_asset_contract.py
+python3 ./tools/verify_partition_contract.py
+
 if command -v node >/dev/null 2>&1; then
   node --check data/app.js
+  node ./tools/web_runtime_smoke.js
 else
   echo "[WARN] node not found; skipped app.js syntax check"
 fi
@@ -33,8 +37,9 @@ if failed:
 print(f'[OK] host C syntax check passed for {len(files)} translation units')
 PY
 
-./tools/host_cpp_sanity.sh
-./tools/host_runtime_contract_check.py
+bash ./tools/host_cpp_sanity.sh
+python3 ./tools/host_runtime_contract_check.py
+bash ./tools/host_behavior_check.sh
 
 if command -v pio >/dev/null 2>&1; then
   if [[ "${SKIP_PIO:-0}" == "1" ]]; then

@@ -6,6 +6,9 @@
 #include "services/input_service.h"
 #include "services/storage_service.h"
 #include "services/diag_service.h"
+#include "services/network_sync_service.h"
+#include "web/web_server.h"
+#include "web/web_wifi.h"
 #include "platform_api.h"
 #include <string.h>
 #include <stddef.h>
@@ -249,4 +252,32 @@ WdtCheckpointResult watch_app_result_storage_stage(void)
         return WDT_CHECKPOINT_RESULT_DEGRADED;
     }
     return WDT_CHECKPOINT_RESULT_OK;
+}
+
+
+WdtCheckpointResult watch_app_result_network_stage(void)
+{
+    NetworkSyncSnapshot snapshot;
+
+    if (!network_sync_service_get_snapshot(&snapshot)) {
+        return WDT_CHECKPOINT_RESULT_FAILED;
+    }
+    if (!web_wifi_has_network_route()) {
+        return WDT_CHECKPOINT_RESULT_DEGRADED;
+    }
+    if (!snapshot.wifi_connected || !snapshot.time_synced) {
+        return WDT_CHECKPOINT_RESULT_DEGRADED;
+    }
+    if (!snapshot.weather_last_attempt_ok && snapshot.last_weather_http_status < 0) {
+        return WDT_CHECKPOINT_RESULT_DEGRADED;
+    }
+    return WDT_CHECKPOINT_RESULT_OK;
+}
+
+WdtCheckpointResult watch_app_result_web_stage(void)
+{
+    if (!web_server_filesystem_ready() || !web_server_filesystem_assets_ready()) {
+        return WDT_CHECKPOINT_RESULT_DEGRADED;
+    }
+    return web_server_is_ready() ? WDT_CHECKPOINT_RESULT_OK : WDT_CHECKPOINT_RESULT_DEGRADED;
 }

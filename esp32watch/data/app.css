@@ -505,3 +505,66 @@ button.ghost {
     grid-column: span 1;
   }
 }
+
+
+.perf-subpanel {
+  display: grid;
+  gap: 14px;
+}
+
+.perf-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.perf-columns h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.perf-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.perf-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
+}
+
+.perf-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.perf-row strong {
+  font-size: 13px;
+}
+
+.perf-row span,
+.perf-row em,
+.perf-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.perf-row em {
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.perf-empty {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(255,255,255,0.08);
+}

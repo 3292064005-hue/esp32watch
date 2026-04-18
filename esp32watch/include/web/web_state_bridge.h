@@ -1,10 +1,13 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include "watch_app.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define WEB_STATE_PERF_RECENT_HISTORY_MAX 6U
 
 typedef struct {
     bool connected;
@@ -119,6 +122,9 @@ typedef struct {
     char last_log_name[32];
     uint16_t last_log_value;
     uint8_t last_log_aux;
+    uint8_t consecutive_incomplete_boots;
+    uint32_t boot_count;
+    uint32_t previous_boot_count;
 } WebStateDiagSnapshot;
 
 typedef struct {
@@ -132,6 +138,15 @@ typedef struct {
     bool migration_ok;
     bool transaction_active;
     bool sleep_flush_pending;
+    char app_state_backend[24];
+    char device_config_backend[24];
+    char app_state_durability[20];
+    char device_config_durability[20];
+    bool app_state_power_loss_guaranteed;
+    bool device_config_power_loss_guaranteed;
+    bool app_state_mixed_durability;
+    uint8_t app_state_reset_domain_object_count;
+    uint8_t app_state_durable_object_count;
 } WebStateStorageSnapshot;
 
 typedef struct {
@@ -160,6 +175,40 @@ typedef struct {
 } WebStateOverlaySnapshot;
 
 typedef struct {
+    char name[16];
+    uint32_t budget_ms;
+    uint32_t last_duration_ms;
+    uint32_t max_duration_ms;
+    uint32_t sample_count;
+    uint16_t over_budget_count;
+    uint16_t consecutive_over_budget;
+    uint16_t max_consecutive_over_budget;
+    uint16_t deferred_count;
+} WebStatePerfStageSnapshot;
+
+typedef struct {
+    char stage[16];
+    char event[8];
+    uint32_t timestamp_ms;
+    uint32_t loop_counter;
+    uint16_t duration_ms;
+    uint16_t budget_ms;
+} WebStatePerfHistorySnapshot;
+
+typedef struct {
+    uint32_t loop_count;
+    uint32_t max_loop_ms;
+    uint16_t action_queue_depth;
+    uint16_t action_queue_drop_count;
+    uint8_t stage_count;
+    uint8_t history_count;
+    char last_checkpoint[16];
+    char last_checkpoint_result[8];
+    WebStatePerfStageSnapshot stages[WATCH_APP_STAGE_COUNT];
+    WebStatePerfHistorySnapshot history[WEB_STATE_PERF_RECENT_HISTORY_MAX];
+} WebStatePerfSnapshot;
+
+typedef struct {
     WebStateSensorSnapshot sensor;
     WebStateDiagSnapshot diag;
     WebStateStorageSnapshot storage;
@@ -167,11 +216,13 @@ typedef struct {
     WebStateAlarmSnapshot alarm;
     WebStateMusicSnapshot music;
     WebStateOverlaySnapshot overlay;
+    WebStatePerfSnapshot perf;
 } WebStateDetailSnapshot;
 
 void web_state_bridge_mark_startup(uint32_t mark_ms);
 bool web_state_core_collect(WebStateCoreSnapshot *out);
 bool web_state_detail_collect(WebStateDetailSnapshot *out);
+bool web_state_perf_collect(WebStatePerfSnapshot *out);
 
 #ifdef __cplusplus
 }

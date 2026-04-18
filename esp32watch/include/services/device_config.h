@@ -122,6 +122,16 @@ bool device_config_save_api_token(const char *token);
 bool device_config_get_wifi_password(char *out, uint32_t out_size);
 
 /**
+ * @brief Copy the persisted API mutation token into a caller buffer.
+ *
+ * @param[out] out Destination buffer.
+ * @param[in] out_size Destination buffer size in bytes.
+ * @return true when the buffer was populated; false when the arguments are invalid.
+ * @throws None.
+ */
+bool device_config_get_api_token(char *out, uint32_t out_size);
+
+/**
  * @brief Report whether a mutation token is configured.
  *
  * @return true when an API token is configured; false otherwise.
@@ -146,6 +156,39 @@ bool device_config_authenticate_token(const char *token);
  * @boundary_behavior Preserves the previous committed snapshot if the new default snapshot cannot be committed.
  */
 bool device_config_restore_defaults(void);
+
+/**
+ * @brief Read the monotonic committed generation of the authoritative device configuration snapshot.
+ *
+ * @return Commit generation that increments after every durable device-config write. Returns 0 when the configuration has not been persisted yet.
+ * @throws None.
+ */
+uint32_t device_config_generation(void);
+
+/**
+ * @brief Report the durable backend label used by device configuration persistence.
+ *
+ * @return Backend label string. Returns "UNAVAILABLE" when the backend could not be opened.
+ * @throws None.
+ */
+const char *device_config_backend_name(void);
+
+/**
+ * @brief Report whether the durable device configuration backend is currently usable.
+ *
+ * @return true when the backing Preferences namespace opened successfully.
+ * @throws None.
+ */
+bool device_config_backend_ready(void);
+
+/**
+ * @brief Report whether the most recent durable device configuration commit succeeded.
+ *
+ * @return true when the last attempted commit completed successfully, or when a valid snapshot was loaded.
+ * @throws None.
+ */
+bool device_config_last_commit_ok(void);
+
 
 #ifdef __cplusplus
 }

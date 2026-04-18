@@ -1,9 +1,16 @@
 #include <Arduino.h>
-#include <Preferences.h>
 #include <Wire.h>
+#include <esp_sleep.h>
+#include <esp_system.h>
+#include <string.h>
 #include "esp32_port_config.h"
 #include "platform_api.h"
 #include "app_config.h"
+#include "board_manifest.h"
+
+#ifndef RTC_NOINIT_ATTR
+#define RTC_NOINIT_ATTR
+#endif
 
 extern "C" {
 PlatformI2cBus platform_i2c_main = {};
@@ -15,23 +22,34 @@ PlatformGpioPort g_platform_gpioa = {0};
 PlatformGpioPort g_platform_gpiob = {1};
 }
 
-static Preferences g_bkp_prefs;
+static constexpr uint32_t kRtcResetDomainMagic = 0xB4A0F11EU;
+static constexpr uint32_t kBkpRegisterCount = 16U;
+
+static RTC_NOINIT_ATTR uint32_t g_bkp_magic = 0U;
+static RTC_NOINIT_ATTR uint32_t g_bkp_regs[kBkpRegisterCount] = {0};
 static bool g_bkp_loaded = false;
-static uint32_t g_bkp_regs[16] = {0};
 static uint32_t g_adc_last_value = 2048U;
+
+static bool bkp_should_reset_for_reason(esp_reset_reason_t reason)
+{
+    switch (reason) {
+        case ESP_RST_POWERON:
+#ifdef ESP_RST_BROWNOUT
+        case ESP_RST_BROWNOUT:
+#endif
+        case ESP_RST_UNKNOWN:
+            return true;
+        default:
+            return false;
+    }
+}
 
 static int resolve_actual_gpio(PlatformGpioPort *port, uint16_t pin_mask)
 {
-    if (port == PLATFORM_GPIOB && pin_mask == PLATFORM_PIN_6) return ESP32_I2C_SCL_GPIO;
-    if (port == PLATFORM_GPIOB && pin_mask == PLATFORM_PIN_7) return ESP32_I2C_SDA_GPIO;
-    if (port == KEY_UP_GPIO_Port && pin_mask == KEY_UP_Pin) return ESP32_KEY_UP_GPIO;
-    if (port == KEY_DOWN_GPIO_Port && pin_mask == KEY_DOWN_Pin) return ESP32_KEY_DOWN_GPIO;
-    if (port == KEY_OK_GPIO_Port && pin_mask == KEY_OK_Pin) return ESP32_KEY_OK_GPIO;
-    if (port == KEY_BACK_GPIO_Port && pin_mask == KEY_BACK_Pin) return ESP32_KEY_BACK_GPIO;
-    if (port == BATTERY_ADC_GPIO_Port && pin_mask == BATTERY_ADC_Pin) return ESP32_BATTERY_ADC_GPIO;
-    if (port == VIBE_GPIO_Port && pin_mask == VIBE_Pin) return ESP32_VIBE_GPIO;
-    if (port == CHARGE_DET_GPIO_Port && pin_mask == CHARGE_DET_Pin) return ESP32_CHARGE_DET_GPIO;
-    if (port == OLED_RESET_GPIO_Port && pin_mask == OLED_RESET_Pin) return ESP32_OLED_RESET_GPIO;
+    int manifest_gpio = board_manifest_resolve_native_gpio(port, pin_mask);
+    if (manifest_gpio >= 0) {
+        return manifest_gpio;
+    }
     return -1;
 }
 
@@ -40,29 +58,20 @@ static void bkp_load_once(void)
     if (g_bkp_loaded) {
         return;
     }
-    if (g_bkp_prefs.begin("watch_bkp", false)) {
-        for (int i = 0; i < 16; ++i) {
-            char key[8];
-            snprintf(key, sizeof(key), "r%02d", i);
-            g_bkp_regs[i] = g_bkp_prefs.getULong(key, 0U);
-        }
-        g_bkp_prefs.end();
+
+    if (g_bkp_magic != kRtcResetDomainMagic || bkp_should_reset_for_reason(esp_reset_reason())) {
+        memset(g_bkp_regs, 0, sizeof(g_bkp_regs));
+        g_bkp_magic = kRtcResetDomainMagic;
     }
     g_bkp_loaded = true;
 }
 
 static void bkp_store_index(uint32_t index)
 {
-    if (index >= 16U) {
+    if (index >= kBkpRegisterCount) {
         return;
     }
-    if (!g_bkp_prefs.begin("watch_bkp", false)) {
-        return;
-    }
-    char key[8];
-    snprintf(key, sizeof(key), "r%02lu", (unsigned long)index);
-    g_bkp_prefs.putULong(key, g_bkp_regs[index]);
-    g_bkp_prefs.end();
+    g_bkp_magic = kRtcResetDomainMagic;
 }
 
 void platform_init(void)
@@ -139,13 +148,14 @@ void platform_gpio_write(PlatformGpioPort *port, uint16_t pin_mask, PlatformPinS
 
 PlatformStatus platform_i2c_init(PlatformI2cBus *bus)
 {
+    const BoardManifest *manifest = board_manifest_get();
     (void)bus;
-    if (ESP32_I2C_SDA_GPIO >= 0 && ESP32_I2C_SCL_GPIO >= 0) {
-        Wire.begin(ESP32_I2C_SDA_GPIO, ESP32_I2C_SCL_GPIO);
+    if (manifest != nullptr && manifest->i2c_sda_gpio >= 0 && manifest->i2c_scl_gpio >= 0) {
+        Wire.begin(manifest->i2c_sda_gpio, manifest->i2c_scl_gpio);
     } else {
         Wire.begin();
     }
-    Wire.setClock(ESP32_I2C_CLOCK_HZ);
+    Wire.setClock((manifest != nullptr && manifest->i2c_clock_hz != 0U) ? manifest->i2c_clock_hz : 400000UL);
     return PLATFORM_STATUS_OK;
 }
 
@@ -187,6 +197,7 @@ PlatformStatus platform_i2c_mem_read(PlatformI2cBus *bus, uint16_t address, uint
 PlatformStatus platform_rtc_init(PlatformRtcDevice *device)
 {
     (void)device;
+    bkp_load_once();
     return PLATFORM_STATUS_OK;
 }
 
@@ -198,7 +209,7 @@ uint32_t platform_rtc_backup_read(PlatformRtcDevice *device, uint32_t reg)
 {
     (void)device;
     bkp_load_once();
-    if (reg < 16U) {
+    if (reg < kBkpRegisterCount) {
         return g_bkp_regs[reg];
     }
     return 0U;
@@ -208,7 +219,7 @@ void platform_rtc_backup_write(PlatformRtcDevice *device, uint32_t reg, uint32_t
 {
     (void)device;
     bkp_load_once();
-    if (reg < 16U) {
+    if (reg < kBkpRegisterCount) {
         g_bkp_regs[reg] = value;
         bkp_store_index(reg);
     }
@@ -236,8 +247,9 @@ PlatformStatus platform_adc_calibrate(PlatformAdcDevice *device)
 PlatformStatus platform_adc_start(PlatformAdcDevice *device)
 {
     (void)device;
-    if (ESP32_BATTERY_ADC_GPIO >= 0) {
-        g_adc_last_value = (uint32_t)analogRead(ESP32_BATTERY_ADC_GPIO);
+    const BoardManifest *manifest = board_manifest_get();
+    if (manifest != nullptr && manifest->battery_adc_gpio >= 0) {
+        g_adc_last_value = (uint32_t)analogRead(manifest->battery_adc_gpio);
     }
     return PLATFORM_STATUS_OK;
 }
@@ -264,13 +276,26 @@ PlatformStatus platform_adc_stop(PlatformAdcDevice *device)
 PlatformStatus platform_watchdog_init(PlatformWatchdog *device)
 {
     (void)device;
-    return PLATFORM_STATUS_OK;
+    return PLATFORM_STATUS_ERROR;
 }
 
 PlatformStatus platform_watchdog_kick(PlatformWatchdog *device)
 {
     (void)device;
-    return PLATFORM_STATUS_OK;
+    return PLATFORM_STATUS_ERROR;
+}
+
+bool platform_light_sleep_for(uint32_t duration_ms)
+{
+    if (duration_ms == 0U) {
+        return false;
+    }
+
+    const uint64_t sleep_us = (uint64_t)duration_ms * 1000ULL;
+    if (esp_sleep_enable_timer_wakeup(sleep_us) != ESP_OK) {
+        return false;
+    }
+    return esp_light_sleep_start() == ESP_OK;
 }
 
 PlatformStatus platform_uart_init(PlatformUartPort *port)
@@ -354,6 +379,19 @@ void platform_irq_enable_all(void)
 uint32_t platform_cpu_hz(void)
 {
     return getCpuFrequencyMhz() * 1000000UL;
+}
+
+bool platform_get_support_snapshot(PlatformSupportSnapshot *out)
+{
+    if (out == nullptr) {
+        return false;
+    }
+
+    out->rtc_reset_domain_supported = true;
+    out->idle_light_sleep_supported = ESP32_IDLE_LIGHT_SLEEP_ENABLED != 0;
+    out->watchdog_supported = false;
+    out->flash_journal_supported = false;
+    return true;
 }
 
 void platform_reset_system(void)

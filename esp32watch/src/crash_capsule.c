@@ -32,6 +32,7 @@ void crash_capsule_init(ResetReason reset_reason)
     memset(&g_current_capsule, 0, sizeof(g_current_capsule));
     g_current_capsule.magic = CRASH_CAPSULE_MAGIC;
     g_current_capsule.boot_count = g_has_previous ? (g_previous_capsule.boot_count + 1U) : 1U;
+    g_current_capsule.consecutive_incomplete_boots = (uint8_t)((g_has_previous && g_previous_capsule.boot_in_progress != 0U) ? (g_previous_capsule.consecutive_incomplete_boots + 1U) : 0U);
     g_current_capsule.boot_in_progress = 1U;
     g_current_capsule.reset_reason = (uint8_t)reset_reason;
     g_retained_capsule = g_current_capsule;
@@ -115,6 +116,11 @@ const CrashCapsuleSnapshot *crash_capsule_get_previous(void)
 bool crash_capsule_has_previous(void)
 {
     return g_has_previous;
+}
+
+uint8_t crash_capsule_consecutive_incomplete_boots(void)
+{
+    return g_current_capsule.consecutive_incomplete_boots;
 }
 
 void crash_capsule_note_init_failure(uint8_t stage, uint8_t policy)

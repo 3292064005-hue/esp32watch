@@ -16,6 +16,8 @@ bool persist_is_initialized(void);
 uint8_t persist_get_version(void);
 uint16_t persist_get_stored_crc(void);
 uint16_t persist_get_calculated_crc(void);
+bool persist_app_state_durable_ready(void);
+const char *persist_app_state_backend_name(void);
 void persist_save_settings(const SettingsState *settings);
 void persist_load_settings(SettingsState *settings);
 void persist_save_alarms(const AlarmState *alarms, uint8_t count);

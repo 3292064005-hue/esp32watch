@@ -119,6 +119,9 @@ bool diag_service_export_snapshot(DiagExportSnapshot *out)
                                     crash_capsule_get_previous()->boot_in_progress != 0U;
     out->previous_init_failed_stage = crash_capsule_has_previous() ?
                                       crash_capsule_get_previous()->init_failed_stage : 0U;
+    out->consecutive_incomplete_boots = crash_capsule_consecutive_incomplete_boots();
+    out->boot_count = crash_capsule_get_current()->boot_count;
+    out->previous_boot_count = crash_capsule_has_previous() ? crash_capsule_get_previous()->boot_count : 0U;
     for (i = (uint8_t)DIAG_FAULT_NONE + 1U; i <= (uint8_t)DIAG_FAULT_WDT_RESET; ++i) {
         if (g_diag.faults[i].seen) {
             out->active_fault_count++;
@@ -162,7 +165,7 @@ const char *diag_service_fault_name(DiagFaultCode code)
         case DIAG_FAULT_STORAGE_COMMIT: return "STOR";
         case DIAG_FAULT_SENSOR: return "SENS";
         case DIAG_FAULT_DISPLAY_TX: return "OLED";
-        case DIAG_FAULT_RTC_INVALID: return "RTC";
+        case DIAG_FAULT_TIME_INVALID: return "TIME";
         case DIAG_FAULT_BATTERY_ADC: return "BATT";
         case DIAG_FAULT_WDT_RESET: return "WDT";
         default: return "NONE";
@@ -175,7 +178,7 @@ const char *diag_service_fault_owner_name(DiagFaultOwner owner)
         case DIAG_FAULT_OWNER_STORAGE: return "STOR";
         case DIAG_FAULT_OWNER_SENSOR: return "SENS";
         case DIAG_FAULT_OWNER_DISPLAY: return "OLED";
-        case DIAG_FAULT_OWNER_RTC: return "RTC";
+        case DIAG_FAULT_OWNER_TIME: return "TIME";
         case DIAG_FAULT_OWNER_BATTERY: return "BATT";
         case DIAG_FAULT_OWNER_WDT: return "WDT";
         default: return "NONE";
@@ -220,6 +223,7 @@ const char *diag_service_safe_mode_reason_name(DiagSafeModeReason reason)
         case DIAG_SAFE_MODE_STORAGE_FAULT: return "STOR";
         case DIAG_SAFE_MODE_SENSOR_FAULT: return "SENS";
         case DIAG_SAFE_MODE_INIT_FAILURE: return "INIT";
+        case DIAG_SAFE_MODE_BOOT_LOOP: return "BOOT_LOOP";
         default: return "NONE";
     }
 }

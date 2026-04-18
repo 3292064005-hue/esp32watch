@@ -85,6 +85,7 @@ extern StorageServiceState g_storage;
 
 bool storage_backend_adapter_flash_ready(void);
 bool storage_backend_adapter_bkp_ready(void);
+bool storage_backend_adapter_app_state_durable_ready(void);
 bool storage_backend_adapter_is_initialized(void);
 uint8_t storage_backend_adapter_get_version(void);
 StorageBackendType storage_backend_adapter_get_backend(void);

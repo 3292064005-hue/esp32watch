@@ -8,6 +8,7 @@
 #include "services/power_service.h"
 #include "services/sensor_service.h"
 #include "services/storage_service.h"
+#include "services/storage_facade.h"
 #include "ui.h"
 #include "ui_internal.h"
 #include "platform_api.h"
@@ -121,7 +122,7 @@ static bool watch_app_command_from_ui_mutation(const UiModelMutation *mutation, 
             out->data.enabled = mutation->data.enabled;
             return true;
         case UI_MODEL_MUTATION_RESTORE_DEFAULTS:
-            out->type = APP_COMMAND_RESTORE_DEFAULTS;
+            out->type = APP_COMMAND_RESET_APP_STATE;
             return true;
         case UI_MODEL_MUTATION_SELECT_ALARM_OFFSET:
             out->type = APP_COMMAND_SELECT_ALARM_OFFSET;
@@ -203,19 +204,19 @@ void watch_app_apply_model_runtime_requests(uint8_t *last_sensor_sensitivity)
 
     if ((flags & MODEL_RUNTIME_REQUEST_CLEAR_SENSOR_CALIBRATION) != 0U) {
         sensor_service_clear_calibration();
-        storage_service_clear_sensor_calibration();
+        storage_facade_clear_sensor_calibration();
     }
 
     if ((flags & MODEL_RUNTIME_REQUEST_STAGE_SETTINGS) != 0U) {
-        storage_service_save_settings(&domain_state.settings);
+        storage_facade_save_settings(&domain_state.settings);
     }
 
     if ((flags & MODEL_RUNTIME_REQUEST_STAGE_ALARMS) != 0U) {
-        storage_service_save_alarms(domain_state.alarms, APP_MAX_ALARMS);
+        storage_facade_save_alarms(domain_state.alarms, APP_MAX_ALARMS);
     }
 
     if ((flags & MODEL_RUNTIME_REQUEST_STAGE_GAME_STATS) != 0U) {
-        storage_service_save_game_stats(&domain_state.game_stats);
+        storage_facade_save_game_stats(&domain_state.game_stats);
     }
 
     if ((flags & MODEL_RUNTIME_REQUEST_STORAGE_COMMIT) != 0U) {

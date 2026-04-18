@@ -4,8 +4,14 @@
 #include <string.h>
 #include <stdint.h>
 
+#ifndef WEB_PROVISIONING_SERIAL_PASSWORD_LOG
+#define WEB_PROVISIONING_SERIAL_PASSWORD_LOG 1
+#endif
+
 extern "C" {
+#include "services/storage_facade.h"
 #include "services/device_config.h"
+#include "services/runtime_event_service.h"
 }
 
 namespace {
@@ -33,6 +39,9 @@ typedef struct {
     char ap_ssid[33];
     char ap_password[33];
     int32_t last_rssi;
+    uint32_t last_applied_generation;
+    char applied_ssid[DEVICE_CONFIG_WIFI_SSID_MAX_LEN + 1U];
+    bool applied_wifi_configured;
 } WebWifiStateData;
 
 WebWifiStateData g_wifi_state = {
@@ -67,6 +76,13 @@ static void set_status(const char *status)
     copy_string(g_wifi_state.status_text, sizeof(g_wifi_state.status_text), status);
 }
 
+static void note_applied_config(const DeviceConfigSnapshot &cfg)
+{
+    g_wifi_state.last_applied_generation = device_config_generation();
+    g_wifi_state.applied_wifi_configured = cfg.wifi_configured && cfg.wifi_ssid[0] != '\0';
+    copy_string(g_wifi_state.applied_ssid, sizeof(g_wifi_state.applied_ssid), cfg.wifi_ssid);
+}
+
 static void refresh_ip_string(void)
 {
     IPAddress ip = g_wifi_state.ap_active && !web_wifi_connected() ? WiFi.softAPIP() : WiFi.localIP();
@@ -98,10 +114,13 @@ static bool start_provisioning_ap(void)
              sizeof(g_wifi_state.ap_ssid),
              "ESP32Watch-%04X",
              (unsigned)(chip_id & 0xFFFFU));
-    uint32_t secret = (uint32_t)(((chip_id >> 24) ^ (chip_id >> 8) ^ chip_id ^ 0x5A17A5U) & 0xFFFFFFU);
+    uint32_t secret = esp_random() ^ (uint32_t)(chip_id >> 16) ^ (uint32_t)millis();
+    if (secret == 0U) {
+        secret = (uint32_t)(((chip_id >> 24) ^ (chip_id >> 8) ^ chip_id ^ 0x5A17A5U) & 0xFFFFFFFFU);
+    }
     snprintf(g_wifi_state.ap_password,
              sizeof(g_wifi_state.ap_password),
-             "watch-%06X",
+             "watch-%08X",
              (unsigned)secret);
 
     if (!WiFi.softAP(g_wifi_state.ap_ssid, g_wifi_state.ap_password, 1, false, kProvisioningApMaxConnections)) {
@@ -113,10 +132,16 @@ static bool start_provisioning_ap(void)
     g_wifi_state.fallback_ap_enabled = true;
     refresh_ip_string();
     set_status("AP_READY");
+#if WEB_PROVISIONING_SERIAL_PASSWORD_LOG
     Serial.printf("[WIFI] Provisioning AP active: ssid=%s password=%s ip=%s\n",
                   g_wifi_state.ap_ssid,
                   g_wifi_state.ap_password,
                   g_wifi_state.ip_string);
+#else
+    Serial.printf("[WIFI] Provisioning AP active: ssid=%s password=<redacted> ip=%s\n",
+                  g_wifi_state.ap_ssid,
+                  g_wifi_state.ip_string);
+#endif
     return true;
 }
 
@@ -133,7 +158,7 @@ static bool begin_station_connect(const DeviceConfigSnapshot &cfg, uint32_t now_
         return false;
     }
 
-    (void)device_config_get_wifi_password(password, sizeof(password));
+    (void)storage_facade_get_device_wifi_password(password, sizeof(password));
     WiFi.mode(g_wifi_state.ap_active ? WIFI_AP_STA : WIFI_STA);
     WiFi.setAutoConnect(true);
     WiFi.setAutoReconnect(true);
@@ -150,22 +175,27 @@ static bool begin_station_connect(const DeviceConfigSnapshot &cfg, uint32_t now_
     return true;
 }
 
-static void enter_ap_only(uint32_t now_ms)
+static bool enter_ap_only(uint32_t now_ms)
 {
     WiFi.mode(WIFI_AP);
-    start_provisioning_ap();
+    if (!start_provisioning_ap()) {
+        return false;
+    }
     g_wifi_state.state = WEB_WIFI_STATE_AP_ONLY;
     g_wifi_state.state_enter_at_ms = now_ms;
     g_wifi_state.last_rssi = -100;
     refresh_ip_string();
+    return true;
 }
 
-static void restart_from_config(uint32_t now_ms)
+static bool restart_from_config(uint32_t now_ms)
 {
     DeviceConfigSnapshot cfg;
 
-    device_config_init();
-    (void)device_config_get(&cfg);
+    if (!storage_facade_get_device_config(&cfg)) {
+        set_status("CFG_ERR");
+        return false;
+    }
     WiFi.disconnect(true, true);
     stop_provisioning_ap();
     memset(g_wifi_state.ip_string, 0, sizeof(g_wifi_state.ip_string));
@@ -173,16 +203,38 @@ static void restart_from_config(uint32_t now_ms)
     g_wifi_state.last_rssi = -100;
 
     if (!wifi_has_credentials(&cfg)) {
-        enter_ap_only(now_ms);
-        return;
+        if (enter_ap_only(now_ms)) {
+            note_applied_config(cfg);
+            return true;
+        }
+        return false;
     }
 
     g_wifi_state.state = WEB_WIFI_STATE_IDLE;
     g_wifi_state.state_enter_at_ms = now_ms;
     if (!begin_station_connect(cfg, now_ms)) {
-        enter_ap_only(now_ms);
+        if (enter_ap_only(now_ms)) {
+            note_applied_config(cfg);
+            return true;
+        }
+        return false;
     }
+    note_applied_config(cfg);
+    return true;
 }
+
+static bool handle_runtime_event(RuntimeServiceEvent event, void *ctx)
+{
+    (void)ctx;
+    if (event != RUNTIME_SERVICE_EVENT_DEVICE_CONFIG_CHANGED) {
+        return true;
+    }
+    if (!g_wifi_state.initialized) {
+        return false;
+    }
+    return restart_from_config(millis());
+}
+
 } // namespace
 
 extern "C" bool web_wifi_init(void)
@@ -192,12 +244,24 @@ extern "C" bool web_wifi_init(void)
     }
 
     memset(&g_wifi_state, 0, sizeof(g_wifi_state));
+    RuntimeEventSubscription subscription = {
+        .handler = handle_runtime_event,
+        .ctx = nullptr,
+        .name = "web_wifi",
+        .priority = 20,
+        .critical = true,
+    };
+    if (!runtime_event_service_register_ex(&subscription)) {
+        return false;
+    }
     g_wifi_state.state = WEB_WIFI_STATE_IDLE;
     g_wifi_state.last_rssi = -100;
     set_status("INIT");
-    device_config_init();
-    restart_from_config(millis());
     g_wifi_state.initialized = true;
+    if (!restart_from_config(millis())) {
+        g_wifi_state.initialized = false;
+        return false;
+    }
     return true;
 }
 
@@ -210,7 +274,10 @@ extern "C" void web_wifi_tick(uint32_t now_ms)
         return;
     }
 
-    (void)device_config_get(&cfg);
+    if (!storage_facade_get_device_config(&cfg)) {
+        set_status("CFG_ERR");
+        return;
+    }
     wifi_status = WiFi.status();
 
     switch (g_wifi_state.state) {
@@ -259,29 +326,26 @@ extern "C" void web_wifi_tick(uint32_t now_ms)
         case WEB_WIFI_STATE_STA_RETRY_WAIT:
             if ((now_ms - g_wifi_state.state_enter_at_ms) >= kWifiRetryDelayMs) {
                 if (!begin_station_connect(cfg, now_ms)) {
-                    enter_ap_only(now_ms);
+                    (void)enter_ap_only(now_ms);
                 }
             }
             break;
         case WEB_WIFI_STATE_IDLE:
         default:
-            restart_from_config(now_ms);
+            (void)restart_from_config(now_ms);
             break;
     }
-}
-
-extern "C" bool web_wifi_reconfigure(void)
-{
-    if (!g_wifi_state.initialized) {
-        return false;
-    }
-    restart_from_config(millis());
-    return true;
 }
 
 extern "C" bool web_wifi_connected(void)
 {
     return g_wifi_state.state == WEB_WIFI_STATE_STA_CONNECTED && WiFi.status() == WL_CONNECTED;
+}
+
+extern "C" bool web_wifi_transition_active(void)
+{
+    return g_wifi_state.state == WEB_WIFI_STATE_STA_CONNECTING ||
+           g_wifi_state.state == WEB_WIFI_STATE_STA_RETRY_WAIT;
 }
 
 extern "C" const char *web_wifi_ip_string(void)
@@ -309,6 +373,11 @@ extern "C" const char *web_wifi_access_point_password(void)
     return g_wifi_state.ap_password;
 }
 
+extern "C" bool web_wifi_serial_password_log_enabled(void)
+{
+    return WEB_PROVISIONING_SERIAL_PASSWORD_LOG != 0;
+}
+
 extern "C" const char *web_wifi_mode_name(void)
 {
     switch (g_wifi_state.state) {
@@ -328,4 +397,31 @@ extern "C" const char *web_wifi_status_name(void)
 extern "C" bool web_wifi_has_network_route(void)
 {
     return web_wifi_connected() || web_wifi_access_point_active();
+}
+
+extern "C" uint32_t web_wifi_last_applied_generation(void)
+{
+    return g_wifi_state.last_applied_generation;
+}
+
+extern "C" bool web_wifi_verify_config_applied(uint32_t generation, const DeviceConfigSnapshot *cfg)
+{
+    if (!g_wifi_state.initialized || generation == 0U || generation != g_wifi_state.last_applied_generation) {
+        return false;
+    }
+    if (cfg == nullptr) {
+        return true;
+    }
+    const bool wifi_configured = cfg->wifi_configured && cfg->wifi_ssid[0] != '\0';
+    if (wifi_configured != g_wifi_state.applied_wifi_configured) {
+        return false;
+    }
+    if (strcmp(g_wifi_state.applied_ssid, cfg->wifi_ssid) != 0) {
+        return false;
+    }
+    if (!wifi_configured) {
+        return web_wifi_access_point_active() && strcmp(web_wifi_mode_name(), "AP") == 0;
+    }
+    const char *mode = web_wifi_mode_name();
+    return mode != nullptr && mode[0] != '\0' && strcmp(mode, "AP") != 0;
 }

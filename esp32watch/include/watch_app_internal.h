@@ -109,6 +109,8 @@ WdtCheckpointResult watch_app_result_sensor_stage(const SensorSnapshot *snap);
 WdtCheckpointResult watch_app_result_model_stage(void);
 WdtCheckpointResult watch_app_result_diag_stage(void);
 WdtCheckpointResult watch_app_result_storage_stage(void);
+WdtCheckpointResult watch_app_result_network_stage(void);
+WdtCheckpointResult watch_app_result_web_stage(void);
 
 void watch_app_apply_model_runtime_requests(uint8_t *last_sensor_sensitivity);
 void watch_app_apply_ui_actions(WatchAppSleepRequestState *sleep_request, uint8_t *last_sensor_sensitivity);

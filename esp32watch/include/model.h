@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include "app_limits.h"
 
+#ifndef MODEL_ENABLE_LEGACY_PROJECTION
+#define MODEL_ENABLE_LEGACY_PROJECTION 0
+#endif
+
 typedef struct SensorSnapshot SensorSnapshot;
 
 typedef enum {
@@ -308,7 +312,15 @@ void model_sync_runtime_observability(void);
  */
 void model_flush_read_snapshots(void);
 
-WatchModel *model_get(void);
+/**
+ * @brief Return the legacy aggregate snapshot as a read-only compatibility view.
+ *
+ * @return Pointer to the internally mirrored legacy snapshot. The returned snapshot
+ *         is read-only; all authoritative writes must go through the split-state
+ *         mutation helpers.
+ * @throws None.
+ */
+const WatchModel *model_get(void);
 
 /**
  * @brief Build a read-only snapshot of persistent domain state.
@@ -358,7 +370,22 @@ uint32_t model_consume_runtime_requests(StorageCommitReason *commit_reason);
 
 void model_ack_popup(void);
 void model_snooze_alarm(void);
+/**
+ * @brief Restore model-owned app-state defaults without clearing durable game statistics.
+ *
+ * @return void
+ * @throws None.
+ */
 void model_restore_defaults(void);
+
+/**
+ * @brief Restore factory defaults for model-owned app state and durable game statistics.
+ *
+ * @return void
+ * @throws None.
+ * @boundary_behavior Schedules settings, alarms, sensor-calibration clear, and game-stat persistence through the normal runtime/storage pipeline so factory reset semantics stay aligned with storage ownership metadata.
+ */
+void model_factory_reset_defaults(void);
 
 void model_push_popup(PopupType popup, bool priority);
 bool model_popup_queue_contains(PopupType popup);

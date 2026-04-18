@@ -570,7 +570,7 @@ void ui_request_set_game_high_score(GameId game_id, uint16_t score);
 void ui_sync_sensor_setting_from_model(void);
 
 /**
- * @brief Restore defaults and rely on the app orchestrator for side effects.
+ * @brief Reset application-owned state and rely on the app orchestrator for side effects.
  *
  * @param None.
  * @return void

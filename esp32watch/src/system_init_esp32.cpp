@@ -11,6 +11,7 @@ extern "C" {
 #include "services/storage_service.h"
 #include "services/time_service.h"
 #include "services/network_sync_service.h"
+#include "services/runtime_event_service.h"
 #include "system_init_stage_internal.h"
 #include "platform_api.h"
 #include "web/web_server.h"
@@ -180,12 +181,13 @@ extern "C" void system_bootstrap(void)
     memset(&g_startup_report, 0, sizeof(g_startup_report));
     g_startup_report.startup_ok = true;
     system_init_completion_reset(&g_init_completed);
+    runtime_event_service_reset();
     platform_init();
     system_mark_stage_completed_internal(SYSTEM_INIT_STAGE_HAL);
     reset_reason_init();
     crash_capsule_init(reset_reason_get());
     system_mark_stage_completed_internal(SYSTEM_INIT_STAGE_RESET_REASON);
-    SystemClock_Config();
+    system_clock_prepare_platform();
     system_mark_stage_completed_internal(SYSTEM_INIT_STAGE_CLOCK);
 }
 
@@ -214,6 +216,13 @@ extern "C" bool system_runtime_capability_probe(SystemRuntimeCapabilities *out)
                                   system_init_stage_completed(SYSTEM_INIT_STAGE_IWDG);
     g_runtime_caps.has_flash_storage = manifest->flash_storage_enabled;
     g_runtime_caps.has_bkp_mirror = manifest->mirror_bkp_enabled;
+    g_runtime_caps.keypad_mapping_valid = board_manifest_keypad_mapping_valid();
+    g_runtime_caps.gpio_contract_valid = board_manifest_gpio_contract_valid();
+    g_runtime_caps.has_full_keypad = manifest->key_count >= 4U &&
+                                     manifest->all_keys_mapped &&
+                                     g_runtime_caps.keypad_mapping_valid;
+    g_runtime_caps.has_idle_light_sleep = manifest->idle_light_sleep_enabled;
+    g_runtime_caps.has_reset_domain_storage = manifest->reset_domain_storage_enabled;
     g_runtime_caps.storage_map_valid = !manifest->flash_storage_enabled || board_manifest_storage_map_valid();
 
     if (out != NULL) {
@@ -225,6 +234,9 @@ extern "C" bool system_runtime_capability_probe(SystemRuntimeCapabilities *out)
                  system_init_stage_completed(SYSTEM_INIT_STAGE_BKP) &&
                  system_init_stage_completed(SYSTEM_INIT_STAGE_RTC) &&
                  system_init_stage_completed(SYSTEM_INIT_STAGE_I2C) &&
+                 g_runtime_caps.has_full_keypad &&
+                 g_runtime_caps.gpio_contract_valid &&
+                 g_runtime_caps.has_reset_domain_storage &&
                  (!manifest->sensor_enabled || (manifest->i2c_port != NULL && manifest->i2c_scl_pin != 0U && manifest->i2c_sda_pin != 0U)) &&
                  (!manifest->vibration_enabled || (manifest->vibe_port != NULL && manifest->vibe_pin != 0U)) &&
                  (!manifest->buzzer_enabled || manifest->buzzer_gpio >= 0) &&
@@ -310,6 +322,10 @@ extern "C" bool system_web_service_init(void)
 {
     if (!web_server_init()) {
         return system_handle_stage_failure(SYSTEM_INIT_STAGE_WEB_SERVER, 0U, SYSTEM_FATAL_POLICY_STOP);
+    }
+    if (!web_server_console_ready()) {
+        system_mark_stage_degraded_internal(SYSTEM_INIT_STAGE_WEB_SERVER);
+        return true;
     }
     system_mark_stage_completed_internal(SYSTEM_INIT_STAGE_WEB_SERVER);
     return true;
@@ -417,4 +433,14 @@ extern "C" bool system_get_startup_status(SystemStartupStatus *out)
     return true;
 }
 
-extern "C" void SystemClock_Config(void) {}
+extern "C" void system_clock_prepare_platform(void)
+{
+    /* ESP32 Arduino configures the CPU clock before setup(); keep this as an
+     * explicit stage marker instead of exposing an empty STM32-style hook on
+     * the active startup path. */
+}
+
+extern "C" void SystemClock_Config(void)
+{
+    system_clock_prepare_platform();
+}

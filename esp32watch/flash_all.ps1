@@ -7,18 +7,24 @@ $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
-Write-Host "Uploading LittleFS image for $EnvName..."
-& pio run -e $EnvName -t uploadfs
+Write-Host "Building firmware for $EnvName..."
+& pio run -e $EnvName
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "Cleaning build cache before firmware upload..."
-& pio run -e $EnvName -t clean
+Write-Host "Building LittleFS image for $EnvName..."
+& pio run -e $EnvName -t buildfs
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
 Write-Host "Uploading firmware for $EnvName..."
 & pio run -e $EnvName -t upload
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+Write-Host "Uploading LittleFS image for $EnvName..."
+& pio run -e $EnvName -t uploadfs
 exit $LASTEXITCODE

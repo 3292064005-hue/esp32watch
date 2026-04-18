@@ -2,6 +2,7 @@
 #define APP_TUNING_H
 
 #include <stdint.h>
+#include "watch_app.h"
 
 #define UI_FPS                          24U
 #define UI_FRAME_MS                     (1000U / UI_FPS)
@@ -16,7 +17,7 @@
 #define UI_LIQUID_REFRESH_MS            45U
 
 #define BATTERY_SAMPLE_MS               30000U
-#define RTC_REFRESH_MS                  200U
+#define TIME_REFRESH_MS                 200U
 #define LOW_BATTERY_THRESHOLD           15U
 #define SENSOR_SAMPLE_MS                25U
 #define SENSOR_RETRY_MS                 1000U
@@ -52,6 +53,8 @@
 #define WATCH_APP_STAGE_ALERT_BUDGET_MS     2U
 #define WATCH_APP_STAGE_DIAG_BUDGET_MS      3U
 #define WATCH_APP_STAGE_STORAGE_BUDGET_MS   4U
+#define WATCH_APP_STAGE_NETWORK_BUDGET_MS   4U
+#define WATCH_APP_STAGE_WEB_BUDGET_MS       4U
 #define WATCH_APP_STAGE_RENDER_BUDGET_MS    8U
 #define WATCH_APP_STAGE_IDLE_BUDGET_MS      2U
 
@@ -71,7 +74,7 @@ typedef struct {
     uint32_t ui_liquid_refresh_ms;
 
     uint32_t battery_sample_ms;
-    uint32_t rtc_refresh_ms;
+    uint32_t time_refresh_ms;
     uint8_t low_battery_threshold;
 
     uint32_t sensor_sample_ms;
@@ -105,7 +108,7 @@ typedef struct {
     uint32_t storage_commit_idle_ms;
     uint32_t storage_commit_max_ms;
     uint32_t storage_commit_cal_ms;
-    uint32_t watch_app_stage_budget_ms[10];
+    uint32_t watch_app_stage_budget_ms[WATCH_APP_STAGE_COUNT];
 } AppTuningManifest;
 
 static inline const AppTuningManifest *app_tuning_manifest_get(void)
@@ -124,7 +127,7 @@ static inline const AppTuningManifest *app_tuning_manifest_get(void)
         .ui_liquid_refresh_ms = UI_LIQUID_REFRESH_MS,
 
         .battery_sample_ms = BATTERY_SAMPLE_MS,
-        .rtc_refresh_ms = RTC_REFRESH_MS,
+        .time_refresh_ms = TIME_REFRESH_MS,
         .low_battery_threshold = LOW_BATTERY_THRESHOLD,
 
         .sensor_sample_ms = SENSOR_SAMPLE_MS,
@@ -183,6 +186,8 @@ static inline const AppTuningManifest *app_tuning_manifest_get(void)
             WATCH_APP_STAGE_ALERT_BUDGET_MS,
             WATCH_APP_STAGE_DIAG_BUDGET_MS,
             WATCH_APP_STAGE_STORAGE_BUDGET_MS,
+            WATCH_APP_STAGE_NETWORK_BUDGET_MS,
+            WATCH_APP_STAGE_WEB_BUDGET_MS,
             WATCH_APP_STAGE_RENDER_BUDGET_MS,
             WATCH_APP_STAGE_IDLE_BUDGET_MS
         }

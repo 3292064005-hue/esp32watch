@@ -54,6 +54,11 @@ typedef struct {
     bool has_watchdog;
     bool has_flash_storage;
     bool has_bkp_mirror;
+    bool has_full_keypad;
+    bool keypad_mapping_valid;
+    bool gpio_contract_valid;
+    bool has_idle_light_sleep;
+    bool has_reset_domain_storage;
     bool storage_map_valid;
 } SystemRuntimeCapabilities;
 
@@ -258,6 +263,24 @@ bool system_runtime_battery_adc_available(void);
  */
 bool system_runtime_watchdog_available(void);
 
+/**
+ * @brief Prepare the active platform clock domain before peripheral bring-up.
+ *
+ * On ESP32 this is a normalized hook rather than a direct clock-tree mutator;
+ * the Arduino/IDF runtime already owns the underlying clock configuration.
+ *
+ * @return void
+ */
+void system_clock_prepare_platform(void);
+
+/**
+ * @brief Backward-compatible alias for legacy callers that still expect STM32-style clock setup.
+ *
+ * The alias forwards to @ref system_clock_prepare_platform so active-path code no
+ * longer depends on an empty STM32-named hook.
+ *
+ * @return void
+ */
 void SystemClock_Config(void);
 
 #ifdef __cplusplus

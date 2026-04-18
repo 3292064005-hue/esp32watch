@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ESP32 Watch Terminal</title>
-  <link rel="stylesheet" href="/app.css?v=20260409_4" />
+  <link rel="stylesheet" href="/app.css?v=20260409_5" />
 </head>
 <body>
   <div class="app-shell">
@@ -110,7 +110,8 @@
               <button data-command="sensorCalibration">Calibrate</button>
               <button data-command="storageManualFlush">Flush</button>
               <button data-command="clearSafeMode">Clear Safe</button>
-              <button data-command="restoreDefaults">Factory Defaults</button>
+              <button data-command="resetAppState">Reset App State</button>
+              <button data-command="factoryReset" class="danger">Factory Reset</button>
             </div>
           </section>
 
@@ -166,7 +167,7 @@
             </div>
             <div class="button-row button-row-2">
               <button id="saveConfigBtn">Save Config</button>
-              <button id="resetConfigBtn" class="ghost">Reset Config</button>
+              <button id="resetConfigBtn" class="ghost">Reset Device Config</button>
             </div>
           </section>
 
@@ -180,12 +181,30 @@
               <div class="mini-grid" id="storagePanel"></div>
             </div>
           </section>
+
+          <section class="subpanel perf-subpanel">
+            <div class="subpanel-head">
+              <h3>Runtime Perf</h3>
+              <span class="subpanel-note">scheduler + watchdog + queue</span>
+            </div>
+            <div class="mini-grid" id="perfPanel"></div>
+            <div class="perf-columns">
+              <div>
+                <h4>Stages</h4>
+                <div class="perf-stack" id="perfStagePanel"></div>
+              </div>
+              <div>
+                <h4>Recent Events</h4>
+                <div class="perf-stack" id="perfHistoryPanel"></div>
+              </div>
+            </div>
+          </section>
         </div>
       </section>
     </main>
   </div>
 
   <div id="toastHost" class="toast-host"></div>
-  <script src="/app.js?v=20260409_4"></script>
+  <script src="/app.js?v=20260411_1"></script>
 </body>
 </html>

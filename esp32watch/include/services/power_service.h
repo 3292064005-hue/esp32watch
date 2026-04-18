@@ -17,6 +17,10 @@ WakeReason power_service_get_last_wake_reason(void);
 SleepReason power_service_get_last_sleep_reason(void);
 uint32_t power_service_get_last_wake_ms(void);
 uint32_t power_service_get_last_sleep_ms(void);
+uint32_t power_service_get_last_idle_budget_ms(void);
+bool power_service_last_idle_sleep_ok(void);
+uint32_t power_service_get_idle_sleep_attempt_count(void);
+uint32_t power_service_get_idle_sleep_reject_count(void);
 void power_service_idle(bool can_sleep_cpu);
 
 #endif

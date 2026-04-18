@@ -1,4 +1,5 @@
 #include "display.h"
+#include "board_manifest.h"
 #include "esp32_port_config.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -17,11 +18,17 @@ extern "C" {
 
 static void display_backend_begin_wire(void)
 {
-#if (ESP32_I2C_SDA_GPIO >= 0) && (ESP32_I2C_SCL_GPIO >= 0)
-    Wire.begin(ESP32_I2C_SDA_GPIO, ESP32_I2C_SCL_GPIO);
-#else
+    const BoardManifest *manifest = board_manifest_get();
+
+    if (manifest != nullptr && manifest->i2c_sda_gpio >= 0 && manifest->i2c_scl_gpio >= 0) {
+        Wire.begin(manifest->i2c_sda_gpio, manifest->i2c_scl_gpio);
+        if (manifest->i2c_clock_hz != 0U) {
+            Wire.setClock(manifest->i2c_clock_hz);
+        }
+        return;
+    }
+
     Wire.begin();
-#endif
 }
 
 bool display_backend_init(void)

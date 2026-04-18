@@ -3,13 +3,14 @@
 #include "services/diag_service.h"
 #include "services/sensor_service.h"
 #include "services/storage_service.h"
+#include "services/reset_service.h"
 #include <stddef.h>
 #include <string.h>
 
 static const AppCommandDescriptor kAppCommandCatalog[] = {
-    {APP_COMMAND_SET_BRIGHTNESS, "setBrightness", false},
+    {APP_COMMAND_SET_BRIGHTNESS, "setBrightness", true},
     {APP_COMMAND_SET_GOAL, "setGoal", false},
-    {APP_COMMAND_SET_WATCHFACE, "setWatchface", false},
+    {APP_COMMAND_SET_WATCHFACE, "setWatchface", true},
     {APP_COMMAND_CYCLE_WATCHFACE, "cycleWatchface", false},
     {APP_COMMAND_SET_SCREEN_TIMEOUT_IDX, "setScreenTimeoutIndex", false},
     {APP_COMMAND_CYCLE_SCREEN_TIMEOUT, "cycleScreenTimeout", false},
@@ -17,10 +18,14 @@ static const AppCommandDescriptor kAppCommandCatalog[] = {
     {APP_COMMAND_SET_AUTO_WAKE, "setAutoWake", false},
     {APP_COMMAND_SET_AUTO_SLEEP, "setAutoSleep", false},
     {APP_COMMAND_SET_DND, "setDnd", false},
+#if APP_FEATURE_VIBRATION
     {APP_COMMAND_SET_VIBRATE, "setVibrate", false},
+#endif
     {APP_COMMAND_SET_SHOW_SECONDS, "setShowSeconds", false},
     {APP_COMMAND_SET_ANIMATIONS, "setAnimations", false},
-    {APP_COMMAND_RESTORE_DEFAULTS, "restoreDefaults", true},
+    {APP_COMMAND_RESET_APP_STATE, "resetAppState", true},
+    {APP_COMMAND_FACTORY_RESET, "factoryReset", true},
+    {APP_COMMAND_RESTORE_DEFAULTS, "restoreDefaults", false},
     {APP_COMMAND_SELECT_ALARM_OFFSET, "selectAlarmOffset", false},
     {APP_COMMAND_SET_ALARM_ENABLED_AT, "setAlarmEnabledAt", false},
     {APP_COMMAND_SET_ALARM_TIME_AT, "setAlarmTimeAt", false},
@@ -73,6 +78,9 @@ const AppCommandDescriptor *app_command_describe_by_name(const char *wire_name)
     if (wire_name == NULL || wire_name[0] == '\0') {
         return NULL;
     }
+    if (strcmp(wire_name, "restoreDefaults") == 0) {
+        return app_command_describe(APP_COMMAND_RESET_APP_STATE);
+    }
     for (i = 0; i < (sizeof(kAppCommandCatalog) / sizeof(kAppCommandCatalog[0])); ++i) {
         if (strcmp(kAppCommandCatalog[i].wire_name, wire_name) == 0) {
             return &kAppCommandCatalog[i];
@@ -119,8 +127,12 @@ bool app_command_type_from_companion_key(const char *companion_key, AppCommandTy
         return true;
     }
     if (strcmp(companion_key, "VIBRATE") == 0) {
+#if APP_FEATURE_VIBRATION
         *out_type = APP_COMMAND_SET_VIBRATE;
         return true;
+#else
+        return false;
+#endif
     }
     if (strcmp(companion_key, "SHOW_SECONDS") == 0) {
         *out_type = APP_COMMAND_SET_SHOW_SECONDS;
@@ -213,16 +225,31 @@ bool app_command_execute_detailed(const AppCommand *command,
             model_set_dnd(command->data.enabled);
             break;
         case APP_COMMAND_SET_VIBRATE:
+#if APP_FEATURE_VIBRATION
             model_set_vibrate(command->data.enabled);
             break;
+#else
+            app_command_set_result(out_result, false, APP_COMMAND_RESULT_UNSUPPORTED);
+            return false;
+#endif
         case APP_COMMAND_SET_SHOW_SECONDS:
             model_set_show_seconds(command->data.enabled);
             break;
         case APP_COMMAND_SET_ANIMATIONS:
             model_set_animations(command->data.enabled);
             break;
+        case APP_COMMAND_RESET_APP_STATE:
         case APP_COMMAND_RESTORE_DEFAULTS:
-            model_restore_defaults();
+            if (!reset_service_reset_app_state(NULL)) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_BACKEND_FAILURE);
+                return false;
+            }
+            break;
+        case APP_COMMAND_FACTORY_RESET:
+            if (!reset_service_factory_reset(NULL)) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_BACKEND_FAILURE);
+                return false;
+            }
             break;
         case APP_COMMAND_SELECT_ALARM_OFFSET:
             model_select_alarm_offset(command->data.delta_i8);

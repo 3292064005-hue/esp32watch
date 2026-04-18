@@ -3,10 +3,10 @@
 #include "services/network_sync_service.h"
 #include <string.h>
 #include <cstdio>
+#include "web/web_runtime_snapshot.h"
 
 extern "C" {
 #include "ui_internal.h"
-#include "services/device_config.h"
 #include "services/time_service.h"
 #include "watch_app.h"
 #include "main.h"
@@ -20,7 +20,7 @@ static const char *web_page_name(PageId page)
         case PAGE_QUICK: return "HUB";
         case PAGE_APPS: return "APPS";
         case PAGE_SETTINGS: return "SETTINGS";
-        case PAGE_MUSIC: return "MUSIC";
+        case PAGE_MUSIC: return "MELODY";
         case PAGE_SENSOR: return "SENSOR";
         case PAGE_DIAG: return "DIAG";
         case PAGE_STORAGE: return "STORAGE";
@@ -30,13 +30,24 @@ static const char *web_page_name(PageId page)
     }
 }
 
-static void collect_wifi_snapshot(WebStateCoreSnapshot *out, const DeviceConfigSnapshot *device_cfg)
+static void copy_system_stage_name(char *dst, size_t dst_size, SystemInitStage stage)
 {
+    if (dst == NULL || dst_size == 0U) {
+        return;
+    }
+
+    strncpy(dst, system_init_stage_name(stage), dst_size - 1U);
+    dst[dst_size - 1U] = '\0';
+}
+
+static void collect_wifi_snapshot(WebStateCoreSnapshot *out, const WebRuntimeSnapshot *snapshot)
+{
+    const DeviceConfigSnapshot *device_cfg = &snapshot->device_config;
     out->wifi.connected = web_wifi_connected();
     out->wifi.provisioning_ap_active = web_wifi_access_point_active();
-    out->wifi.config_wifi_ready = device_cfg->wifi_configured;
-    out->wifi.config_weather_ready = device_cfg->weather_configured;
-    out->wifi.auth_required = device_cfg->api_token_configured;
+    out->wifi.config_wifi_ready = snapshot->has_device_config && device_cfg->wifi_configured;
+    out->wifi.config_weather_ready = snapshot->has_device_config && device_cfg->weather_configured;
+    out->wifi.auth_required = snapshot->has_device_config && device_cfg->api_token_configured;
     strncpy(out->wifi.mode, web_wifi_mode_name(), sizeof(out->wifi.mode) - 1U);
     strncpy(out->wifi.status, web_wifi_status_name(), sizeof(out->wifi.status) - 1U);
     strncpy(out->wifi.provisioning_ap_ssid, web_wifi_access_point_ssid(), sizeof(out->wifi.provisioning_ap_ssid) - 1U);
@@ -44,16 +55,11 @@ static void collect_wifi_snapshot(WebStateCoreSnapshot *out, const DeviceConfigS
     out->wifi.rssi = web_wifi_rssi();
 }
 
-static void collect_system_snapshot(WebStateCoreSnapshot *out)
+static void collect_system_snapshot(WebStateCoreSnapshot *out, const WebRuntimeSnapshot *snapshot)
 {
-    UiRuntimeSnapshot ui_runtime;
-    TimeSourceSnapshot time_snapshot;
-    WatchAppInitReport init_report;
-    SystemStartupStatus startup_status;
-
-    out->system.uptime_ms = web_state_bridge_uptime_ms();
-    memset(&init_report, 0, sizeof(init_report));
-    if (watch_app_get_init_report(&init_report)) {
+    out->system.uptime_ms = snapshot->uptime_ms;
+    if (snapshot->has_app_init_report) {
+        const WatchAppInitReport &init_report = snapshot->app_init_report;
         out->system.app_ready = init_report.success && init_report.failed_stage == WATCH_APP_INIT_STAGE_NONE;
         out->system.app_degraded = init_report.degraded;
         strncpy(out->system.app_init_stage,
@@ -64,50 +70,64 @@ static void collect_system_snapshot(WebStateCoreSnapshot *out)
         strncpy(out->system.app_init_stage, "UNKNOWN", sizeof(out->system.app_init_stage) - 1U);
     }
 
-    if (ui_get_runtime_snapshot(&ui_runtime)) {
-        out->system.sleeping = ui_runtime.sleeping;
-        out->system.animating = ui_runtime.animating;
-        strncpy(out->system.current_page, web_page_name(ui_runtime.current), sizeof(out->system.current_page) - 1U);
+    if (snapshot->has_ui_runtime) {
+        out->system.sleeping = snapshot->ui_runtime.sleeping;
+        out->system.animating = snapshot->ui_runtime.animating;
+        strncpy(out->system.current_page, web_page_name(snapshot->ui_runtime.current), sizeof(out->system.current_page) - 1U);
     } else {
         strncpy(out->system.current_page, "WATCH", sizeof(out->system.current_page) - 1U);
     }
 
-    if (time_service_get_source_snapshot(&time_snapshot)) {
+    if (snapshot->has_time_source) {
         strncpy(out->system.time_source,
-                time_service_source_name(time_snapshot.source),
+                time_service_source_name(snapshot->time_source.source),
                 sizeof(out->system.time_source) - 1U);
         strncpy(out->system.time_confidence,
-                time_service_confidence_name(time_snapshot.confidence),
+                time_service_confidence_name(snapshot->time_source.confidence),
                 sizeof(out->system.time_confidence) - 1U);
-        out->system.time_valid = time_snapshot.valid;
-        out->system.time_authoritative = time_snapshot.authoritative;
-        out->system.time_source_age_ms = time_snapshot.source_age_ms;
+        out->system.time_valid = snapshot->time_source.valid;
+        out->system.time_authoritative = snapshot->time_source.authoritative;
+        out->system.time_source_age_ms = snapshot->time_source.source_age_ms;
     } else {
         strncpy(out->system.time_source, "UNKNOWN", sizeof(out->system.time_source) - 1U);
         strncpy(out->system.time_confidence, "NONE", sizeof(out->system.time_confidence) - 1U);
     }
 
-    if (system_get_startup_status(&startup_status)) {
-        out->system.startup_ok = !startup_status.init_failed;
-        out->system.startup_degraded = startup_status.safe_mode_boot_recovery_pending;
-        out->system.fatal_stop_requested = startup_status.init_failed;
-        strncpy(out->system.startup_failure_stage,
-                system_init_stage_name(startup_status.last_stage),
-                sizeof(out->system.startup_failure_stage) - 1U);
-        strncpy(out->system.startup_recovery_stage,
-                system_init_stage_name(startup_status.safe_mode_boot_recovery_stage),
-                sizeof(out->system.startup_recovery_stage) - 1U);
+    if (snapshot->has_startup_report) {
+        out->system.startup_ok = snapshot->startup_report.startup_ok;
+        out->system.startup_degraded = snapshot->startup_report.degraded;
+        out->system.fatal_stop_requested = snapshot->startup_report.fatal_stop_requested;
+        copy_system_stage_name(out->system.startup_failure_stage,
+                               sizeof(out->system.startup_failure_stage),
+                               snapshot->startup_report.failure_stage);
+        copy_system_stage_name(out->system.startup_recovery_stage,
+                               sizeof(out->system.startup_recovery_stage),
+                               snapshot->startup_report.recovery_stage);
+    } else if (snapshot->has_startup_status) {
+        out->system.startup_ok = !snapshot->startup_status.init_failed;
+        out->system.startup_degraded = snapshot->startup_status.safe_mode_boot_recovery_pending;
+        out->system.fatal_stop_requested = snapshot->startup_status.init_failed;
+        if (snapshot->startup_status.init_failed) {
+            strncpy(out->system.startup_failure_stage, "UNKNOWN", sizeof(out->system.startup_failure_stage) - 1U);
+            out->system.startup_failure_stage[sizeof(out->system.startup_failure_stage) - 1U] = '\0';
+        } else {
+            copy_system_stage_name(out->system.startup_failure_stage,
+                                   sizeof(out->system.startup_failure_stage),
+                                   SYSTEM_INIT_STAGE_NONE);
+        }
+        copy_system_stage_name(out->system.startup_recovery_stage,
+                               sizeof(out->system.startup_recovery_stage),
+                               snapshot->startup_status.safe_mode_boot_recovery_stage);
     } else {
         strncpy(out->system.startup_failure_stage, "NONE", sizeof(out->system.startup_failure_stage) - 1U);
         strncpy(out->system.startup_recovery_stage, "NONE", sizeof(out->system.startup_recovery_stage) - 1U);
     }
 }
 
-static void collect_model_summary(WebStateCoreSnapshot *out)
+static void collect_model_summary(WebStateCoreSnapshot *out, const WebRuntimeSnapshot *snapshot)
 {
-    ModelDomainState domain_state;
-
-    if (model_get_domain_state(&domain_state) != NULL) {
+    if (snapshot->has_domain_state) {
+        const ModelDomainState &domain_state = snapshot->domain_state;
         out->activity.steps = domain_state.activity.steps;
         out->activity.goal = domain_state.activity.goal;
         out->activity.goal_percent = (domain_state.activity.goal == 0U) ? 0U :
@@ -143,11 +163,10 @@ static void collect_status_labels(WebStateCoreSnapshot *out)
     }
 }
 
-static void collect_weather_snapshot(WebStateCoreSnapshot *out)
+static void collect_weather_snapshot(WebStateCoreSnapshot *out, const WebRuntimeSnapshot *snapshot)
 {
-    NetworkSyncSnapshot net_snapshot;
-
-    if (network_sync_service_get_snapshot(&net_snapshot)) {
+    if (snapshot->has_network_sync) {
+        const NetworkSyncSnapshot &net_snapshot = snapshot->network_sync;
         out->weather.valid = net_snapshot.weather_valid;
         out->weather.temperature_tenths_c = net_snapshot.temperature_tenths_c;
         strncpy(out->weather.text, net_snapshot.weather_text, sizeof(out->weather.text) - 1U);
@@ -173,21 +192,32 @@ static void collect_weather_snapshot(WebStateCoreSnapshot *out)
     }
 }
 
+extern "C" bool web_state_core_collect_from_runtime_snapshot(const WebRuntimeSnapshot *snapshot, WebStateCoreSnapshot *out)
+{
+    if (snapshot == NULL || out == NULL) {
+        return false;
+    }
+
+    memset(out, 0, sizeof(*out));
+    collect_wifi_snapshot(out, snapshot);
+    collect_system_snapshot(out, snapshot);
+    collect_model_summary(out, snapshot);
+    collect_status_labels(out);
+    collect_weather_snapshot(out, snapshot);
+    return true;
+}
+
 extern "C" bool web_state_core_collect_impl(WebStateCoreSnapshot *out)
 {
-    DeviceConfigSnapshot device_cfg;
+    WebRuntimeSnapshot snapshot = {};
 
     if (out == NULL) {
         return false;
     }
 
-    memset(out, 0, sizeof(*out));
-    device_config_init();
-    (void)device_config_get(&device_cfg);
-    collect_wifi_snapshot(out, &device_cfg);
-    collect_system_snapshot(out);
-    collect_model_summary(out);
-    collect_status_labels(out);
-    collect_weather_snapshot(out);
-    return true;
+    if (!web_runtime_snapshot_collect(&snapshot)) {
+        return false;
+    }
+
+    return web_state_core_collect_from_runtime_snapshot(&snapshot, out);
 }

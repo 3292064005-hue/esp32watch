@@ -4,7 +4,7 @@
 #include "services/diag_service.h"
 #include "system_init.h"
 
-#define WDT_REQUIRED_MASK ((1UL << WDT_CHECKPOINT_INPUT) |                            (1UL << WDT_CHECKPOINT_SENSOR) |                            (1UL << WDT_CHECKPOINT_MODEL) |                            (1UL << WDT_CHECKPOINT_UI) |                            (1UL << WDT_CHECKPOINT_BATTERY) |                            (1UL << WDT_CHECKPOINT_ALERT) |                            (1UL << WDT_CHECKPOINT_DIAG) |                            (1UL << WDT_CHECKPOINT_STORAGE))
+#define WDT_REQUIRED_MASK ((1UL << WDT_CHECKPOINT_INPUT) |                            (1UL << WDT_CHECKPOINT_SENSOR) |                            (1UL << WDT_CHECKPOINT_MODEL) |                            (1UL << WDT_CHECKPOINT_UI) |                            (1UL << WDT_CHECKPOINT_BATTERY) |                            (1UL << WDT_CHECKPOINT_ALERT) |                            (1UL << WDT_CHECKPOINT_DIAG) |                            (1UL << WDT_CHECKPOINT_STORAGE) |                            (1UL << WDT_CHECKPOINT_NETWORK) |                            (1UL << WDT_CHECKPOINT_WEB))
 
 typedef struct {
     uint32_t loop_started_ms;
@@ -145,6 +145,8 @@ const char *wdt_service_checkpoint_name(WdtCheckpoint checkpoint)
         case WDT_CHECKPOINT_ALERT: return "ALERT";
         case WDT_CHECKPOINT_DIAG: return "DIAG";
         case WDT_CHECKPOINT_STORAGE: return "STORE";
+        case WDT_CHECKPOINT_NETWORK: return "NET";
+        case WDT_CHECKPOINT_WEB: return "WEB";
         case WDT_CHECKPOINT_RENDER: return "REND";
         case WDT_CHECKPOINT_IDLE: return "IDLE";
         default: return "NONE";

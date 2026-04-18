@@ -458,7 +458,7 @@ void ui_sync_sensor_setting_from_model(void)
 }
 
 /**
- * @brief Restore defaults and synchronize dependent runtime services through the dispatcher boundary.
+ * @brief Reset application-owned state and synchronize dependent runtime services through the dispatcher boundary.
  *
  * @param None.
  * @return void

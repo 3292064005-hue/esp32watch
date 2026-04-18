@@ -2,30 +2,31 @@
 #include <Wire.h>
 #include "esp32_mpu_i2c.h"
 #include "esp32_port_config.h"
+#include "board_manifest.h"
 
 static TwoWire g_mpu_wire(1);
 static bool g_mpu_wire_ready = false;
 
 static bool esp32_mpu_i2c_begin_bus(void)
 {
-#if (ESP32_MPU_I2C_SDA_GPIO >= 0) && (ESP32_MPU_I2C_SCL_GPIO >= 0)
-    g_mpu_wire.begin(ESP32_MPU_I2C_SDA_GPIO, ESP32_MPU_I2C_SCL_GPIO);
-    g_mpu_wire.setClock(ESP32_MPU_I2C_CLOCK_HZ);
+    const BoardManifest *manifest = board_manifest_get();
+
+    if (manifest == nullptr || manifest->mpu_i2c_sda_gpio < 0 || manifest->mpu_i2c_scl_gpio < 0) {
+        g_mpu_wire_ready = false;
+        return false;
+    }
+
+    g_mpu_wire.begin(manifest->mpu_i2c_sda_gpio, manifest->mpu_i2c_scl_gpio);
+    g_mpu_wire.setClock(manifest->mpu_i2c_clock_hz != 0U ? manifest->mpu_i2c_clock_hz : 400000UL);
     g_mpu_wire_ready = true;
     return true;
-#else
-    g_mpu_wire_ready = false;
-    return false;
-#endif
 }
 
 extern "C" bool esp32_mpu_i2c_available(void)
 {
-#if (ESP32_MPU_I2C_SDA_GPIO >= 0) && (ESP32_MPU_I2C_SCL_GPIO >= 0)
-    return true;
-#else
-    return false;
-#endif
+    const BoardManifest *manifest = board_manifest_get();
+
+    return manifest != nullptr && manifest->mpu_i2c_sda_gpio >= 0 && manifest->mpu_i2c_scl_gpio >= 0;
 }
 
 extern "C" bool esp32_mpu_i2c_init(void)
@@ -38,32 +39,34 @@ extern "C" bool esp32_mpu_i2c_init(void)
 
 extern "C" bool esp32_mpu_i2c_recover_bus(void)
 {
-    if (!esp32_mpu_i2c_available()) {
+    const BoardManifest *manifest = board_manifest_get();
+
+    if (!esp32_mpu_i2c_available() || manifest == nullptr) {
         return false;
     }
 
     g_mpu_wire_ready = false;
-    pinMode(ESP32_MPU_I2C_SCL_GPIO, OUTPUT_OPEN_DRAIN);
-    pinMode(ESP32_MPU_I2C_SDA_GPIO, OUTPUT_OPEN_DRAIN);
-    digitalWrite(ESP32_MPU_I2C_SCL_GPIO, HIGH);
-    digitalWrite(ESP32_MPU_I2C_SDA_GPIO, HIGH);
+    pinMode(manifest->mpu_i2c_scl_gpio, OUTPUT_OPEN_DRAIN);
+    pinMode(manifest->mpu_i2c_sda_gpio, OUTPUT_OPEN_DRAIN);
+    digitalWrite(manifest->mpu_i2c_scl_gpio, HIGH);
+    digitalWrite(manifest->mpu_i2c_sda_gpio, HIGH);
     delay(1);
 
     for (uint8_t i = 0; i < 9U; ++i) {
-        digitalWrite(ESP32_MPU_I2C_SCL_GPIO, LOW);
+        digitalWrite(manifest->mpu_i2c_scl_gpio, LOW);
         delay(1);
-        digitalWrite(ESP32_MPU_I2C_SCL_GPIO, HIGH);
+        digitalWrite(manifest->mpu_i2c_scl_gpio, HIGH);
         delay(1);
-        if (digitalRead(ESP32_MPU_I2C_SDA_GPIO) == HIGH) {
+        if (digitalRead(manifest->mpu_i2c_sda_gpio) == HIGH) {
             break;
         }
     }
 
-    digitalWrite(ESP32_MPU_I2C_SDA_GPIO, LOW);
+    digitalWrite(manifest->mpu_i2c_sda_gpio, LOW);
     delay(1);
-    digitalWrite(ESP32_MPU_I2C_SCL_GPIO, HIGH);
+    digitalWrite(manifest->mpu_i2c_scl_gpio, HIGH);
     delay(1);
-    digitalWrite(ESP32_MPU_I2C_SDA_GPIO, HIGH);
+    digitalWrite(manifest->mpu_i2c_sda_gpio, HIGH);
     delay(1);
 
     return esp32_mpu_i2c_begin_bus();

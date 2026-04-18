@@ -13,31 +13,30 @@
 #include "services/storage_service.h"
 #include "services/wdt_service.h"
 #include "services/battery_service.h"
+#include "services/network_sync_service.h"
 #include "crash_capsule.h"
 #include "power_policy.h"
 #include "ui.h"
 #include "ui_internal.h"
 #include "web/web_overlay.h"
+#include "web/web_server.h"
+#include "web/web_wifi.h"
+#include "web/web_action_queue.h"
 #include "platform_api.h"
 #include <string.h>
+
+typedef void (*WatchAppStageRunFn)(WatchAppRuntimeState *state, uint32_t now_ms);
+
+typedef struct {
+    WatchAppStageId id;
+    const char *name;
+    WatchAppStageRunFn run_fn;
+} WatchAppStageDescriptor;
 
 __attribute__((weak)) uint32_t watch_app_stage_clock_now(void)
 {
     return platform_time_now_ms();
 }
-
-static const char * const g_stage_names[WATCH_APP_STAGE_COUNT] = {
-    "INPUT",
-    "SENSOR",
-    "MODEL",
-    "UI",
-    "BATTERY",
-    "ALERT",
-    "DIAG",
-    "STORAGE",
-    "RENDER",
-    "IDLE"
-};
 
 static bool watch_app_qos_provider_render(void *ctx, PowerQosSnapshot *snapshot)
 {
@@ -104,6 +103,26 @@ static bool watch_app_qos_provider_alarm(void *ctx, PowerQosSnapshot *snapshot)
     return true;
 }
 
+static bool watch_app_qos_provider_network(void *ctx, PowerQosSnapshot *snapshot)
+{
+    (void)ctx;
+    if (snapshot == NULL) {
+        return false;
+    }
+    snapshot->network_busy = snapshot->network_busy || web_wifi_transition_active();
+    return true;
+}
+
+static bool watch_app_qos_provider_web(void *ctx, PowerQosSnapshot *snapshot)
+{
+    (void)ctx;
+    if (snapshot == NULL) {
+        return false;
+    }
+    snapshot->web_busy = snapshot->web_busy || web_wifi_access_point_active() || web_server_has_pending_actions();
+    return true;
+}
+
 void watch_app_register_qos_providers(WatchAppRuntimeState *state)
 {
     power_policy_reset_qos_registry();
@@ -113,6 +132,8 @@ void watch_app_register_qos_providers(WatchAppRuntimeState *state)
     (void)power_policy_register_qos_provider(watch_app_qos_provider_sensor, state);
     (void)power_policy_register_qos_provider(watch_app_qos_provider_ui, state);
     (void)power_policy_register_qos_provider(watch_app_qos_provider_alarm, state);
+    (void)power_policy_register_qos_provider(watch_app_qos_provider_network, state);
+    (void)power_policy_register_qos_provider(watch_app_qos_provider_web, state);
 }
 
 static void watch_app_run_input_stage(WatchAppRuntimeState *state, uint32_t now)
@@ -215,7 +236,9 @@ static void watch_app_run_simple_stage(WatchAppRuntimeState *state,
                                   &state->stage_history_head,
                                   &state->stage_history_count,
                                   state->loop_counter);
-    wdt_service_note_checkpoint_result(checkpoint, WDT_CHECKPOINT_RESULT_OK, platform_time_now_ms());
+    if (checkpoint != WDT_CHECKPOINT_NONE) {
+        wdt_service_note_checkpoint_result(checkpoint, WDT_CHECKPOINT_RESULT_OK, platform_time_now_ms());
+    }
 }
 
 static void watch_app_run_diag_stage(WatchAppRuntimeState *state, uint32_t now)
@@ -270,6 +293,57 @@ static void watch_app_run_storage_stage(WatchAppRuntimeState *state, uint32_t no
     wdt_service_note_checkpoint_result(WDT_CHECKPOINT_STORAGE, watch_app_result_storage_stage(), platform_time_now_ms());
 }
 
+
+static void watch_app_run_network_stage(WatchAppRuntimeState *state, uint32_t now)
+{
+    uint32_t stage_start = watch_app_stage_clock_now();
+
+    network_sync_service_tick(now);
+    watch_app_record_stage_timing(WATCH_APP_STAGE_NETWORK,
+                                  stage_start,
+                                  watch_app_stage_clock_now(),
+                                  state->stage_telemetry,
+                                  state->stage_history,
+                                  &state->stage_history_head,
+                                  &state->stage_history_count,
+                                  state->loop_counter);
+    wdt_service_note_checkpoint_result(WDT_CHECKPOINT_NETWORK, watch_app_result_network_stage(), platform_time_now_ms());
+}
+
+static void watch_app_run_web_stage(WatchAppRuntimeState *state, uint32_t now)
+{
+    uint32_t stage_start = watch_app_stage_clock_now();
+
+    web_server_poll(now);
+    watch_app_record_stage_timing(WATCH_APP_STAGE_WEB,
+                                  stage_start,
+                                  watch_app_stage_clock_now(),
+                                  state->stage_telemetry,
+                                  state->stage_history,
+                                  &state->stage_history_head,
+                                  &state->stage_history_count,
+                                  state->loop_counter);
+    wdt_service_note_checkpoint_result(WDT_CHECKPOINT_WEB, watch_app_result_web_stage(), platform_time_now_ms());
+}
+
+static void watch_app_run_battery_stage(WatchAppRuntimeState *state, uint32_t now)
+{
+    watch_app_run_simple_stage(state,
+                               WATCH_APP_STAGE_BATTERY,
+                               battery_service_tick,
+                               now,
+                               WDT_CHECKPOINT_BATTERY);
+}
+
+static void watch_app_run_alert_stage(WatchAppRuntimeState *state, uint32_t now)
+{
+    watch_app_run_simple_stage(state,
+                               WATCH_APP_STAGE_ALERT,
+                               alert_service_tick,
+                               now,
+                               WDT_CHECKPOINT_ALERT);
+}
+
 static void watch_app_run_render_stage(WatchAppRuntimeState *state, uint32_t now)
 {
     bool render_due;
@@ -301,12 +375,14 @@ static void watch_app_run_render_stage(WatchAppRuntimeState *state, uint32_t now
                                   state->loop_counter);
 }
 
-static void watch_app_run_idle_stage(WatchAppRuntimeState *state)
+static void watch_app_run_idle_stage(WatchAppRuntimeState *state, uint32_t now)
 {
     bool can_idle_sleep;
     ModelDomainState domain_state;
     PowerQosSnapshot qos_snapshot;
     uint32_t stage_start = watch_app_stage_clock_now();
+
+    (void)now;
 
     if (model_get_domain_state(&domain_state) != NULL) {
         state->qos_alarm_active = domain_state.alarm_ringing_index < APP_MAX_ALARMS;
@@ -330,6 +406,21 @@ static void watch_app_run_idle_stage(WatchAppRuntimeState *state)
                                   state->loop_counter);
 }
 
+static const WatchAppStageDescriptor g_watch_app_stage_descriptors[] = {
+    {WATCH_APP_STAGE_INPUT,   "INPUT",   watch_app_run_input_stage},
+    {WATCH_APP_STAGE_SENSOR,  "SENSOR",  watch_app_run_sensor_stage},
+    {WATCH_APP_STAGE_MODEL,   "MODEL",   watch_app_run_model_stage},
+    {WATCH_APP_STAGE_UI,      "UI",      watch_app_run_ui_stage},
+    {WATCH_APP_STAGE_BATTERY, "BATTERY", watch_app_run_battery_stage},
+    {WATCH_APP_STAGE_ALERT,   "ALERT",   watch_app_run_alert_stage},
+    {WATCH_APP_STAGE_DIAG,    "DIAG",    watch_app_run_diag_stage},
+    {WATCH_APP_STAGE_STORAGE, "STORAGE", watch_app_run_storage_stage},
+    {WATCH_APP_STAGE_NETWORK, "NETWORK", watch_app_run_network_stage},
+    {WATCH_APP_STAGE_WEB,     "WEB",     watch_app_run_web_stage},
+    {WATCH_APP_STAGE_RENDER,  "RENDER",  watch_app_run_render_stage},
+    {WATCH_APP_STAGE_IDLE,    "IDLE",    watch_app_run_idle_stage},
+};
+
 void watch_app_runtime_run_loop(WatchAppRuntimeState *state)
 {
     uint32_t now;
@@ -342,22 +433,23 @@ void watch_app_runtime_run_loop(WatchAppRuntimeState *state)
     state->loop_counter++;
     wdt_service_begin_loop(now);
 
-    watch_app_run_input_stage(state, now);
-    watch_app_run_sensor_stage(state, now);
-    watch_app_run_model_stage(state, now);
-    watch_app_run_ui_stage(state, now);
-    watch_app_run_simple_stage(state, WATCH_APP_STAGE_BATTERY, battery_service_tick, now, WDT_CHECKPOINT_BATTERY);
-    watch_app_run_simple_stage(state, WATCH_APP_STAGE_ALERT, alert_service_tick, now, WDT_CHECKPOINT_ALERT);
-    watch_app_run_diag_stage(state, now);
-    watch_app_run_storage_stage(state, now);
-    watch_app_run_render_stage(state, now);
-    watch_app_run_idle_stage(state);
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_watch_app_stage_descriptors) / sizeof(g_watch_app_stage_descriptors[0])); ++i) {
+        const WatchAppStageDescriptor *descriptor = &g_watch_app_stage_descriptors[i];
+        if (descriptor->run_fn != NULL) {
+            descriptor->run_fn(state, now);
+        }
+    }
     model_flush_read_snapshots();
 }
 
 const char *watch_app_runtime_stage_name(WatchAppStageId id)
 {
-    return (id < WATCH_APP_STAGE_COUNT) ? g_stage_names[id] : "UNKNOWN";
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_watch_app_stage_descriptors) / sizeof(g_watch_app_stage_descriptors[0])); ++i) {
+        if (g_watch_app_stage_descriptors[i].id == id) {
+            return g_watch_app_stage_descriptors[i].name;
+        }
+    }
+    return "UNKNOWN";
 }
 
 bool watch_app_runtime_get_stage_telemetry(const WatchAppRuntimeState *state,

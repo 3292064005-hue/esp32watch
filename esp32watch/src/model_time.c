@@ -13,13 +13,14 @@ void model_epoch_to_datetime(uint32_t epoch, DateTime *out)
 
 void model_set_datetime(const DateTime *dt)
 {
-    TimeState next_state = (g_model.time_state == TIME_STATE_UNSET) ? TIME_STATE_RECOVERED : TIME_STATE_VALID;
+    TimeSourceSnapshot source_snapshot = {0};
+
     if (!time_service_try_set_datetime(dt, TIME_SOURCE_HOST_SYNC)) {
         return;
     }
-    time_service_refresh(&g_model.now);
-    g_model.current_day_id = time_service_day_id_from_epoch(time_service_get_epoch());
-    g_model.time_state = next_state;
-    g_model.time_valid = true;
-    model_internal_commit_legacy_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN);
+    (void)time_service_get_datetime_snapshot(&g_model_domain_state.now, &source_snapshot);
+    g_model_domain_state.current_day_id = time_service_day_id_from_epoch(source_snapshot.epoch);
+    g_model_domain_state.time_state = TIME_STATE_VALID;
+    g_model_domain_state.time_valid = true;
+    model_internal_commit_domain_mutation();
 }

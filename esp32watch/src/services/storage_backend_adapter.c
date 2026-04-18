@@ -36,9 +36,14 @@ bool storage_backend_adapter_bkp_ready(void)
     return persist_is_initialized();
 }
 
+bool storage_backend_adapter_app_state_durable_ready(void)
+{
+    return persist_app_state_durable_ready();
+}
+
 bool storage_backend_adapter_is_initialized(void)
 {
-    return storage_backend_adapter_flash_ready() || storage_backend_adapter_bkp_ready();
+    return storage_backend_adapter_flash_ready() || storage_backend_adapter_bkp_ready() || storage_backend_adapter_app_state_durable_ready();
 }
 
 uint8_t storage_backend_adapter_get_version(void)
@@ -56,7 +61,13 @@ StorageBackendType storage_backend_adapter_get_backend(void)
 
 const char *storage_backend_adapter_get_backend_name(void)
 {
-    return storage_backend_adapter_flash_ready() ? "FLASH_JOURNAL" : "NVS_EMULATED_BKP";
+    if (storage_backend_adapter_flash_ready()) {
+        return "FLASH_JOURNAL";
+    }
+    if (storage_backend_adapter_app_state_durable_ready()) {
+        return persist_app_state_backend_name();
+    }
+    return "RTC_RESET_DOMAIN";
 }
 
 uint16_t storage_backend_adapter_get_stored_crc(void)

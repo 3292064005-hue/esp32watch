@@ -91,4 +91,12 @@
 
 #define APP_CLAMP(v, minv, maxv)        ((v) < (minv) ? (minv) : ((v) > (maxv) ? (maxv) : (v)))
 
+#ifndef MODEL_ENABLE_LEGACY_PROJECTION
+#define MODEL_ENABLE_LEGACY_PROJECTION 0
+#endif
+
+#ifndef RUNTIME_EVENT_ENABLE_COMPAT_REGISTRATION
+#define RUNTIME_EVENT_ENABLE_COMPAT_REGISTRATION 0
+#endif
+
 #endif

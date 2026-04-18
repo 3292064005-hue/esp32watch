@@ -3,7 +3,9 @@
 extern "C" {
 #include "services/time_service.h"
 #include "platform_api.h"
+#include "persist_namespace_config.h"
 }
+#include "persist_preferences.h"
 
 static Preferences g_time_prefs;
 static TimeSourceSnapshot g_time_source_snapshot;
@@ -54,7 +56,7 @@ static TimeConfidenceLevel time_confidence_for_source(TimeSourceType source, boo
         case TIME_SOURCE_HOST_SYNC:
             return TIME_CONFIDENCE_MEDIUM;
         case TIME_SOURCE_RECOVERY:
-        case TIME_SOURCE_RTC:
+        case TIME_SOURCE_DEVICE_CLOCK:
         default:
             return TIME_CONFIDENCE_LOW;
     }
@@ -73,7 +75,7 @@ static void time_update_snapshot(TimeSourceType source, uint32_t epoch, bool val
 
 static void time_save_epoch(uint32_t epoch)
 {
-    if (!g_time_prefs.begin("watch_rtc", false)) {
+    if (!persist_preferences_begin(g_time_prefs, PERSIST_PREFS_DOMAIN_TIME_RECOVERY, false)) {
         return;
     }
     g_time_prefs.putULong("epoch", epoch);
@@ -87,7 +89,7 @@ static void time_load_epoch(void)
     }
 
     g_epoch_base = kEpochFloor;
-    if (g_time_prefs.begin("watch_rtc", true)) {
+    if (persist_preferences_begin(g_time_prefs, PERSIST_PREFS_DOMAIN_TIME_RECOVERY, true)) {
         g_epoch_base = g_time_prefs.getULong("epoch", kEpochFloor);
         g_time_prefs.end();
     }
@@ -201,6 +203,35 @@ extern "C" void time_service_refresh(DateTime *out)
     time_service_epoch_to_datetime(time_service_get_epoch(), out);
 }
 
+extern "C" bool time_service_get_datetime_snapshot(DateTime *out, TimeSourceSnapshot *source_out)
+{
+    uint32_t now_ms;
+    uint32_t epoch;
+    bool valid;
+
+    if (out == NULL && source_out == NULL) {
+        return false;
+    }
+
+    now_ms = platform_time_now_ms();
+    epoch = time_service_get_epoch();
+    valid = g_time_source_snapshot.valid && time_service_is_reasonable_epoch(epoch);
+
+    g_time_source_snapshot.epoch = epoch;
+    g_time_source_snapshot.valid = valid;
+    g_time_source_snapshot.source_age_ms = now_ms - g_time_source_snapshot.updated_at_ms;
+    g_time_source_snapshot.confidence = time_confidence_for_source(g_time_source_snapshot.source, valid);
+    g_time_source_snapshot.authoritative = time_source_is_authoritative(g_time_source_snapshot.source);
+
+    if (out != NULL) {
+        time_service_epoch_to_datetime(epoch, out);
+    }
+    if (source_out != NULL) {
+        *source_out = g_time_source_snapshot;
+    }
+    return true;
+}
+
 extern "C" bool time_service_set_epoch_from_source(uint32_t epoch, TimeSourceType source)
 {
     uint32_t now_ms;
@@ -247,31 +278,17 @@ extern "C" void time_service_note_recovery_epoch(uint32_t epoch, bool valid)
 
 extern "C" bool time_service_get_source_snapshot(TimeSourceSnapshot *out)
 {
-    uint32_t now_ms;
-    uint32_t epoch;
-    bool valid;
-
     if (out == NULL) {
         return false;
     }
 
-    now_ms = platform_time_now_ms();
-    epoch = time_service_get_epoch();
-    valid = time_service_is_reasonable_epoch(epoch);
-
-    g_time_source_snapshot.epoch = epoch;
-    g_time_source_snapshot.valid = valid;
-    g_time_source_snapshot.source_age_ms = now_ms - g_time_source_snapshot.updated_at_ms;
-    g_time_source_snapshot.confidence = time_confidence_for_source(g_time_source_snapshot.source, valid);
-    g_time_source_snapshot.authoritative = time_source_is_authoritative(g_time_source_snapshot.source);
-    *out = g_time_source_snapshot;
-    return true;
+    return time_service_get_datetime_snapshot(NULL, out);
 }
 
 extern "C" const char *time_service_source_name(TimeSourceType source)
 {
     switch (source) {
-        case TIME_SOURCE_RTC: return "RTC";
+        case TIME_SOURCE_DEVICE_CLOCK: return "DEVICE_CLOCK";
         case TIME_SOURCE_HOST_SYNC: return "HOST";
         case TIME_SOURCE_NETWORK_SYNC: return "NTP";
         case TIME_SOURCE_COMPANION_SYNC: return "COMPANION";

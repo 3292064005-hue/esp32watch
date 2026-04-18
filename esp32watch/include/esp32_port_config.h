@@ -28,16 +28,16 @@
 #define ESP32_MPU_I2C_CLOCK_HZ         400000UL
 #endif
 #ifndef ESP32_KEY_UP_GPIO
-#define ESP32_KEY_UP_GPIO              -1
+#define ESP32_KEY_UP_GPIO              11
 #endif
 #ifndef ESP32_KEY_DOWN_GPIO
-#define ESP32_KEY_DOWN_GPIO            -1
+#define ESP32_KEY_DOWN_GPIO            1
 #endif
 #ifndef ESP32_KEY_OK_GPIO
-#define ESP32_KEY_OK_GPIO              0
+#define ESP32_KEY_OK_GPIO              6
 #endif
 #ifndef ESP32_KEY_BACK_GPIO
-#define ESP32_KEY_BACK_GPIO            -1
+#define ESP32_KEY_BACK_GPIO            3
 #endif
 #ifndef ESP32_BATTERY_ADC_GPIO
 #define ESP32_BATTERY_ADC_GPIO         -1
@@ -56,6 +56,22 @@
 #endif
 #ifndef ESP32_NEOPIXEL_GPIO
 #define ESP32_NEOPIXEL_GPIO            48
+#endif
+
+#ifndef ESP32_IDLE_LIGHT_SLEEP_ENABLED
+#define ESP32_IDLE_LIGHT_SLEEP_ENABLED 1
+#endif
+#ifndef ESP32_IDLE_LIGHT_SLEEP_MIN_MS
+#define ESP32_IDLE_LIGHT_SLEEP_MIN_MS  2U
+#endif
+#ifndef ESP32_IDLE_LIGHT_SLEEP_ACTIVE_MS
+#define ESP32_IDLE_LIGHT_SLEEP_ACTIVE_MS 6U
+#endif
+#ifndef ESP32_IDLE_LIGHT_SLEEP_UI_SLEEP_MS
+#define ESP32_IDLE_LIGHT_SLEEP_UI_SLEEP_MS 40U
+#endif
+#ifndef ESP32_IDLE_LIGHT_SLEEP_MAX_MS
+#define ESP32_IDLE_LIGHT_SLEEP_MAX_MS  100U
 #endif
 
 #endif

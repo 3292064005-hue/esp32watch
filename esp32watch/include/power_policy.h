@@ -30,7 +30,9 @@ typedef enum {
     POWER_QOS_SAFE_MODE_ACTIVE = 1 << 3,
     POWER_QOS_SENSOR_BACKOFF_ACTIVE = 1 << 4,
     POWER_QOS_UI_FEEDBACK_PENDING = 1 << 5,
-    POWER_QOS_ALARM_ACTIVE = 1 << 6
+    POWER_QOS_ALARM_ACTIVE = 1 << 6,
+    POWER_QOS_NETWORK_BUSY = 1 << 7,
+    POWER_QOS_WEB_BUSY = 1 << 8
 } PowerQosFlags;
 
 typedef struct {
@@ -41,6 +43,8 @@ typedef struct {
     bool sensor_backoff_active;
     bool ui_feedback_pending;
     bool alarm_active;
+    bool network_busy;
+    bool web_busy;
 } PowerQosSnapshot;
 
 typedef bool (*PowerQosProviderFn)(void *ctx, PowerQosSnapshot *snapshot);

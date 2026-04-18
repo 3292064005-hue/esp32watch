@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "services/device_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -56,15 +57,6 @@ void network_sync_service_tick(uint32_t now_ms);
 void network_sync_service_request_refresh(void);
 
 /**
- * @brief Reconcile cached state after provisioning changes.
- *
- * @return void
- * @throws None.
- * @boundary_behavior Clears stale weather cache when timezone or location inputs changed, then schedules an immediate refresh.
- */
-void network_sync_service_on_config_changed(void);
-
-/**
  * @brief Copy the latest synchronization snapshot.
  *
  * @param[out] out Destination snapshot.
@@ -73,6 +65,39 @@ void network_sync_service_on_config_changed(void);
  */
 bool network_sync_service_get_snapshot(NetworkSyncSnapshot *out);
 const char *network_sync_service_weather_text(uint8_t weather_code);
+
+/**
+ * @brief Verify that the authoritative device-configuration generation has been applied by the network sync service.
+ *
+ * @param[in] generation Authoritative device-config generation expected to be active.
+ * @param[in] cfg Optional config snapshot used for semantic cross-checking.
+ * @return true when the network-sync runtime state reflects the requested generation and profile values.
+ * @throws None.
+ */
+bool network_sync_service_verify_config_applied(uint32_t generation, const DeviceConfigSnapshot *cfg);
+
+/**
+ * @brief Return the last authoritative device-config generation applied by the network sync service.
+ *
+ * @return Generation number, or 0 when no config has been applied yet.
+ * @throws None.
+ */
+uint32_t network_sync_service_last_applied_generation(void);
+
+#if defined(HOST_RUNTIME_TEST)
+void network_sync_service_test_seed_weather_state(uint32_t generation,
+                                                  const char *location,
+                                                  const char *status);
+void network_sync_service_test_inject_weather_result(uint32_t generation,
+                                                     bool success,
+                                                     const char *location,
+                                                     const char *status,
+                                                     int16_t temperature_tenths_c,
+                                                     uint8_t weather_code,
+                                                     uint32_t completed_at_ms);
+void network_sync_service_test_apply_pending_weather_result(void);
+#endif
+
 
 #ifdef __cplusplus
 }

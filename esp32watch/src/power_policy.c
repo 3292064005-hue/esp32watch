@@ -113,6 +113,12 @@ uint32_t power_policy_build_qos_mask(const PowerQosSnapshot *snapshot)
     if (snapshot->alarm_active) {
         mask |= POWER_QOS_ALARM_ACTIVE;
     }
+    if (snapshot->network_busy) {
+        mask |= POWER_QOS_NETWORK_BUSY;
+    }
+    if (snapshot->web_busy) {
+        mask |= POWER_QOS_WEB_BUSY;
+    }
     return mask;
 }
 
@@ -146,6 +152,8 @@ bool power_policy_can_enter_cpu_idle(bool render_due,
     snapshot.sensor_backoff_active = false;
     snapshot.ui_feedback_pending = false;
     snapshot.alarm_active = false;
+    snapshot.network_busy = false;
+    snapshot.web_busy = false;
     return power_policy_can_enter_cpu_idle_ex(&snapshot, NULL);
 }
 
