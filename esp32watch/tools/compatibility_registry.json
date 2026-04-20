@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "surfaces": [
+    {
+      "id": "legacy_init_profile",
+      "label": "LEGACY_CONSUMER_FIRST init profile",
+      "owner": "system init",
+      "category": "init-profile",
+      "reason_retained": "Validate migration order and rollback during storage authority transition",
+      "removal_condition": "Remove after two release cycles with no rollback use",
+      "doc_anchor": "LEGACY_CONSUMER_FIRST init profile",
+      "evidence": [
+        {
+          "file": "docs/compatibility-lifecycle.md",
+          "snippets": [
+            "LEGACY_CONSUMER_FIRST init profile"
+          ]
+        },
+        {
+          "file": "src/system_init_esp32.cpp",
+          "snippets": [
+            "SYSTEM_RUNTIME_INIT_PROFILE_LEGACY_CONSUMER_FIRST"
+          ]
+        },
+        {
+          "file": "tools/host_tests/test_system_runtime_service_init.cpp",
+          "snippets": [
+            "LEGACY_CONSUMER_FIRST"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "compatibility_state_snapshot",
+      "label": "Compatibility state snapshot (model_get, model_get_domain_state)",
+      "owner": "model runtime",
+      "category": "model-read-shim",
+      "reason_retained": "Preserve read-only consumers while telemetry moved to authoritative services",
+      "removal_condition": "Remove when all consumers switch to authoritative runtime surfaces",
+      "doc_anchor": "Compatibility state snapshot (`model_get`, `model_get_domain_state`)",
+      "evidence": [
+        {
+          "file": "docs/compatibility-lifecycle.md",
+          "snippets": [
+            "model_get",
+            "model_get_domain_state"
+          ]
+        },
+        {
+          "file": "include/model.h",
+          "snippets": [
+            "const WatchModel *model_get(void);",
+            "const ModelDomainState *model_get_domain_state(ModelDomainState *out);"
+          ]
+        },
+        {
+          "file": "tools/host_tests/test_model_runtime_split.c",
+          "snippets": [
+            "model_get();",
+            "model_get_domain_state"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "state_summary_route",
+      "label": "stateSummary compatibility route",
+      "owner": "web control plane",
+      "category": "web-route",
+      "reason_retained": "Preserve legacy summary polling callers while stateAggregate becomes the canonical control-plane route",
+      "removal_condition": "Remove when all compatibility consumers switch to stateAggregate and the compatibility route is no longer documented",
+      "doc_anchor": "stateSummary compatibility route",
+      "evidence": [
+        {
+          "file": "docs/compatibility-lifecycle.md",
+          "snippets": [
+            "stateSummary compatibility route"
+          ]
+        },
+        {
+          "file": "src/web/web_contract.cpp",
+          "snippets": [
+            "{\"stateSummary\", \"state\", \"summary\"}"
+          ]
+        },
+        {
+          "file": "data/contract-bootstrap.json",
+          "snippets": [
+            "stateSummary"
+          ]
+        },
+        {
+          "file": "tools/host_tests/test_compatibility_lifecycle.py",
+          "snippets": [
+            "stateSummary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legacy_command_aliases",
+      "label": "Legacy command aliases in Web/API",
+      "owner": "web control plane",
+      "category": "command-alias",
+      "reason_retained": "Support previously shipped automation callers",
+      "removal_condition": "Remove after command catalog version bump and migration note",
+      "doc_anchor": "Legacy command aliases in Web/API",
+      "evidence": [
+        {
+          "file": "docs/compatibility-lifecycle.md",
+          "snippets": [
+            "Legacy command aliases in Web/API"
+          ]
+        },
+        {
+          "file": "src/web/web_routes_api_contract_meta.cpp",
+          "snippets": [
+            "web_json_kv_str(response, \"lifecycle\"",
+            "web_json_kv_str(response, \"canonicalType\"",
+            "web_json_kv_bool(response, \"legacyAlias\"",
+            "{\"restoreDefaults\", \"resetAppState\"}",
+            "\"DEPRECATED\""
+          ]
+        },
+        {
+          "file": "src/app_command.c",
+          "snippets": [
+            "restoreDefaults"
+          ]
+        },
+        {
+          "file": "tools/host_tests/test_command_catalog_compatibility.c",
+          "snippets": [
+            "restoreDefaults"
+          ]
+        }
+      ]
+    }
+  ]
+}

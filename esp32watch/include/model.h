@@ -307,21 +307,21 @@ void model_init(void);
 void model_tick(uint32_t now_ms);
 void model_sync_runtime_observability(void);
 /**
- * @brief Flush pending read-side model projections into stable snapshot views.
+ * @brief Normalize split-state derived fields before callers snapshot read-side views.
  *
  * @param None.
  * @return void
  * @throws None.
- * @boundary_behavior Returns immediately when all snapshot views are already current.
+ * @boundary_behavior Repairs derived selected-alarm and popup/runtime-request mirrors before returning.
  */
 void model_flush_read_snapshots(void);
 
 /**
- * @brief Return the legacy aggregate snapshot as a read-only compatibility view.
+ * @brief Return a synthesized aggregate snapshot as a read-only compatibility view.
  *
- * @return Pointer to the internally mirrored legacy snapshot. The returned snapshot
- *         is read-only; all authoritative writes must go through the split-state
- *         mutation helpers.
+ * @return Pointer to an internally owned synthesized compatibility snapshot. The
+ *         returned snapshot is read-only; all authoritative writes must go through
+ *         the split-state mutation helpers.
  * @throws None.
  */
 const WatchModel *model_get(void);

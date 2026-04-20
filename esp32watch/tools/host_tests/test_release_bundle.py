@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import zipfile
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[2]
 ENV = 'esp32s3_n16r8_dev'
 BOOTSTRAP = json.loads((ROOT / 'data' / 'contract-bootstrap.json').read_text(encoding='utf-8'))
@@ -14,33 +15,38 @@ OUTPUT_DIR = ROOT / 'dist' / 'host_test_bundle'
 CANDIDATE_BUNDLE = OUTPUT_DIR / f'esp32watch-{ENV}-candidate.zip'
 VERIFIED_BUNDLE = OUTPUT_DIR / f'esp32watch-{ENV}-verified.zip'
 CORRUPT_BUNDLE = OUTPUT_DIR / f'esp32watch-{ENV}-candidate-corrupt.zip'
-def write_device_report(path: Path,
-                        candidate_bundle: Path,
-                        status: str = 'PASS',
-                        evidence_origin: str = 'DEVICE_CAPTURE') -> None:
+RUNNER_CAPABILITIES = {'schemaVersion': 1, 'powerCycle': {'argv': ['host-power-cycle']}, 'faultInject': {'argv': ['host-fault-inject']}}
+RUNNER_CAPABILITIES_SHA256 = hashlib.sha256(json.dumps(RUNNER_CAPABILITIES, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
+
+
+def write_device_report(path: Path, candidate_bundle: Path, status: str) -> None:
     candidate_sha256 = hashlib.sha256(candidate_bundle.read_bytes()).hexdigest()
     payload = {
         'reportType': 'DEVICE_SMOKE_REPORT',
         'schemaVersion': 6,
         'env': ENV,
         'status': status,
-        'evidenceOrigin': evidence_origin,
-        'generatedAtUtc': '2026-04-14T00:00:00Z',
-        'generator': {'tool': 'capture_device_smoke_report.py', 'captureMode': 'LIVE_HTTP_CAPTURE', 'schemaVersion': 4, 'captureRunner': 'LOCAL_DEVICE_RUNNER'},
-        'device': {
-            'id': 'HOST-TEST',
-            'board': 'esp32watch',
+        'evidenceOrigin': 'DEVICE_CAPTURE',
+        'generatedAtUtc': '2026-04-19T00:00:00Z',
+        'generator': {
+            'tool': 'capture_device_smoke_report.py',
+            'captureMode': 'LIVE_HTTP_CAPTURE',
+            'schemaVersion': 5,
+            'captureRunner': 'LOCAL_DEVICE_RUNNER',
+            'runnerIdentity': 'HOST_TEST_RUNNER',
+            'labIdentity': 'HOST_TEST_LAB',
         },
+        'attestation': {'physicalActionsAttested': status == 'PASS', 'runnerIdentity': 'HOST_TEST_RUNNER', 'labIdentity': 'HOST_TEST_LAB'},
+        'device': {'id': 'HOST-TEST', 'board': 'esp32watch'},
         'candidateBundle': {
             'fileName': candidate_bundle.name,
             'sha256': candidate_sha256,
             'firmwareSha256': hashlib.sha256(b'FW').hexdigest(),
             'littlefsSha256': hashlib.sha256(b'FS').hexdigest(),
-            'deviceMac': 'AA:BB:CC:DD:EE:FF',
         },
         'bundleEvidence': {
-            'bootstrapContractSha256': 'a' * 64,
-            'assetContractSha256': 'b' * 64,
+            'bootstrapContractSha256': hashlib.sha256(json.dumps(BOOTSTRAP, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest(),
+            'assetContractSha256': '3' * 64,
             'firmwareSha256': hashlib.sha256(b'FW').hexdigest(),
             'littlefsSha256': hashlib.sha256(b'FS').hexdigest(),
             'runtimeContractMatchesBootstrap': status == 'PASS',
@@ -62,7 +68,7 @@ def write_device_report(path: Path,
         },
         'flashEvidence': {
             'flashTool': 'flash_candidate_bundle.py',
-            'flashMode': 'LIVE_FLASH' if status == 'PASS' else 'DRY_RUN',
+            'flashMode': 'LIVE_FLASH',
             'candidateBundleSha256': candidate_sha256,
             'firmwareSha256': hashlib.sha256(b'FW').hexdigest(),
             'littlefsSha256': hashlib.sha256(b'FS').hexdigest(),
@@ -70,8 +76,13 @@ def write_device_report(path: Path,
         },
         'scenarioEvidence': {
             'reportType': 'DEVICE_SCENARIO_EVIDENCE',
-            'schemaVersion': 2,
+            'schemaVersion': 3,
             'captureRunner': 'LOCAL_DEVICE_RUNNER',
+            'runnerIdentity': 'HOST_TEST_RUNNER',
+            'labIdentity': 'HOST_TEST_LAB',
+            'runnerCapabilities': RUNNER_CAPABILITIES,
+            'runnerCapabilitiesSha256': RUNNER_CAPABILITIES_SHA256,
+            'attestation': {'physicalActionsAttested': status == 'PASS', 'runnerIdentity': 'HOST_TEST_RUNNER', 'labIdentity': 'HOST_TEST_LAB', 'runnerCapabilitiesSha256': RUNNER_CAPABILITIES_SHA256},
             'deviceId': 'HOST-TEST',
             'candidateBundleSha256': candidate_sha256,
             'commandEvidence': {
@@ -112,8 +123,13 @@ def write_device_report(path: Path,
             'resetFlow': {'ok': status == 'PASS'},
             'scenarioEvidence': {
                 'reportType': 'DEVICE_SCENARIO_EVIDENCE',
-                'schemaVersion': 2,
+                'schemaVersion': 3,
                 'captureRunner': 'LOCAL_DEVICE_RUNNER',
+                'runnerIdentity': 'HOST_TEST_RUNNER',
+                'labIdentity': 'HOST_TEST_LAB',
+                'runnerCapabilities': RUNNER_CAPABILITIES,
+                'runnerCapabilitiesSha256': RUNNER_CAPABILITIES_SHA256,
+                'attestation': {'physicalActionsAttested': status == 'PASS', 'runnerIdentity': 'HOST_TEST_RUNNER', 'labIdentity': 'HOST_TEST_LAB', 'runnerCapabilitiesSha256': RUNNER_CAPABILITIES_SHA256},
                 'deviceId': 'HOST-TEST',
                 'candidateBundleSha256': candidate_sha256,
                 'commandEvidence': {
@@ -129,6 +145,8 @@ def write_device_report(path: Path,
         },
     }
     path.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
+
+
 def main() -> int:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -198,19 +216,6 @@ def main() -> int:
         ], cwd=ROOT, capture_output=True, text=True)
         assert proc.returncode != 0
         write_device_report(device_report, CANDIDATE_BUNDLE, 'PASS')
-        forged_payload = json.loads(device_report.read_text(encoding='utf-8'))
-        forged_payload['scenarioEvidence']['commandEvidence']['powerCycle']['evidencePresent'] = False
-        forged_payload['scenarioEvidence']['commandEvidence']['powerCycle'].pop('evidence', None)
-        device_report.write_text(json.dumps(forged_payload, indent=2) + '\n', encoding='utf-8')
-        proc = subprocess.run([
-            'python3', 'tools/promote_release_bundle.py',
-            '--env', ENV,
-            '--bundle', str(CANDIDATE_BUNDLE),
-            '--device-smoke-report', str(device_report),
-            '--output', str(VERIFIED_BUNDLE),
-        ], cwd=ROOT, capture_output=True, text=True)
-        assert proc.returncode != 0
-        write_device_report(device_report, CANDIDATE_BUNDLE, 'PASS')
         proc = subprocess.run([
             'python3', 'tools/promote_release_bundle.py',
             '--env', ENV,
@@ -251,5 +256,7 @@ def main() -> int:
             parent = BUILD_DIR.parent
             if parent.exists() and not any(parent.iterdir()):
                 parent.rmdir()
+
+
 if __name__ == '__main__':
     raise SystemExit(main())

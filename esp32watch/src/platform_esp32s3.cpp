@@ -201,6 +201,34 @@ PlatformStatus platform_rtc_init(PlatformRtcDevice *device)
     return PLATFORM_STATUS_OK;
 }
 
+bool platform_rtc_wall_clock_supported(PlatformRtcDevice *device)
+{
+    (void)device;
+    return false;
+}
+
+bool platform_rtc_wall_clock_persistent(PlatformRtcDevice *device)
+{
+    (void)device;
+    return false;
+}
+
+PlatformStatus platform_rtc_get_epoch(PlatformRtcDevice *device, uint32_t *out_epoch)
+{
+    (void)device;
+    if (out_epoch != nullptr) {
+        *out_epoch = 0U;
+    }
+    return PLATFORM_STATUS_ERROR;
+}
+
+PlatformStatus platform_rtc_set_epoch(PlatformRtcDevice *device, uint32_t epoch)
+{
+    (void)device;
+    (void)epoch;
+    return PLATFORM_STATUS_ERROR;
+}
+
 void platform_rtc_backup_unlock(void)
 {
 }
@@ -388,6 +416,8 @@ bool platform_get_support_snapshot(PlatformSupportSnapshot *out)
     }
 
     out->rtc_reset_domain_supported = true;
+    out->rtc_wall_clock_supported = false;
+    out->rtc_wall_clock_persistent = false;
     out->idle_light_sleep_supported = ESP32_IDLE_LIGHT_SLEEP_ENABLED != 0;
     out->watchdog_supported = false;
     out->flash_journal_supported = false;

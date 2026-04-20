@@ -40,6 +40,60 @@ static void copy_system_stage_name(char *dst, size_t dst_size, SystemInitStage s
     dst[dst_size - 1U] = '\0';
 }
 
+
+static void copy_text_field(char *dst, size_t dst_size, const char *src)
+{
+    if (dst == nullptr || dst_size == 0U) {
+        return;
+    }
+    if (src == nullptr) {
+        dst[0] = '\0';
+        return;
+    }
+    std::snprintf(dst, dst_size, "%s", src);
+}
+
+static void collect_degraded_truth(WebStateCoreSnapshot *out, const WebRuntimeSnapshot *snapshot)
+{
+    copy_text_field(out->system.degraded_code, sizeof(out->system.degraded_code), "NONE");
+    copy_text_field(out->system.degraded_owner, sizeof(out->system.degraded_owner), "NONE");
+    copy_text_field(out->system.degraded_recovery_hint, sizeof(out->system.degraded_recovery_hint), "NONE");
+
+    if (!snapshot->web_console_ready || !snapshot->filesystem_assets_ready) {
+        copy_text_field(out->system.degraded_code, sizeof(out->system.degraded_code), "WEB_CONSOLE_FALLBACK");
+        copy_text_field(out->system.degraded_owner, sizeof(out->system.degraded_owner), "WEB_SERVER");
+        copy_text_field(out->system.degraded_recovery_hint, sizeof(out->system.degraded_recovery_hint), "Verify LittleFS assets and contract bootstrap integrity.");
+        return;
+    }
+
+    if (snapshot->has_startup_report && snapshot->startup_report.degraded) {
+        copy_text_field(out->system.degraded_code, sizeof(out->system.degraded_code), "STARTUP_DEGRADED");
+        copy_text_field(out->system.degraded_owner, sizeof(out->system.degraded_owner), "SYSTEM_INIT");
+        copy_text_field(out->system.degraded_recovery_hint, sizeof(out->system.degraded_recovery_hint), "Inspect startupRecoveryStage and degraded init stage evidence.");
+        return;
+    }
+
+    if (snapshot->has_app_init_report && snapshot->app_init_report.degraded) {
+        copy_text_field(out->system.degraded_code, sizeof(out->system.degraded_code), "APP_INIT_DEGRADED");
+        copy_text_field(out->system.degraded_owner, sizeof(out->system.degraded_owner), "WATCH_APP");
+        copy_text_field(out->system.degraded_recovery_hint, sizeof(out->system.degraded_recovery_hint), "Inspect app init stage diagnostics and runtime snapshot detail.");
+        return;
+    }
+
+    if (time_service_init_status() == TIME_INIT_STATUS_DEGRADED) {
+        copy_text_field(out->system.degraded_code, sizeof(out->system.degraded_code), "TIME_INIT_DEGRADED");
+        copy_text_field(out->system.degraded_owner, sizeof(out->system.degraded_owner), "TIME_SERVICE");
+        copy_text_field(out->system.degraded_recovery_hint, sizeof(out->system.degraded_recovery_hint), "Set time manually or wait for NTP/companion sync.");
+        return;
+    }
+
+    if (snapshot->has_time_source && !snapshot->time_source.valid) {
+        copy_text_field(out->system.degraded_code, sizeof(out->system.degraded_code), "TIME_UNTRUSTED");
+        copy_text_field(out->system.degraded_owner, sizeof(out->system.degraded_owner), "TIME_SERVICE");
+        copy_text_field(out->system.degraded_recovery_hint, sizeof(out->system.degraded_recovery_hint), "Wait for an authoritative time source before relying on timestamps.");
+    }
+}
+
 static void collect_wifi_snapshot(WebStateCoreSnapshot *out, const WebRuntimeSnapshot *snapshot)
 {
     const DeviceConfigSnapshot *device_cfg = &snapshot->device_config;
@@ -85,12 +139,24 @@ static void collect_system_snapshot(WebStateCoreSnapshot *out, const WebRuntimeS
         strncpy(out->system.time_confidence,
                 time_service_confidence_name(snapshot->time_source.confidence),
                 sizeof(out->system.time_confidence) - 1U);
+        strncpy(out->system.time_authority,
+                time_service_authority_name(snapshot->time_source.authority),
+                sizeof(out->system.time_authority) - 1U);
+        strncpy(out->system.time_init_status,
+                time_service_init_status_name(time_service_init_status()),
+                sizeof(out->system.time_init_status) - 1U);
+        strncpy(out->system.time_init_reason,
+                time_service_init_reason(),
+                sizeof(out->system.time_init_reason) - 1U);
         out->system.time_valid = snapshot->time_source.valid;
         out->system.time_authoritative = snapshot->time_source.authoritative;
         out->system.time_source_age_ms = snapshot->time_source.source_age_ms;
     } else {
         strncpy(out->system.time_source, "UNKNOWN", sizeof(out->system.time_source) - 1U);
         strncpy(out->system.time_confidence, "NONE", sizeof(out->system.time_confidence) - 1U);
+        strncpy(out->system.time_authority, time_service_authority_name(time_service_authority_level()), sizeof(out->system.time_authority) - 1U);
+        strncpy(out->system.time_init_status, time_service_init_status_name(time_service_init_status()), sizeof(out->system.time_init_status) - 1U);
+        strncpy(out->system.time_init_reason, time_service_init_reason(), sizeof(out->system.time_init_reason) - 1U);
     }
 
     if (snapshot->has_startup_report) {
@@ -204,6 +270,7 @@ extern "C" bool web_state_core_collect_from_runtime_snapshot(const WebRuntimeSna
     collect_model_summary(out, snapshot);
     collect_status_labels(out);
     collect_weather_snapshot(out, snapshot);
+    collect_degraded_truth(out, snapshot);
     return true;
 }
 

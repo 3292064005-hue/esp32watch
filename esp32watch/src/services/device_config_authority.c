@@ -1,11 +1,7 @@
 #include "services/device_config_authority.h"
+#include "services/device_config_codec.h"
 #include "services/storage_facade.h"
 #include <string.h>
-
-static bool float_equal(float lhs, float rhs)
-{
-    return lhs == rhs;
-}
 
 static void apply_report_init(DeviceConfigAuthorityApplyReport *out)
 {
@@ -13,14 +9,6 @@ static void apply_report_init(DeviceConfigAuthorityApplyReport *out)
         return;
     }
     memset(out, 0, sizeof(*out));
-}
-
-static bool config_strings_equal(const char *lhs, const char *rhs)
-{
-    if (lhs == NULL || rhs == NULL) {
-        return lhs == rhs;
-    }
-    return strcmp(lhs, rhs) == 0;
 }
 
 static bool authority_load_current(DeviceConfigSnapshot *cfg,
@@ -44,6 +32,28 @@ static bool authority_load_current(DeviceConfigSnapshot *cfg,
     return true;
 }
 
+
+static uint32_t authority_expand_runtime_reload_affinity(uint32_t changed_domain_mask)
+{
+    uint32_t expanded = changed_domain_mask;
+
+    if ((changed_domain_mask & RUNTIME_RELOAD_DOMAIN_WIFI) != 0U) {
+        expanded |= RUNTIME_RELOAD_DOMAIN_POWER;
+        expanded |= RUNTIME_RELOAD_DOMAIN_COMPANION;
+    }
+    if ((changed_domain_mask & RUNTIME_RELOAD_DOMAIN_NETWORK) != 0U) {
+        expanded |= RUNTIME_RELOAD_DOMAIN_DISPLAY;
+        expanded |= RUNTIME_RELOAD_DOMAIN_POWER;
+        expanded |= RUNTIME_RELOAD_DOMAIN_SENSOR;
+        expanded |= RUNTIME_RELOAD_DOMAIN_COMPANION;
+    }
+    if ((changed_domain_mask & RUNTIME_RELOAD_DOMAIN_AUTH) != 0U) {
+        expanded |= RUNTIME_RELOAD_DOMAIN_COMPANION;
+    }
+
+    return expanded;
+}
+
 static void authority_compute_diff(const DeviceConfigUpdate *update,
                                    const DeviceConfigSnapshot *current_cfg,
                                    const char *current_wifi_password,
@@ -59,19 +69,37 @@ static void authority_compute_diff(const DeviceConfigUpdate *update,
     out->token_saved = update->set_api_token;
 
     if (update->set_wifi) {
-        out->wifi_changed = !config_strings_equal(update->wifi_ssid, current_cfg->wifi_ssid) ||
-                            !config_strings_equal(update->wifi_password, current_wifi_password);
+        out->saved_domain_mask |= RUNTIME_RELOAD_DOMAIN_WIFI;
+        out->wifi_changed = strcmp(update->wifi_ssid, current_cfg->wifi_ssid) != 0 ||
+                            strcmp(update->wifi_password, current_wifi_password) != 0;
+        if (out->wifi_changed) {
+            out->changed_domain_mask |= RUNTIME_RELOAD_DOMAIN_WIFI;
+        }
     }
     if (update->set_network) {
-        out->network_changed = !config_strings_equal(update->timezone_posix, current_cfg->timezone_posix) ||
-                               !config_strings_equal(update->timezone_id, current_cfg->timezone_id) ||
-                               !config_strings_equal(update->location_name, current_cfg->location_name) ||
-                               !float_equal(update->latitude, current_cfg->latitude) ||
-                               !float_equal(update->longitude, current_cfg->longitude);
+        out->saved_domain_mask |= RUNTIME_RELOAD_DOMAIN_NETWORK;
+        out->network_changed = !device_config_text_equal_canonical(update->timezone_posix, current_cfg->timezone_posix) ||
+                               !device_config_text_equal_canonical(update->timezone_id, current_cfg->timezone_id) ||
+                               !device_config_text_equal_canonical(update->location_name, current_cfg->location_name) ||
+                               !device_config_coordinate_equal(update->latitude, current_cfg->latitude) ||
+                               !device_config_coordinate_equal(update->longitude, current_cfg->longitude);
+        if (out->network_changed) {
+            out->changed_domain_mask |= RUNTIME_RELOAD_DOMAIN_NETWORK;
+        }
     }
     if (update->set_api_token) {
-        out->token_changed = !config_strings_equal(update->api_token, current_api_token);
+        out->saved_domain_mask |= RUNTIME_RELOAD_DOMAIN_AUTH;
+        out->token_changed = strcmp(update->api_token, current_api_token) != 0;
+        if (out->token_changed) {
+            out->changed_domain_mask |= RUNTIME_RELOAD_DOMAIN_AUTH;
+        }
     }
+
+    if (update->request_runtime_reload) {
+        out->changed_domain_mask |= update->runtime_reload_domain_mask;
+    }
+
+    out->changed_domain_mask = authority_expand_runtime_reload_affinity(out->changed_domain_mask);
 }
 
 bool device_config_authority_get(DeviceConfigSnapshot *out)
@@ -95,6 +123,7 @@ bool device_config_authority_apply_update(const DeviceConfigUpdate *update,
     DeviceConfigSnapshot current_cfg = {0};
     DeviceConfigAuthorityApplyReport local_report = {0};
     DeviceConfigAuthorityApplyReport *report = out != NULL ? out : &local_report;
+    DeviceConfigUpdate persist_update = {0};
     char current_wifi_password[DEVICE_CONFIG_WIFI_PASSWORD_MAX_LEN + 1U] = {0};
     char current_api_token[DEVICE_CONFIG_API_TOKEN_MAX_LEN + 1U] = {0};
 
@@ -110,44 +139,47 @@ bool device_config_authority_apply_update(const DeviceConfigUpdate *update,
         return false;
     }
 
-    authority_compute_diff(update, &current_cfg, current_wifi_password, current_api_token, report);
+    persist_update = *update;
+    device_config_canonicalize_update(&persist_update);
+    authority_compute_diff(&persist_update, &current_cfg, current_wifi_password, current_api_token, report);
 
-    if (!storage_facade_apply_device_config_update(update)) {
+    if (!storage_facade_apply_device_config_update(&persist_update)) {
         return false;
     }
 
-    {
-        const bool runtime_reload_requested = report->wifi_changed || report->network_changed;
-        report->committed = true;
-        report->runtime_reload_requested = runtime_reload_requested;
-        if (!runtime_reload_requested) {
-            report->runtime_reload_ok = true;
-            return true;
-        }
-        report->runtime_reload_ok = runtime_reload_device_config(report->wifi_changed,
-                                                                 report->network_changed,
-                                                                 &report->reload);
-        return report->runtime_reload_ok;
+    report->committed = true;
+    report->runtime_reload_requested_domain_mask = report->changed_domain_mask & runtime_reload_supported_domain_mask();
+    report->runtime_reload_requested = report->runtime_reload_requested_domain_mask != RUNTIME_RELOAD_DOMAIN_NONE;
+    if (!report->runtime_reload_requested) {
+        report->runtime_reload_ok = true;
+        return true;
     }
+    report->runtime_reload_ok = runtime_reload_device_config_domains(report->runtime_reload_requested_domain_mask,
+                                                                     &report->reload);
+    return report->runtime_reload_ok;
 }
 
 bool device_config_authority_restore_defaults(DeviceConfigAuthorityApplyReport *out)
 {
-    apply_report_init(out);
+    DeviceConfigAuthorityApplyReport local_report = {0};
+    DeviceConfigAuthorityApplyReport *report = out != NULL ? out : &local_report;
+
+    apply_report_init(report);
     if (!storage_facade_restore_device_config_defaults()) {
         return false;
     }
-    if (out != NULL) {
-        out->committed = true;
-        out->wifi_saved = true;
-        out->network_saved = true;
-        out->token_saved = true;
-        out->wifi_changed = true;
-        out->network_changed = true;
-        out->token_changed = true;
-        out->runtime_reload_requested = true;
-        out->runtime_reload_ok = runtime_reload_device_config(true, true, &out->reload);
-        return out->runtime_reload_ok;
-    }
-    return runtime_reload_device_config(true, true, NULL);
+    report->committed = true;
+    report->wifi_saved = true;
+    report->network_saved = true;
+    report->token_saved = true;
+    report->wifi_changed = true;
+    report->network_changed = true;
+    report->token_changed = true;
+    report->saved_domain_mask = RUNTIME_RELOAD_DOMAIN_WIFI | RUNTIME_RELOAD_DOMAIN_NETWORK | RUNTIME_RELOAD_DOMAIN_AUTH;
+    report->changed_domain_mask = authority_expand_runtime_reload_affinity(report->saved_domain_mask);
+    report->runtime_reload_requested_domain_mask = report->changed_domain_mask & runtime_reload_supported_domain_mask();
+    report->runtime_reload_requested = true;
+    report->runtime_reload_ok = runtime_reload_device_config_domains(report->runtime_reload_requested_domain_mask,
+                                                                     &report->reload);
+    return report->runtime_reload_ok;
 }

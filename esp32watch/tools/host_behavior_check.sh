@@ -32,7 +32,14 @@ gcc -std=c11 -Iinclude -Isrc \
   -o /tmp/esp32watch_host_tests/watch_app_policy_test
 /tmp/esp32watch_host_tests/watch_app_policy_test
 
-gcc -std=c11 -Iinclude -Isrc   tools/host_tests/test_model_runtime_split.c   src/model_runtime.c   -o /tmp/esp32watch_host_tests/model_runtime_split_test
+gcc -std=c11 -Iinclude -Isrc \
+  tools/host_tests/test_model_runtime_split.c \
+  src/model_runtime.c \
+  src/model.c \
+  src/model_alarm.c \
+  src/model_activity.c \
+  src/model_settings.c \
+  -o /tmp/esp32watch_host_tests/model_runtime_split_test
 
 gcc -std=c11 -Iinclude -Isrc \
   tools/host_tests/test_runtime_reload_coordinator.c \
@@ -42,8 +49,15 @@ gcc -std=c11 -Iinclude -Isrc \
 /tmp/esp32watch_host_tests/runtime_reload_coordinator_test
 
 gcc -std=c11 -Iinclude -Isrc \
+  tools/host_tests/test_runtime_side_effect_service.c \
+  src/services/runtime_side_effect_service.c \
+  -o /tmp/esp32watch_host_tests/runtime_side_effect_service_test
+/tmp/esp32watch_host_tests/runtime_side_effect_service_test
+
+gcc -std=c11 -Iinclude -Isrc \
   tools/host_tests/test_reset_service.c \
   src/services/reset_service.c \
+  src/services/runtime_side_effect_service.c \
   src/services/runtime_event_service.c \
   -o /tmp/esp32watch_host_tests/reset_service_test
 /tmp/esp32watch_host_tests/reset_service_test
@@ -77,6 +91,13 @@ g++ -std=c++17 -DHOST_RUNTIME_TEST "${COMMON_CPP_DEFINES[@]}" -Itools/host_stubs
   tools/host_tests/test_runtime_cpp_services.cpp \
   src/web/web_wifi.cpp \
   src/services/network_sync_service.cpp \
+  src/services/network_sync_runtime.cpp \
+  src/services/network_sync_config.cpp \
+  src/services/network_sync_time.cpp \
+  src/services/network_sync_weather.cpp \
+  src/services/network_sync_worker.cpp \
+  src/services/network_sync_api.cpp \
+  src/services/network_sync_codec.cpp \
   /tmp/esp32watch_host_tests/runtime_event_service.o \
   -o /tmp/esp32watch_host_tests/runtime_cpp_services_test
 /tmp/esp32watch_host_tests/runtime_cpp_services_test
@@ -133,6 +154,9 @@ gcc -std=c11 -Iinclude -Isrc \
   --step ABOUT:48 \
   --output /tmp/esp32watch_host_tests/host_runtime_simulator.json
 python3 tools/host_tests/test_host_runtime_simulator.py /tmp/esp32watch_host_tests/host_runtime_simulator.json
+./tools/run_host_simulator_matrix.sh baseline
+./tools/run_host_simulator_matrix.sh reset-flow
+./tools/run_host_simulator_matrix.sh storage-focus
 
 gcc -std=c11 -Iinclude -Isrc \
   tools/host_tests/test_ui_app_catalog.c \
@@ -145,6 +169,9 @@ gcc -std=c11 -Iinclude -Isrc \
   tools/host_tests/test_ui_page_catalog.c \
   src/ui_page_catalog.c \
   src/ui_page_registry.c \
+  src/ui_page_module_registry.c \
+  src/ui_page_module_core.c \
+  src/ui_page_module_manifest.c \
   -o /tmp/esp32watch_host_tests/ui_page_catalog_test
 /tmp/esp32watch_host_tests/ui_page_catalog_test
 
@@ -156,11 +183,71 @@ g++ -std=c++17 "${COMMON_CPP_DEFINES[@]}" -Itools/host_stubs -Iinclude -Isrc \
 
 
 g++ -std=c++17 "${COMMON_CPP_DEFINES[@]}" -Itools/host_stubs -Iinclude -Isrc \
+  tools/host_tests/test_system_runtime_service_init.cpp \
+  src/system_init_esp32.cpp \
+  src/system_init_stage.c \
+  -o /tmp/esp32watch_host_tests/system_runtime_service_init_test
+/tmp/esp32watch_host_tests/system_runtime_service_init_test
+
+g++ -std=c++17 "${COMMON_CPP_DEFINES[@]}" -DSYSTEM_RUNTIME_INIT_STORAGE_AUTHORITY_FIRST=0 -Itools/host_stubs -Iinclude -Isrc \
+  tools/host_tests/test_system_runtime_service_init.cpp \
+  src/system_init_esp32.cpp \
+  src/system_init_stage.c \
+  -o /tmp/esp32watch_host_tests/system_runtime_service_init_legacy_test
+/tmp/esp32watch_host_tests/system_runtime_service_init_legacy_test
+
+g++ -std=c++17 "${COMMON_CPP_DEFINES[@]}" -Itools/host_stubs -Iinclude -Isrc \
   tools/host_tests/test_time_service_faults.cpp \
   src/services/time_service.cpp \
   src/persist_preferences.cpp \
   -o /tmp/esp32watch_host_tests/time_service_faults_test
 /tmp/esp32watch_host_tests/time_service_faults_test
+
+g++ -std=c++17 "${COMMON_CPP_DEFINES[@]}" -Itools/host_stubs -Iinclude -Isrc \
+  tools/host_tests/test_time_service_authority_paths.cpp \
+  src/services/time_service.cpp \
+  src/persist_preferences.cpp \
+  -o /tmp/esp32watch_host_tests/time_service_authority_paths_test
+/tmp/esp32watch_host_tests/time_service_authority_paths_test
+
+g++ -std=c++17 -Itools/host_stubs -Iinclude -Isrc \
+  tools/host_tests/test_web_asset_contract_parser.cpp \
+  src/web/web_asset_contract_parser.cpp \
+  -o /tmp/esp32watch_host_tests/web_asset_contract_parser_test
+/tmp/esp32watch_host_tests/web_asset_contract_parser_test
+
+g++ -std=c++17 "${COMMON_CPP_DEFINES[@]}" -Itools/host_stubs -Iinclude -Isrc \
+  tools/host_tests/test_time_service_long_disconnect.cpp \
+  src/services/time_service.cpp \
+  src/persist_preferences.cpp \
+  -o /tmp/esp32watch_host_tests/time_service_long_disconnect_test
+/tmp/esp32watch_host_tests/time_service_long_disconnect_test
+
+gcc -std=c11 -Iinclude -Isrc \
+  tools/host_tests/test_model_alarm_time_integration.c \
+  src/model.c \
+  src/model_runtime.c \
+  src/model_alarm.c \
+  src/model_activity.c \
+  src/model_settings.c \
+  src/model_time.c \
+  -o /tmp/esp32watch_host_tests/model_alarm_time_integration_test
+/tmp/esp32watch_host_tests/model_alarm_time_integration_test
+
+./tools/run_host_board_profile_matrix.sh
+
+gcc -std=c11 -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude -Isrc \
+  tools/host_tests/test_command_catalog_compatibility.c \
+  src/app_command.c \
+  src/app_command_registry.c \
+  src/app_command_module_core.c \
+  src/app_command_module_manifest.c \
+  -o /tmp/esp32watch_host_tests/command_catalog_compatibility_test
+/tmp/esp32watch_host_tests/command_catalog_compatibility_test
+
+python3 tools/verify_host_python_requirements.py
+python3 tools/host_tests/test_compatibility_lifecycle.py
+python3 tools/host_tests/test_workflow_yaml.py
 
 python3 tools/host_tests/test_release_bundle.py
 python3 tools/host_tests/test_capture_device_smoke_report.py

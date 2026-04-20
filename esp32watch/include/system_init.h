@@ -47,6 +47,11 @@ typedef enum {
     SYSTEM_INIT_STAGE_STATUS_FAILED
 } SystemInitStageStatus;
 
+typedef enum {
+    SYSTEM_RUNTIME_INIT_PROFILE_STORAGE_AUTHORITY_FIRST = 0,
+    SYSTEM_RUNTIME_INIT_PROFILE_LEGACY_CONSUMER_FIRST
+} SystemRuntimeInitProfile;
+
 typedef struct {
     bool has_battery_adc;
     bool has_vibration;
@@ -118,12 +123,51 @@ bool system_board_peripheral_init(void);
  * @brief Initialize runtime services that must come online before watch_app_init().
  *
  * This call is part of the authoritative startup transaction and must succeed
- * before the application layer is allowed to initialize.
+ * before the application layer is allowed to initialize. The active startup
+ * profile defines whether authority services lead or whether legacy consumer-
+ * first fallback ordering is in effect.
  *
  * @return true when all required runtime services were initialized
  *         successfully; false when a fatal stop path was triggered.
  */
 bool system_runtime_service_init(void);
+
+/**
+ * @brief Return the active runtime-service initialization profile.
+ *
+ * @return Active startup profile controlling runtime service order and rollback policy.
+ */
+SystemRuntimeInitProfile system_runtime_init_profile(void);
+
+/**
+ * @brief Return the stable printable name for the active runtime-service initialization profile.
+ *
+ * @return Stable profile name string.
+ */
+const char *system_runtime_init_profile_name(void);
+
+/**
+ * @brief Return the number of stages in the active runtime-service startup plan.
+ *
+ * @return Count of runtime service stages in the current plan.
+ */
+uint8_t system_runtime_service_plan_length(void);
+
+/**
+ * @brief Return the stage assigned to a runtime-service plan slot.
+ *
+ * @param[in] index Zero-based entry in the current runtime-service plan.
+ * @return The requested stage, or SYSTEM_INIT_STAGE_NONE when @p index is out of range.
+ */
+SystemInitStage system_runtime_service_plan_stage(uint8_t index);
+
+/**
+ * @brief Check whether the active runtime-service prerequisites are already satisfied for a stage.
+ *
+ * @param[in] stage Runtime service stage to evaluate.
+ * @return true when the current startup transaction already satisfied every prerequisite for @p stage.
+ */
+bool system_runtime_service_stage_prerequisites_met(SystemInitStage stage);
 
 /**
  * @brief Initialize the web control plane as part of the startup transaction.

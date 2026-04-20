@@ -68,6 +68,8 @@ typedef struct {
 
 typedef struct {
     bool rtc_reset_domain_supported;
+    bool rtc_wall_clock_supported;
+    bool rtc_wall_clock_persistent;
     bool idle_light_sleep_supported;
     bool watchdog_supported;
     bool flash_journal_supported;
@@ -162,6 +164,10 @@ PlatformStatus platform_i2c_write(PlatformI2cBus *bus, uint16_t address, uint8_t
 PlatformStatus platform_i2c_mem_read(PlatformI2cBus *bus, uint16_t address, uint16_t mem_address, uint16_t mem_address_size, uint8_t *data, uint16_t size, uint32_t timeout_ms);
 
 PlatformStatus platform_rtc_init(PlatformRtcDevice *device);
+bool platform_rtc_wall_clock_supported(PlatformRtcDevice *device);
+bool platform_rtc_wall_clock_persistent(PlatformRtcDevice *device);
+PlatformStatus platform_rtc_get_epoch(PlatformRtcDevice *device, uint32_t *out_epoch);
+PlatformStatus platform_rtc_set_epoch(PlatformRtcDevice *device, uint32_t epoch);
 void platform_rtc_backup_unlock(void);
 uint32_t platform_rtc_backup_read(PlatformRtcDevice *device, uint32_t reg);
 void platform_rtc_backup_write(PlatformRtcDevice *device, uint32_t reg, uint32_t value);

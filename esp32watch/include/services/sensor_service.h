@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "sensor.h"
+#include "services/device_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,6 +24,9 @@ const char *sensor_service_runtime_state_name(void);
 const char *sensor_service_calibration_state_name(void);
 
 bool sensor_service_is_initialized(void);
+
+uint32_t sensor_service_last_applied_generation(void);
+bool sensor_service_verify_config_applied(uint32_t generation, const DeviceConfigSnapshot *cfg);
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-trap 'rm -rf .pio' EXIT
+trap 'rm -rf .pio dist .pytest_cache' EXIT
 
 python3 ./tools/generate_asset_contract.py
 python3 ./tools/verify_partition_contract.py
@@ -39,6 +39,8 @@ PY
 
 bash ./tools/host_cpp_sanity.sh
 python3 ./tools/host_runtime_contract_check.py
+python3 ./tools/verify_host_python_requirements.py
+python3 ./tools/verify_change_validation_matrix.py
 bash ./tools/host_behavior_check.sh
 
 if command -v pio >/dev/null 2>&1; then
@@ -48,7 +50,7 @@ if command -v pio >/dev/null 2>&1; then
     timeout "${PIO_TIMEOUT_SEC:-900}" ./tools/verify_platformio_build.sh "${PIO_ENV_NAME:-esp32s3_n16r8_dev}"
   fi
 else
-  echo "[WARN] pio not found; skipped PlatformIO build validation"
+  echo "[WARN] pio not found; skipped PlatformIO build validation (host sanity does not prove firmware compilation in this run)"
 fi
 
 echo "[INFO] Host sanity check completed."

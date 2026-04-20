@@ -9,6 +9,7 @@
 #include "services/sensor_service.h"
 #include "services/storage_service.h"
 #include "services/storage_facade.h"
+#include "services/runtime_side_effect_service.h"
 #include "ui.h"
 #include "ui_internal.h"
 #include "platform_api.h"
@@ -183,45 +184,10 @@ static bool watch_app_command_from_ui_mutation(const UiModelMutation *mutation, 
 
 void watch_app_apply_model_runtime_requests(uint8_t *last_sensor_sensitivity)
 {
-    StorageCommitReason reason = STORAGE_COMMIT_REASON_NONE;
-    uint32_t flags = model_consume_runtime_requests(&reason);
-    ModelDomainState domain_state;
-
-    if (flags == 0U || model_get_domain_state(&domain_state) == NULL) {
-        return;
-    }
-
-    if ((flags & MODEL_RUNTIME_REQUEST_APPLY_BRIGHTNESS) != 0U) {
-        display_service_apply_settings(&domain_state.settings);
-    }
-
-    if ((flags & MODEL_RUNTIME_REQUEST_SYNC_SENSOR_SETTINGS) != 0U) {
-        sensor_service_set_sensitivity(domain_state.settings.sensor_sensitivity);
-        if (last_sensor_sensitivity != NULL) {
-            *last_sensor_sensitivity = domain_state.settings.sensor_sensitivity;
-        }
-    }
-
-    if ((flags & MODEL_RUNTIME_REQUEST_CLEAR_SENSOR_CALIBRATION) != 0U) {
-        sensor_service_clear_calibration();
-        storage_facade_clear_sensor_calibration();
-    }
-
-    if ((flags & MODEL_RUNTIME_REQUEST_STAGE_SETTINGS) != 0U) {
-        storage_facade_save_settings(&domain_state.settings);
-    }
-
-    if ((flags & MODEL_RUNTIME_REQUEST_STAGE_ALARMS) != 0U) {
-        storage_facade_save_alarms(domain_state.alarms, APP_MAX_ALARMS);
-    }
-
-    if ((flags & MODEL_RUNTIME_REQUEST_STAGE_GAME_STATS) != 0U) {
-        storage_facade_save_game_stats(&domain_state.game_stats);
-    }
-
-    if ((flags & MODEL_RUNTIME_REQUEST_STORAGE_COMMIT) != 0U) {
-        storage_service_request_commit(reason);
-    }
+    (void)runtime_side_effect_service_apply_pending(RUNTIME_SIDE_EFFECT_CONTEXT_NORMAL,
+                                                    RUNTIME_SIDE_EFFECT_COMMIT_DEFERRED,
+                                                    last_sensor_sensitivity,
+                                                    NULL);
 }
 
 void watch_app_apply_ui_actions(WatchAppSleepRequestState *sleep_request, uint8_t *last_sensor_sensitivity)

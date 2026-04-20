@@ -30,6 +30,37 @@ extern "C" const char *time_service_source_name(TimeSourceType source)
         default: return "OTHER";
     }
 }
+extern "C" TimeInitStatus time_service_init_status(void)
+{
+    return TIME_INIT_STATUS_DEGRADED;
+}
+extern "C" const char *time_service_init_status_name(TimeInitStatus status)
+{
+    switch (status) {
+        case TIME_INIT_STATUS_READY: return "READY";
+        case TIME_INIT_STATUS_DEGRADED: return "DEGRADED";
+        case TIME_INIT_STATUS_UNAVAILABLE: return "UNAVAILABLE";
+        default: return "UNKNOWN";
+    }
+}
+extern "C" const char *time_service_init_reason(void)
+{
+    return "RECOVERY_FLOOR";
+}
+extern "C" TimeAuthorityLevel time_service_authority_level(void)
+{
+    return TIME_AUTHORITY_RECOVERY;
+}
+extern "C" const char *time_service_authority_name(TimeAuthorityLevel authority)
+{
+    switch (authority) {
+        case TIME_AUTHORITY_RECOVERY: return "RECOVERY";
+        case TIME_AUTHORITY_NETWORK: return "NETWORK";
+        case TIME_AUTHORITY_HARDWARE: return "HARDWARE";
+        case TIME_AUTHORITY_HOST: return "HOST";
+        default: return "NONE";
+    }
+}
 extern "C" const char *time_service_confidence_name(TimeConfidenceLevel confidence)
 {
     switch (confidence) {

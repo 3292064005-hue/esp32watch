@@ -10,6 +10,9 @@
 static bool g_event_should_succeed = true;
 static bool g_wifi_verify_ok = true;
 static bool g_network_verify_ok = true;
+static bool g_display_verify_ok = true;
+static bool g_power_verify_ok = true;
+static bool g_sensor_verify_ok = true;
 static bool g_config_ok = true;
 static uint32_t g_config_generation = 7U;
 static DeviceConfigSnapshot g_cfg = {
@@ -80,9 +83,57 @@ bool network_sync_service_verify_config_applied(uint32_t generation, const Devic
     return g_network_verify_ok && generation == g_config_generation;
 }
 
+uint32_t display_service_last_applied_generation(void)
+{
+    return g_display_verify_ok ? g_config_generation : (g_config_generation == 0U ? 0U : g_config_generation - 1U);
+}
+
+bool display_service_verify_config_applied(uint32_t generation, const DeviceConfigSnapshot *cfg)
+{
+    (void)cfg;
+    return g_display_verify_ok && generation == g_config_generation;
+}
+
+uint32_t power_service_last_applied_generation(void)
+{
+    return g_power_verify_ok ? g_config_generation : (g_config_generation == 0U ? 0U : g_config_generation - 1U);
+}
+
+bool power_service_verify_config_applied(uint32_t generation, const DeviceConfigSnapshot *cfg)
+{
+    (void)cfg;
+    return g_power_verify_ok && generation == g_config_generation;
+}
+
+uint32_t sensor_service_last_applied_generation(void)
+{
+    return g_sensor_verify_ok ? g_config_generation : (g_config_generation == 0U ? 0U : g_config_generation - 1U);
+}
+
+bool sensor_service_verify_config_applied(uint32_t generation, const DeviceConfigSnapshot *cfg)
+{
+    (void)cfg;
+    return g_sensor_verify_ok && generation == g_config_generation;
+}
+
 int main(void)
 {
     RuntimeReloadReport report = {0};
+
+    assert((runtime_reload_supported_domain_mask() & (RUNTIME_RELOAD_DOMAIN_WIFI |
+                                                      RUNTIME_RELOAD_DOMAIN_NETWORK |
+                                                      RUNTIME_RELOAD_DOMAIN_AUTH |
+                                                      RUNTIME_RELOAD_DOMAIN_DISPLAY |
+                                                      RUNTIME_RELOAD_DOMAIN_POWER |
+                                                      RUNTIME_RELOAD_DOMAIN_SENSOR |
+                                                      RUNTIME_RELOAD_DOMAIN_COMPANION)) ==
+           (RUNTIME_RELOAD_DOMAIN_WIFI |
+            RUNTIME_RELOAD_DOMAIN_NETWORK |
+            RUNTIME_RELOAD_DOMAIN_AUTH |
+            RUNTIME_RELOAD_DOMAIN_DISPLAY |
+            RUNTIME_RELOAD_DOMAIN_POWER |
+            RUNTIME_RELOAD_DOMAIN_SENSOR |
+            RUNTIME_RELOAD_DOMAIN_COMPANION));
 
     runtime_event_service_reset();
     assert(runtime_reload_device_config(false, false, &report));
@@ -200,6 +251,50 @@ int main(void)
     assert(strcmp(report.failure_code, "VERIFY_CONFIG_UNAVAILABLE") == 0);
     assert(strcmp(report.wifi_verify_reason, "CONFIG_UNAVAILABLE") == 0);
     assert(strcmp(report.network_verify_reason, "CONFIG_UNAVAILABLE") == 0);
+
+
+    runtime_event_service_reset();
+    g_config_ok = true;
+    g_config_generation = 13U;
+    report = (RuntimeReloadReport){0};
+    assert(runtime_reload_device_config_domains(RUNTIME_RELOAD_DOMAIN_AUTH, &report));
+    assert(report.requested);
+    assert(report.preflight_ok);
+    assert(report.apply_attempted);
+    assert(report.event_dispatch_ok);
+    assert(report.verify_ok);
+    assert(report.deferred_domain_mask == RUNTIME_RELOAD_DOMAIN_AUTH);
+    assert(report.applied_domain_mask == 0U);
+    assert(report.reboot_required_domain_mask == 0U);
+    assert(report.failed_domain_mask == 0U);
+    assert(report.domain_result_count == 1U);
+    assert(report.domain_results[0].persisted_only);
+    assert(report.domain_results[0].effective);
+    assert(strcmp(report.domain_results[0].verify_reason, "PERSISTED_ONLY") == 0);
+
+    runtime_event_service_reset();
+    report = (RuntimeReloadReport){0};
+    assert(runtime_reload_device_config_domains(RUNTIME_RELOAD_DOMAIN_COMPANION, &report));
+    assert(report.requested);
+    assert(report.preflight_ok);
+    assert(report.apply_attempted);
+    assert(report.event_dispatch_ok);
+    assert(report.verify_ok);
+    assert(report.requires_reboot);
+    assert(report.reboot_required_domain_mask == RUNTIME_RELOAD_DOMAIN_COMPANION);
+    assert(report.failed_domain_mask == 0U);
+    assert(report.domain_results[0].reboot_required);
+    assert(strcmp(report.domain_results[0].verify_reason, "REQUIRES_REBOOT") == 0);
+
+    runtime_event_service_reset();
+    { RuntimeEventSubscription subscription = make_subscription(config_event_handler, NULL); subscription.domain_mask = RUNTIME_RELOAD_DOMAIN_DISPLAY | RUNTIME_RELOAD_DOMAIN_POWER | RUNTIME_RELOAD_DOMAIN_SENSOR; assert(runtime_event_service_register_ex(&subscription)); }
+    g_display_verify_ok = true;
+    g_power_verify_ok = true;
+    g_sensor_verify_ok = true;
+    report = (RuntimeReloadReport){0};
+    assert(runtime_reload_device_config_domains(RUNTIME_RELOAD_DOMAIN_DISPLAY | RUNTIME_RELOAD_DOMAIN_POWER | RUNTIME_RELOAD_DOMAIN_SENSOR, &report));
+    assert(report.applied_domain_mask == (RUNTIME_RELOAD_DOMAIN_DISPLAY | RUNTIME_RELOAD_DOMAIN_POWER | RUNTIME_RELOAD_DOMAIN_SENSOR));
+    assert(report.failed_domain_mask == 0U);
 
     puts("[OK] runtime_reload_coordinator behavior check passed");
     return 0;

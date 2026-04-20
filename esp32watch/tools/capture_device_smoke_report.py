@@ -11,7 +11,7 @@ from typing import Any
 from urllib import error, parse, request
 
 TERMINAL_ACTION_STATES = {'APPLIED', 'REJECTED', 'FAILED'}
-SCENARIO_EVIDENCE_SCHEMA_VERSION = 2
+SCENARIO_EVIDENCE_SCHEMA_VERSION = 3
 REQUIRED_SCENARIOS = ('wifiProvisioning', 'persistence', 'bootLoopRecovery')
 
 
@@ -186,6 +186,9 @@ def main() -> int:
     parser.add_argument('--flash-evidence')
     parser.add_argument('--scenario-evidence')
     parser.add_argument('--capture-runner', choices=('CI_DEVICE_RUNNER', 'LOCAL_DEVICE_RUNNER'), default='LOCAL_DEVICE_RUNNER')
+    parser.add_argument('--runner-identity', default='LOCAL_DEVICE_RUNNER')
+    parser.add_argument('--lab-identity', default='UNSPECIFIED_LAB')
+    parser.add_argument('--attest-physical-actions', action='store_true')
     args = parser.parse_args()
 
     candidate_bundle = Path(args.candidate_bundle)
@@ -311,8 +314,15 @@ def main() -> int:
         'generator': {
             'tool': 'capture_device_smoke_report.py',
             'captureMode': 'LIVE_HTTP_CAPTURE',
-            'schemaVersion': 4,
+            'schemaVersion': 5,
             'captureRunner': args.capture_runner,
+            'runnerIdentity': args.runner_identity,
+            'labIdentity': args.lab_identity,
+        },
+        'attestation': {
+            'physicalActionsAttested': args.attest_physical_actions or bool((scenario_evidence or {}).get('attestation', {}).get('physicalActionsAttested')),
+            'runnerIdentity': args.runner_identity,
+            'labIdentity': args.lab_identity,
         },
         'device': {
             'id': args.device_id,

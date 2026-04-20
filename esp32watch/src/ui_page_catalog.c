@@ -1,55 +1,26 @@
 #include "ui_page_catalog.h"
-
-static const UiPageDescriptor g_ui_page_catalog[] = {
-    {.page = PAGE_WATCHFACE,   .ops = {.title = "WATCH", .refresh_policy = UI_REFRESH_WATCHFACE, .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_ROOT,     .presenter = UI_PRESENTER_WATCHFACE, .render = ui_page_watchface_render,    .handle = ui_page_watchface_handle}},
-    {.page = PAGE_QUICK,       .ops = {.title = "QUICK", .refresh_policy = UI_REFRESH_CARD,      .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_ROOT,     .presenter = UI_PRESENTER_WATCHFACE, .render = ui_page_quick_render,        .handle = ui_page_quick_handle}},
-    {.page = PAGE_APPS,        .ops = {.title = "APPS",  .refresh_policy = UI_REFRESH_NONE,      .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_ROOT,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_apps_render,         .handle = ui_page_apps_handle}},
-    {.page = PAGE_ALARM,       .ops = {.title = "ALARM", .refresh_policy = UI_REFRESH_NONE,      .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_alarm_render,        .handle = ui_page_alarm_handle}},
-    {.page = PAGE_ALARM_EDIT,  .ops = {.title = "ALM ED",.refresh_policy = UI_REFRESH_NONE,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_EDIT,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_alarm_edit_render,   .handle = ui_page_alarm_edit_handle}},
-    {.page = PAGE_STOPWATCH,   .ops = {.title = "SW",    .refresh_policy = UI_REFRESH_STOPWATCH, .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_stopwatch_render,    .handle = ui_page_stopwatch_handle}},
-    {.page = PAGE_TIMER,       .ops = {.title = "TIMER", .refresh_policy = UI_REFRESH_TIMER,     .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_timer_render,        .handle = ui_page_timer_handle}},
-    {.page = PAGE_MUSIC,       .ops = {.title = "MELODY",.refresh_policy = UI_REFRESH_CARD,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_music_render,        .handle = ui_page_music_handle}},
-    {.page = PAGE_GAMES,       .ops = {.title = "GAMES", .refresh_policy = UI_REFRESH_NONE,      .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_games_menu_render,   .handle = ui_page_games_menu_handle}},
-    {.page = PAGE_GAME_DETAIL, .ops = {.title = "GAME",  .refresh_policy = UI_REFRESH_NONE,      .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_game_detail_render,  .handle = ui_page_game_detail_handle}},
-    {.page = PAGE_BREAKOUT,    .ops = {.title = "BRK",   .refresh_policy = UI_REFRESH_GAME,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_breakout_render,     .handle = ui_page_breakout_handle}},
-    {.page = PAGE_DINO,        .ops = {.title = "DINO",  .refresh_policy = UI_REFRESH_GAME,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_dino_render,         .handle = ui_page_dino_handle}},
-    {.page = PAGE_PONG,        .ops = {.title = "PONG",  .refresh_policy = UI_REFRESH_GAME,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_pong_render,         .handle = ui_page_pong_handle}},
-    {.page = PAGE_SNAKE,       .ops = {.title = "SNAKE", .refresh_policy = UI_REFRESH_GAME,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_snake_render,        .handle = ui_page_snake_handle}},
-    {.page = PAGE_TETRIS,      .ops = {.title = "TET",   .refresh_policy = UI_REFRESH_GAME,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_tetris_render,       .handle = ui_page_tetris_handle}},
-    {.page = PAGE_SHOOTER,     .ops = {.title = "SHOT",  .refresh_policy = UI_REFRESH_GAME,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_shooter_render,      .handle = ui_page_shooter_handle}},
-    {.page = PAGE_ACTIVITY,    .ops = {.title = "ACT",   .refresh_policy = UI_REFRESH_CARD,      .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_ACTIVITY,  .render = ui_page_activity_render,     .handle = ui_page_activity_handle}},
-    {.page = PAGE_SENSOR,      .ops = {.title = "SENSOR",.refresh_policy = UI_REFRESH_SENSOR,    .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_SENSOR,    .render = ui_page_sensor_render,       .handle = ui_page_sensor_handle}},
-    {.page = PAGE_SETTINGS,    .ops = {.title = "SET",   .refresh_policy = UI_REFRESH_NONE,      .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_SETTINGS, .presenter = UI_PRESENTER_SETTINGS,  .render = ui_page_settings_main_render,.handle = ui_page_settings_main_handle}},
-    {.page = PAGE_TIMESET,     .ops = {.title = "TIME",  .refresh_policy = UI_REFRESH_NONE,      .allow_auto_sleep = false, .allow_popup = false, .nav_group = UI_NAV_GROUP_EDIT,     .presenter = UI_PRESENTER_NONE,      .render = ui_page_time_set_render,     .handle = ui_page_time_set_handle}},
-    {.page = PAGE_DIAG,        .ops = {.title = "DIAG",  .refresh_policy = UI_REFRESH_CARD,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_SYSTEM,   .presenter = UI_PRESENTER_DIAG,      .render = ui_page_diag_render,         .handle = ui_page_diag_handle}},
-    {.page = PAGE_ABOUT,       .ops = {.title = "ABOUT", .refresh_policy = UI_REFRESH_NONE,      .allow_auto_sleep = true,  .allow_popup = true,  .nav_group = UI_NAV_GROUP_SYSTEM,   .presenter = UI_PRESENTER_SYSTEM,    .render = ui_page_about_render,        .handle = ui_page_about_handle}},
-    {.page = PAGE_CALIBRATION, .ops = {.title = "CAL",   .refresh_policy = UI_REFRESH_CARD,      .allow_auto_sleep = false, .allow_popup = false, .nav_group = UI_NAV_GROUP_SYSTEM,   .presenter = UI_PRESENTER_SENSOR,    .render = ui_page_calibration_render,  .handle = ui_page_calibration_handle}},
-    {.page = PAGE_INPUTTEST,   .ops = {.title = "INPUT", .refresh_policy = UI_REFRESH_CARD,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_SYSTEM,   .presenter = UI_PRESENTER_SYSTEM,    .render = ui_page_inputtest_render,    .handle = ui_page_inputtest_handle}},
-    {.page = PAGE_STORAGE,     .ops = {.title = "STORE", .refresh_policy = UI_REFRESH_CARD,      .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_SYSTEM,   .presenter = UI_PRESENTER_STORAGE,   .render = ui_page_storage_render,      .handle = ui_page_storage_handle}},
-    {.page = PAGE_LIQUID,      .ops = {.title = "LIQ",   .refresh_policy = UI_REFRESH_LIQUID,    .allow_auto_sleep = false, .allow_popup = true,  .nav_group = UI_NAV_GROUP_APPS,     .presenter = UI_PRESENTER_SENSOR,    .render = ui_page_liquid_render,       .handle = ui_page_liquid_handle}},
-};
+#include "ui_page_module_registry.h"
 
 uint8_t ui_page_catalog_count(void)
 {
-    return (uint8_t)(sizeof(g_ui_page_catalog) / sizeof(g_ui_page_catalog[0]));
+    return (uint8_t)ui_page_registry_catalog_count();
 }
 
 bool ui_page_catalog_get(uint8_t index, UiPageDescriptor *out)
 {
-    if (out == NULL || index >= ui_page_catalog_count()) {
+    const UiPageDescriptor *descriptor;
+    if (out == NULL) {
         return false;
     }
-
-    *out = g_ui_page_catalog[index];
+    descriptor = ui_page_registry_catalog_at(index);
+    if (descriptor == NULL) {
+        return false;
+    }
+    *out = *descriptor;
     return true;
 }
 
 const UiPageDescriptor *ui_page_catalog_find(PageId page)
 {
-    for (uint8_t i = 0U; i < ui_page_catalog_count(); ++i) {
-        if (g_ui_page_catalog[i].page == page) {
-            return &g_ui_page_catalog[i];
-        }
-    }
-    return NULL;
+    return ui_page_registry_find_descriptor(page);
 }

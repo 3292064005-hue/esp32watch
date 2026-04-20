@@ -3,90 +3,62 @@
 
 #include "model.h"
 
-/* Read-only compatibility projection rebuilt from split-state snapshots. */
-extern WatchModel g_model;
+/* Split-state snapshots remain authoritative; only read-side compatibility views are synthesized on demand. */
 extern ModelDomainState g_model_domain_state;
 extern ModelRuntimeState g_model_runtime_state;
 extern ModelUiState g_model_ui_state;
 
-typedef enum {
-    MODEL_PROJECTION_DIRTY_NONE = 0,
-    MODEL_PROJECTION_DIRTY_DOMAIN = 1 << 0,
-    MODEL_PROJECTION_DIRTY_RUNTIME = 1 << 1,
-    MODEL_PROJECTION_DIRTY_UI = 1 << 2,
-    MODEL_PROJECTION_DIRTY_ALL = (MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_RUNTIME | MODEL_PROJECTION_DIRTY_UI)
-} ModelProjectionDirtyFlags;
-
 /**
-/**
- * @brief Rebuild the read-only legacy projection after an attempted legacy mutation.
+ * @brief Commit a runtime-state mutation and normalize compatibility-facing transient state.
  *
- * The authoritative build no longer accepts write-side mutations through WatchModel.
- * These helpers discard direct g_model edits and restore the projection from the
- * split-state authority without writing anything back into the canonical domains.
- */
-void model_internal_commit_legacy_mutation(void);
-void model_internal_commit_legacy_mutation_with_flags(uint32_t flags);
-
-/**
- * @brief Commit a runtime-state mutation and refresh the legacy compatibility projection.
- *
- * @param[in] flags Bitwise OR of ModelProjectionDirtyFlags values that changed alongside the runtime mutation.
- * @return void
- * @throws None.
- * @boundary_behavior Ignores MODEL_PROJECTION_DIRTY_NONE and rebuilds the affected read-only projection slices from ModelRuntimeState before returning.
- */
-void model_internal_commit_runtime_mutation_with_flags(uint32_t flags);
-void model_internal_commit_runtime_mutation(void);
-
-/**
- * @brief Commit a domain-state mutation and refresh the legacy compatibility projection.
- *
- * @param[in] flags Bitwise OR of ModelProjectionDirtyFlags values that changed alongside the domain mutation.
- * @return void
- * @throws None.
- */
-void model_internal_commit_domain_mutation_with_flags(uint32_t flags);
-void model_internal_commit_domain_mutation(void);
-
-/**
- * @brief Commit a UI-state mutation and refresh the legacy compatibility projection.
- *
- * @param[in] flags Bitwise OR of ModelProjectionDirtyFlags values that changed alongside the UI mutation.
- * @return void
- * @throws None.
- */
-void model_internal_commit_ui_mutation_with_flags(uint32_t flags);
-void model_internal_commit_ui_mutation(void);
-
-/**
- * @brief Discard accidental legacy aggregate edits and rebuild the projection.
- *
- * @note The split-state domains remain authoritative. These helpers exist only
- *       for compatibility during the projection retirement window.
- */
-void model_internal_sync_split_state_from_legacy(void);
-void model_internal_sync_legacy_from_split_state(void);
-
-/**
- * @brief Mark one or more read-side model projections dirty after a write-side mutation.
- *
- * @param[in] flags Bitwise OR of ModelProjectionDirtyFlags values.
- * @return void
- * @throws None.
- * @boundary_behavior Ignores MODEL_PROJECTION_DIRTY_NONE.
- */
-void model_internal_mark_projection_dirty(uint32_t flags);
-
-/**
- * @brief Flush pending read-side projections from the legacy write model into split snapshots.
+ * Compatibility snapshots are synthesized on demand, so commit now means
+ * "repair any dependent split-state mirrors before readers snapshot" rather
+ * than "mark legacy projections dirty".
  *
  * @param None.
  * @return void
  * @throws None.
- * @boundary_behavior Returns immediately when no projection is dirty.
+ */
+void model_internal_commit_runtime_mutation(void);
+
+/**
+ * @brief Commit a domain-state mutation and normalize compatibility-facing dependent views.
+ *
+ * @param None.
+ * @return void
+ * @throws None.
+ */
+void model_internal_commit_domain_mutation(void);
+
+/**
+ * @brief Commit a UI-state mutation and normalize compatibility-facing dependent views.
+ *
+ * @param None.
+ * @return void
+ * @throws None.
+ */
+void model_internal_commit_ui_mutation(void);
+
+/**
+ * @brief Normalize authoritative split-state before callers snapshot read-side views.
+ *
+ * Compatibility snapshots are synthesized on demand, so flush now only repairs
+ * derived split-state fields such as selected-alarm and popup mirrors.
+ *
+ * @param None.
+ * @return void
+ * @throws None.
  */
 void model_internal_flush_read_models(void);
+
+/**
+ * @brief Build a read-only compatibility snapshot from the authoritative split-state domains.
+ *
+ * @param[out] out Destination aggregate snapshot. NULL is ignored.
+ * @return Pointer to @p out when populated; NULL when @p out is NULL.
+ * @throws None.
+ */
+const WatchModel *model_internal_build_compat_snapshot(WatchModel *out);
 
 /**
  * @brief Stage settings domain data for the runtime orchestrator.

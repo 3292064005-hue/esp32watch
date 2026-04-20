@@ -50,7 +50,7 @@ const char *system_init_stage_name_internal(SystemInitStage stage)
         case SYSTEM_INIT_STAGE_GPIO: return "GPIO";
         case SYSTEM_INIT_STAGE_UART: return "UART";
         case SYSTEM_INIT_STAGE_BKP: return "BKP";
-        case SYSTEM_INIT_STAGE_RTC: return "RTC";
+        case SYSTEM_INIT_STAGE_RTC: return "RTC_DOMAIN";
         case SYSTEM_INIT_STAGE_I2C: return "I2C";
         case SYSTEM_INIT_STAGE_ADC: return "ADC";
         case SYSTEM_INIT_STAGE_IWDG: return "IWDG";

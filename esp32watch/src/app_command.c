@@ -1,4 +1,5 @@
 #include "app_command.h"
+#include "app_command_registry.h"
 #include "app_limits.h"
 #include "services/diag_service.h"
 #include "services/sensor_service.h"
@@ -6,43 +7,6 @@
 #include "services/reset_service.h"
 #include <stddef.h>
 #include <string.h>
-
-static const AppCommandDescriptor kAppCommandCatalog[] = {
-    {APP_COMMAND_SET_BRIGHTNESS, "setBrightness", true},
-    {APP_COMMAND_SET_GOAL, "setGoal", false},
-    {APP_COMMAND_SET_WATCHFACE, "setWatchface", true},
-    {APP_COMMAND_CYCLE_WATCHFACE, "cycleWatchface", false},
-    {APP_COMMAND_SET_SCREEN_TIMEOUT_IDX, "setScreenTimeoutIndex", false},
-    {APP_COMMAND_CYCLE_SCREEN_TIMEOUT, "cycleScreenTimeout", false},
-    {APP_COMMAND_SET_SENSOR_SENSITIVITY, "setSensorSensitivity", false},
-    {APP_COMMAND_SET_AUTO_WAKE, "setAutoWake", false},
-    {APP_COMMAND_SET_AUTO_SLEEP, "setAutoSleep", false},
-    {APP_COMMAND_SET_DND, "setDnd", false},
-#if APP_FEATURE_VIBRATION
-    {APP_COMMAND_SET_VIBRATE, "setVibrate", false},
-#endif
-    {APP_COMMAND_SET_SHOW_SECONDS, "setShowSeconds", false},
-    {APP_COMMAND_SET_ANIMATIONS, "setAnimations", false},
-    {APP_COMMAND_RESET_APP_STATE, "resetAppState", true},
-    {APP_COMMAND_FACTORY_RESET, "factoryReset", true},
-    {APP_COMMAND_RESTORE_DEFAULTS, "restoreDefaults", false},
-    {APP_COMMAND_SELECT_ALARM_OFFSET, "selectAlarmOffset", false},
-    {APP_COMMAND_SET_ALARM_ENABLED_AT, "setAlarmEnabledAt", false},
-    {APP_COMMAND_SET_ALARM_TIME_AT, "setAlarmTimeAt", false},
-    {APP_COMMAND_SET_ALARM_REPEAT_MASK_AT, "setAlarmRepeatMaskAt", false},
-    {APP_COMMAND_STOPWATCH_TOGGLE, "stopwatchToggle", false},
-    {APP_COMMAND_STOPWATCH_RESET, "stopwatchReset", false},
-    {APP_COMMAND_STOPWATCH_LAP, "stopwatchLap", false},
-    {APP_COMMAND_TIMER_TOGGLE, "timerToggle", false},
-    {APP_COMMAND_TIMER_ADJUST_SECONDS, "timerAdjustSeconds", false},
-    {APP_COMMAND_TIMER_CYCLE_PRESET, "timerCyclePreset", false},
-    {APP_COMMAND_SET_DATETIME, "setDatetime", false},
-    {APP_COMMAND_SET_GAME_HIGH_SCORE, "setGameHighScore", false},
-    {APP_COMMAND_SENSOR_REINIT, "sensorReinit", true},
-    {APP_COMMAND_SENSOR_CALIBRATION, "sensorCalibration", true},
-    {APP_COMMAND_STORAGE_MANUAL_FLUSH, "storageManualFlush", true},
-    {APP_COMMAND_CLEAR_SAFE_MODE, "clearSafeMode", true}
-};
 
 static bool app_command_source_valid(AppCommandSource source)
 {
@@ -63,99 +27,28 @@ static void app_command_set_result(AppCommandExecutionResult *out_result, bool o
 
 const AppCommandDescriptor *app_command_describe(AppCommandType type)
 {
-    size_t i;
-    for (i = 0; i < (sizeof(kAppCommandCatalog) / sizeof(kAppCommandCatalog[0])); ++i) {
-        if (kAppCommandCatalog[i].type == type) {
-            return &kAppCommandCatalog[i];
-        }
-    }
-    return NULL;
+    return app_command_registry_find(type);
 }
 
+/* Legacy Web/API alias `restoreDefaults` is retained via app_command_registry_find_by_name(). */
 const AppCommandDescriptor *app_command_describe_by_name(const char *wire_name)
 {
-    size_t i;
-    if (wire_name == NULL || wire_name[0] == '\0') {
-        return NULL;
-    }
-    if (strcmp(wire_name, "restoreDefaults") == 0) {
-        return app_command_describe(APP_COMMAND_RESET_APP_STATE);
-    }
-    for (i = 0; i < (sizeof(kAppCommandCatalog) / sizeof(kAppCommandCatalog[0])); ++i) {
-        if (strcmp(kAppCommandCatalog[i].wire_name, wire_name) == 0) {
-            return &kAppCommandCatalog[i];
-        }
-    }
-    return NULL;
+    return app_command_registry_find_by_name(wire_name);
 }
 
 bool app_command_type_from_companion_key(const char *companion_key, AppCommandType *out_type)
 {
-    if (out_type == NULL || companion_key == NULL || companion_key[0] == '\0') {
-        return false;
-    }
-    if (strcmp(companion_key, "BRIGHTNESS") == 0) {
-        *out_type = APP_COMMAND_SET_BRIGHTNESS;
-        return true;
-    }
-    if (strcmp(companion_key, "GOAL") == 0) {
-        *out_type = APP_COMMAND_SET_GOAL;
-        return true;
-    }
-    if (strcmp(companion_key, "WATCHFACE") == 0) {
-        *out_type = APP_COMMAND_SET_WATCHFACE;
-        return true;
-    }
-    if (strcmp(companion_key, "SENSOR_SENS") == 0) {
-        *out_type = APP_COMMAND_SET_SENSOR_SENSITIVITY;
-        return true;
-    }
-    if (strcmp(companion_key, "SCREEN_TIMEOUT") == 0) {
-        *out_type = APP_COMMAND_SET_SCREEN_TIMEOUT_IDX;
-        return true;
-    }
-    if (strcmp(companion_key, "AUTO_WAKE") == 0) {
-        *out_type = APP_COMMAND_SET_AUTO_WAKE;
-        return true;
-    }
-    if (strcmp(companion_key, "AUTO_SLEEP") == 0) {
-        *out_type = APP_COMMAND_SET_AUTO_SLEEP;
-        return true;
-    }
-    if (strcmp(companion_key, "DND") == 0) {
-        *out_type = APP_COMMAND_SET_DND;
-        return true;
-    }
-    if (strcmp(companion_key, "VIBRATE") == 0) {
-#if APP_FEATURE_VIBRATION
-        *out_type = APP_COMMAND_SET_VIBRATE;
-        return true;
-#else
-        return false;
-#endif
-    }
-    if (strcmp(companion_key, "SHOW_SECONDS") == 0) {
-        *out_type = APP_COMMAND_SET_SHOW_SECONDS;
-        return true;
-    }
-    if (strcmp(companion_key, "ANIMATIONS") == 0) {
-        *out_type = APP_COMMAND_SET_ANIMATIONS;
-        return true;
-    }
-    return false;
+    return app_command_registry_find_type_for_companion_key(companion_key, out_type);
 }
 
 size_t app_command_catalog_count(void)
 {
-    return sizeof(kAppCommandCatalog) / sizeof(kAppCommandCatalog[0]);
+    return app_command_registry_catalog_count();
 }
 
 const AppCommandDescriptor *app_command_catalog_at(size_t index)
 {
-    if (index >= app_command_catalog_count()) {
-        return NULL;
-    }
-    return &kAppCommandCatalog[index];
+    return app_command_registry_catalog_at(index);
 }
 
 const char *app_command_result_code_name(AppCommandResultCode code)

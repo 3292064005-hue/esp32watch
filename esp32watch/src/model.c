@@ -9,8 +9,8 @@
 #include "platform_api.h"
 #include <string.h>
 
-/* Read-only legacy aggregate snapshot rebuilt from the split-state authority. */
-WatchModel g_model;
+/* Compatibility aggregate snapshots are synthesized on demand from split-state authority. */
+static WatchModel g_model_compat_snapshot;
 static uint32_t g_last_time_refresh;
 static uint32_t g_last_low_bat_popup;
 static uint32_t g_last_active_minute_ms;
@@ -123,7 +123,7 @@ void model_internal_request_runtime_sync(uint32_t flags, StorageCommitReason rea
     if (model_commit_reason_priority(reason) >= model_commit_reason_priority(g_model_runtime_requests.commit_reason)) {
         g_model_runtime_requests.commit_reason = reason;
     }
-    model_internal_mark_projection_dirty(MODEL_PROJECTION_DIRTY_UI);
+    model_internal_commit_ui_mutation();
 }
 
 void model_internal_persist_settings(void)
@@ -272,7 +272,7 @@ void model_init(void)
     SettingsState defaults;
     AlarmState alarm_defaults[APP_MAX_ALARMS];
 
-    memset(&g_model, 0, sizeof(g_model));
+    memset(&g_model_compat_snapshot, 0, sizeof(g_model_compat_snapshot));
     memset(&g_model_domain_state, 0, sizeof(g_model_domain_state));
     memset(&g_model_runtime_state, 0, sizeof(g_model_runtime_state));
     memset(&g_model_ui_state, 0, sizeof(g_model_ui_state));
@@ -313,18 +313,12 @@ void model_init(void)
         model_internal_sync_storage_runtime();
     }
 
-    model_internal_mark_projection_dirty(MODEL_PROJECTION_DIRTY_ALL);
     model_internal_flush_read_models();
 }
 
 const WatchModel *model_get(void)
 {
-#if !MODEL_ENABLE_LEGACY_PROJECTION
-    return NULL;
-#else
-    model_internal_flush_read_models();
-    return &g_model;
-#endif
+    return model_internal_build_compat_snapshot(&g_model_compat_snapshot);
 }
 
 
@@ -342,7 +336,7 @@ uint32_t model_consume_runtime_requests(StorageCommitReason *commit_reason)
     }
     g_model_runtime_requests.flags = 0U;
     g_model_runtime_requests.commit_reason = STORAGE_COMMIT_REASON_NONE;
-    model_internal_mark_projection_dirty(MODEL_PROJECTION_DIRTY_UI);
+    model_internal_commit_ui_mutation();
     return flags;
 }
 
@@ -388,8 +382,8 @@ static void model_restore_defaults_internal(bool clear_game_stats)
     }
     model_internal_request_runtime_sync(runtime_request_flags,
                                         STORAGE_COMMIT_REASON_RESTORE_DEFAULTS);
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_UI);
-    model_internal_commit_runtime_mutation_with_flags(MODEL_PROJECTION_DIRTY_RUNTIME | MODEL_PROJECTION_DIRTY_UI);
+    model_internal_commit_domain_mutation();
+    model_internal_commit_runtime_mutation();
 }
 
 void model_restore_defaults(void)
@@ -478,7 +472,7 @@ void model_tick(uint32_t now_ms)
         g_last_active_minute_ms = 0U;
     }
 
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_UI);
+    model_internal_commit_domain_mutation();
     model_internal_commit_ui_mutation();
 }
 

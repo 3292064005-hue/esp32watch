@@ -18,6 +18,10 @@ typedef enum {
     RUNTIME_SERVICE_EVENT_FACTORY_RESET_COMPLETED
 } RuntimeServiceEvent;
 
+#define RUNTIME_EVENT_MASK_ALL 0xFFFFFFFFUL
+#define RUNTIME_EVENT_DOMAIN_NONE 0x00000000UL
+#define RUNTIME_EVENT_DOMAIN_ALL 0xFFFFFFFFUL
+
 typedef bool (*RuntimeServiceEventHandler)(RuntimeServiceEvent event, void *ctx);
 
 typedef struct {
@@ -26,6 +30,8 @@ typedef struct {
     const char *name;
     int8_t priority;
     bool critical;
+    uint32_t event_mask;
+    uint32_t domain_mask;
 } RuntimeEventSubscription;
 
 typedef struct {
@@ -34,18 +40,24 @@ typedef struct {
     bool saw_handler;
     bool all_succeeded;
     uint8_t handler_count;
+    uint8_t matched_handler_count;
     uint8_t success_count;
     uint8_t failure_count;
     uint8_t critical_failure_count;
     int8_t first_failed_handler_index;
+    uint32_t domain_mask;
 } RuntimeEventDispatchReport;
 
 void runtime_event_service_reset(void);
 
+uint32_t runtime_event_service_event_mask(RuntimeServiceEvent event);
 bool runtime_event_service_register_ex(const RuntimeEventSubscription *subscription);
 bool runtime_event_service_unregister(RuntimeServiceEventHandler handler, void *ctx);
 bool runtime_event_service_publish(RuntimeServiceEvent event);
 bool runtime_event_service_publish_notify(RuntimeServiceEvent event);
+bool runtime_event_service_publish_domains(RuntimeServiceEvent event, uint32_t domain_mask);
+bool runtime_event_service_publish_notify_domains(RuntimeServiceEvent event, uint32_t domain_mask);
+uint8_t runtime_event_service_matching_handler_count(RuntimeServiceEvent event, uint32_t domain_mask);
 uint8_t runtime_event_service_handler_count(void);
 uint8_t runtime_event_service_capacity(void);
 uint32_t runtime_event_service_registration_reject_count(void);
@@ -62,6 +74,8 @@ bool runtime_event_service_get_last_dispatch(RuntimeEventDispatchReport *out);
 const char *runtime_event_service_handler_name(uint8_t index);
 int8_t runtime_event_service_handler_priority(uint8_t index);
 bool runtime_event_service_handler_is_critical(uint8_t index);
+uint32_t runtime_event_service_handler_event_mask(uint8_t index);
+uint32_t runtime_event_service_handler_domain_mask(uint8_t index);
 
 #ifdef __cplusplus
 }

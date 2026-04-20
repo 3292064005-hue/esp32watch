@@ -95,7 +95,7 @@ def create_candidate_bundle(path: Path, contract: dict, asset_contract: dict) ->
         ],
     }
     validation = {
-        'validationSchemaVersion': 6,
+        'validationSchemaVersion': 7,
         'env': ENV,
         'bundleKind': 'candidate',
         'hostValidationStatus': 'PASS',
@@ -156,6 +156,9 @@ class DeviceFixture:
             'appStateMixedDurability': False,
             'appStateResetDomainObjectCount': 0,
             'appStateDurableObjectCount': 1,
+            'timeAuthority': 'NETWORK',
+            'timeSource': 'NTP',
+            'timeConfidence': 'HIGH',
             'authRequired': False,
             'controlLockedInProvisioningAp': False,
             'provisioningSerialPasswordLogEnabled': False,
@@ -194,6 +197,9 @@ class DeviceFixture:
             'wifiConnected': True,
             'ip': '192.168.4.2',
             'uptimeMs': 1000,
+            'timeAuthority': 'NETWORK',
+            'timeSource': 'NTP',
+            'timeConfidence': 'HIGH',
             'filesystemReady': True,
             'assetContractReady': True,
         })
@@ -205,7 +211,7 @@ class DeviceFixture:
             'bufferHex': '00' * 4,
         })
         self.catalog = api_payload(self.api_schemas['actionsCatalog'], sections={'commandCatalog': {}}, overrides={'ok': True})
-        self.storage_semantics = api_payload(self.api_schemas['storageSemantics'], sections={'storageSemantics': []}, overrides={'ok': True, 'apiVersion': contract['apiVersion'], 'objects': []})
+        self.storage_semantics = api_payload(self.api_schemas['storageSemantics'], sections={'storageSemantics': []}, overrides={'ok': True, 'apiVersion': contract['apiVersion'], 'objects': [], 'backendCapabilities': {'available': True}})
         self.config = api_payload(self.api_schemas['configDeviceReadback'], sections={
             'deviceConfigReadback': {},
             'capabilities': {},
@@ -315,6 +321,9 @@ def run_capture(base_url: str, candidate: Path, output: Path) -> subprocess.Comp
         '--board', 'esp32watch',
         '--candidate-bundle', str(candidate),
         '--output', str(output),
+        '--runner-identity', 'HOST_TEST_RUNNER',
+        '--lab-identity', 'HOST_TEST_LAB',
+        '--attest-physical-actions',
     ], cwd=ROOT, capture_output=True, text=True)
 
 
@@ -342,6 +351,10 @@ def main() -> int:
                     assert payload['status'] == 'PASS'
                     assert payload['evidenceOrigin'] == 'DEVICE_CAPTURE'
                     assert payload['bundleEvidence']['runtimeContractMatchesBootstrap'] is True
+                    assert payload['generator']['schemaVersion'] == 5
+                    assert payload['generator']['runnerIdentity'] == 'HOST_TEST_RUNNER'
+                    assert payload['generator']['labIdentity'] == 'HOST_TEST_LAB'
+                    assert payload['attestation']['physicalActionsAttested'] is True
                 else:
                     assert proc.returncode != 0, 'invalid fixture unexpectedly captured'
             finally:

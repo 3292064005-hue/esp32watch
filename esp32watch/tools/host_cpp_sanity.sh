@@ -23,10 +23,20 @@ CPP_FILES=(
   src/main.cpp
   src/system_init_esp32.cpp
   src/persist.cpp
+  src/persist_durable.cpp
+  src/persist_game_stats.cpp
+  src/persist_calibration.cpp
+  src/persist_codec.cpp
   src/persist_preferences.cpp
   src/services/device_config.cpp
+  src/services/device_config_store.cpp
+  src/services/device_config_public.cpp
+  src/services/device_config_codec.cpp
   src/services/time_service.cpp
   src/services/network_sync_service.cpp
+  src/services/network_sync_runtime.cpp
+  src/services/network_sync_api.cpp
+  src/services/network_sync_codec.cpp
   src/web/web_server.cpp
   src/web/web_wifi.cpp
   src/web/web_state_bridge.cpp
@@ -34,6 +44,23 @@ CPP_FILES=(
   src/web/web_state_detail.cpp
   src/web/web_action_queue.cpp
   src/web/web_routes_api.cpp
+  src/web/web_routes_api_runtime.cpp
+  src/web/web_route_module_registry.cpp
+  src/web/web_route_module_manifest.cpp
+  src/web/web_route_module_core.cpp
+  src/web/web_route_module_actions.cpp
+  src/web/web_route_module_config.cpp
+  src/web/web_route_module_reset.cpp
+  src/web/web_route_module_state.cpp
+  src/web/web_route_module_display.cpp
+  src/web/web_route_module_input.cpp
+  src/web/web_route_handlers_core.cpp
+  src/web/web_route_handlers_actions.cpp
+  src/web/web_route_handlers_config.cpp
+  src/web/web_route_handlers_reset.cpp
+  src/web/web_route_handlers_state.cpp
+  src/web/web_route_handlers_display.cpp
+  src/web/web_route_handlers_input.cpp
   src/web/web_routes_page.cpp
   src/web/web_json.cpp
   src/web/web_overlay.cpp

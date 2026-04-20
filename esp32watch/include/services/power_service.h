@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "model.h"
+#include "services/device_config.h"
 
 void power_service_init(void);
 void power_service_apply_settings(const SettingsState *settings);
@@ -22,5 +23,8 @@ bool power_service_last_idle_sleep_ok(void);
 uint32_t power_service_get_idle_sleep_attempt_count(void);
 uint32_t power_service_get_idle_sleep_reject_count(void);
 void power_service_idle(bool can_sleep_cpu);
+
+uint32_t power_service_last_applied_generation(void);
+bool power_service_verify_config_applied(uint32_t generation, const DeviceConfigSnapshot *cfg);
 
 #endif

@@ -12,6 +12,53 @@ const elements = new Map();
 const localStore = new Map();
 let lastToast = null;
 
+
+function makeRuntimeReloadPayload(overrides = {}) {
+  const payload = {
+    runtimeReloadRequested: false,
+    runtimeReloadPreflightOk: true,
+    runtimeReloadApplyAttempted: false,
+    runtimeReloaded: true,
+    runtimeReloadEventDispatchOk: true,
+    runtimeReloadAuthoritativePath: true,
+    runtimeReloadVerifyOk: true,
+    runtimeReloadPartialSuccess: false,
+    runtimeWifiReloadOk: true,
+    runtimeNetworkReloadOk: true,
+    runtimeHandlerCount: 1,
+    runtimeMatchedHandlerCount: 0,
+    runtimeHandlerSuccessCount: 0,
+    runtimeHandlerFailureCount: 0,
+    runtimeHandlerCriticalFailureCount: 0,
+    runtimeReloadConfigGeneration: 1,
+    runtimeWifiAppliedGeneration: 1,
+    runtimeNetworkAppliedGeneration: 1,
+    runtimeReloadDomainResultCount: 0,
+    runtimeWifiVerifyReason: 'NONE',
+    runtimeNetworkVerifyReason: 'NONE',
+    runtimeReloadSupportedDomains: ['WIFI', 'NETWORK'],
+    runtimeReloadImpactDomains: [],
+    runtimeReloadAppliedDomains: [],
+    runtimeReloadFailedDomains: [],
+    runtimeReloadDomainResults: [],
+    runtimeReloadFailurePhase: 'NONE',
+    runtimeReloadFailureCode: 'NONE',
+  };
+  return { ...payload, ...overrides };
+}
+
+function makeResetActionPayload(resetKind, overrides = {}) {
+  return {
+    ok: true,
+    message: `${resetKind.toLowerCase().replace('_', ' ')} reset`,
+    resetKind,
+    runtimeReload: makeRuntimeReloadPayload(),
+    resetAction: { resetKind },
+    ...overrides,
+  };
+}
+
+
 function makeElement(id) {
   return {
     id,
@@ -65,6 +112,7 @@ const fetchPayloads = {
     apiVersion: bootstrapContract.apiVersion,
     objects: [{ kind: 1, name: 'appState', owner: 'app', namespace: 'watch', resetBehavior: 'RESET', durability: 'DURABLE', managedByStorageService: true, survivesPowerLoss: true }],
     storageSemantics: [{ kind: 1, name: 'appState', owner: 'app', namespace: 'watch', resetBehavior: 'RESET', durability: 'DURABLE', managedByStorageService: true, survivesPowerLoss: true }],
+    backendCapabilities: { available: true, backend: 'preferences' },
   },
   [bootstrapContract.routes.health]: {
     ok: true,
@@ -73,14 +121,18 @@ const fetchPayloads = {
     uptimeMs: 123456,
     filesystemReady: true,
     assetContractReady: true,
-    healthStatus: { wifiConnected: true, ip: '192.168.1.10', uptimeMs: 123456, filesystemReady: true, assetContractReady: true },
+    timeAuthority: 'NETWORK',
+    timeSource: 'NTP',
+    timeConfidence: 'HIGH',
+    healthStatus: { wifiConnected: true, ip: '192.168.1.10', uptimeMs: 123456, timeAuthority: 'NETWORK', timeSource: 'NTP', timeConfidence: 'HIGH', filesystemReady: true, assetContractReady: true },
   },
   [bootstrapContract.routes.stateAggregate]: {
     ok: true,
     apiVersion: bootstrapContract.apiVersion,
     stateVersion: bootstrapContract.stateVersion,
+    stateRevision: 101,
     wifi: { connected: true, provisioningApActive: false, provisioningApSsid: '', mode: 'STA', status: 'CONNECTED', ip: '192.168.1.10', rssi: -48 },
-    system: { page: 'WATCHFACE', timeSource: 'NTP', timeConfidence: 'HIGH', appReady: true, appDegraded: false, startupOk: true, startupDegraded: false, fatalStopRequested: false, startupFailureStage: 'NONE', startupRecoveryStage: 'NONE', appInitStage: 'APP', timeValid: true, timeAuthoritative: true, timeSourceAgeMs: 10, sleeping: false, animating: false, uptimeMs: 123456 },
+    system: { page: 'WATCHFACE', timeSource: 'NTP', timeConfidence: 'HIGH', timeAuthority: 'NETWORK', appReady: true, appDegraded: false, startupOk: true, startupDegraded: false, fatalStopRequested: false, startupFailureStage: 'NONE', startupRecoveryStage: 'NONE', appInitStage: 'APP', timeValid: true, timeAuthoritative: true, timeSourceAgeMs: 10, sleeping: false, animating: false, uptimeMs: 123456 },
     config: {
       wifiConfigured: true,
       weatherConfigured: true,
@@ -110,6 +162,7 @@ const fetchPayloads = {
     ok: true,
     apiVersion: bootstrapContract.apiVersion,
     stateVersion: bootstrapContract.stateVersion,
+    stateRevision: 101,
     wifi: { mode: 'STA', status: 'CONNECTED', ip: '192.168.1.10', provisioningApActive: false },
     system: { page: 'WATCHFACE', timeSource: 'NTP', timeConfidence: 'HIGH', appReady: true, appDegraded: false, uptimeMs: 123456 },
     summary: { headerTags: 'SYNC READY', networkLine: 'SYNCED', diagLabel: 'OK', storageLabel: 'OK', sensorLabel: 'ONLINE' },
@@ -119,6 +172,7 @@ const fetchPayloads = {
     ok: true,
     apiVersion: bootstrapContract.apiVersion,
     stateVersion: bootstrapContract.stateVersion,
+    stateRevision: 101,
     weather: { syncStatus: 'SYNCED', tlsMode: 'STRICT', updatedAtMs: 123000 },
     activity: { steps: 1000, goal: 8000 },
     alarm: { label: '07:30', enabled: true, nextTime: '07:30' },
@@ -133,10 +187,16 @@ const fetchPayloads = {
   },
   [bootstrapContract.routes.statePerf]: {
     ok: true,
+    apiVersion: bootstrapContract.apiVersion,
+    stateVersion: bootstrapContract.stateVersion,
+    stateRevision: 102,
     perf: { loopCount: 3, maxLoopMs: 12, lastCheckpoint: 'WEB', lastCheckpointResult: 'OK', actionQueueDepth: 0, actionQueueDropCount: 0, stages: [], history: [] },
   },
   [bootstrapContract.routes.stateRaw]: {
     ok: true,
+    apiVersion: bootstrapContract.apiVersion,
+    stateVersion: bootstrapContract.stateVersion,
+    stateRevision: 103,
     startupRaw: { ok: true },
     queueRaw: { depth: 0 },
     sensor: { ax: 0, ay: 0, az: 1000 },
@@ -210,32 +270,67 @@ const fetchPayloads = {
     apiVersion: bootstrapContract.apiVersion,
     stateVersion: bootstrapContract.stateVersion,
     storageSchemaVersion: 7,
+    timeAuthority: 'NETWORK',
+    timeSource: 'NTP',
+    timeConfidence: 'HIGH',
     assetContractReady: true,
     assetContractHashVerified: true,
     assetContractVersion: bootstrapContract.assetContractVersion,
     provisioningSerialPasswordLogEnabled: false,
     versions: { apiVersion: bootstrapContract.apiVersion, stateVersion: bootstrapContract.stateVersion, storageSchemaVersion: 7, runtimeContractVersion: bootstrapContract.runtimeContractVersion, commandCatalogVersion: bootstrapContract.commandCatalogVersion },
-    storageRuntime: { flashStorageSupported: false, flashStorageReady: false, storageMigrationAttempted: false, storageMigrationOk: false, appStateBackend: 'NVS_APP_STATE', deviceConfigBackend: 'NVS_A_B', appStateDurability: 'DURABLE', deviceConfigDurability: 'DURABLE', appStatePowerLossGuaranteed: true, deviceConfigPowerLossGuaranteed: true, appStateMixedDurability: false, appStateResetDomainObjectCount: 0, appStateDurableObjectCount: 1 },
+    storageRuntime: { flashStorageSupported: false, flashStorageReady: false, storageMigrationAttempted: false, storageMigrationOk: false, appStateBackend: 'NVS_APP_STATE', deviceConfigBackend: 'NVS_A_B', appStateDurability: 'DURABLE', deviceConfigDurability: 'DURABLE', appStatePowerLossGuaranteed: true, deviceConfigPowerLossGuaranteed: true, appStateMixedDurability: false, appStateResetDomainObjectCount: 0, appStateDurableObjectCount: 1, backendCapabilities: { available: true, backend: 'preferences' } },
     assetContract: { webControlPlaneReady: true, webConsoleReady: true, filesystemReady: true, filesystemAssetsReady: true, assetContractReady: true, assetContractHashVerified: true, assetContractVersion: bootstrapContract.assetContractVersion, assetContractHash: 123, assetContractGeneratedAt: '2026-04-14T00:00:00Z', filesystemStatus: 'READY', assetExpectedHashIndexHtml: 'A', assetActualHashIndexHtml: 'A', assetExpectedHashAppJs: 'B', assetActualHashAppJs: 'B', assetExpectedHashAppCss: 'C', assetActualHashAppCss: 'C', assetExpectedHashContractBootstrap: 'D', assetActualHashContractBootstrap: 'D' },
     runtimeEvents: { runtimeEventHandlers: 1, runtimeEventCapacity: 8, runtimeEventRegistrationRejectCount: 0, runtimeEventPublishCount: 1, runtimeEventPublishFailCount: 0, runtimeEventLastSuccessCount: 1, runtimeEventLastFailureCount: 0, runtimeEventLastCriticalFailureCount: 0, runtimeEventLast: 'CONFIG_UPDATE', runtimeEventLastFailed: 'NONE', runtimeEventLastFailedHandlerIndex: -1, handlers: [{ index: 0, name: 'cfg', priority: 0, critical: true }] },
-    platformSupport: { rtcResetDomain: true, idleLightSleep: true, watchdog: false, flashJournal: true },
+    platformSupport: { rtcResetDomain: true, rtcWallClock: false, rtcWallClockPersistent: false, idleLightSleep: true, watchdog: false, flashJournal: true },
     deviceIdentity: { boardProfile: 'esp32watch', chipModel: 'ESP32-S3', efuseMac: 'AA:BB:CC:DD:EE:FF' },
     capabilities: { configProvisioning: true, securedProvisioningAp: true, authToken: true, overlayControl: true, trackedMutations: true, stateSummary: true, stateDetail: true, statePerf: true, stateRaw: true, controlLockInProvisioningAp: true },
+    stateSurfaces: { controlPlane: ['stateAggregate'], diagnostics: ['stateDetail', 'statePerf', 'storageSemantics'], compatibility: ['stateSummary'], internal: ['stateRaw'] },
     releaseValidation: { schemaVersion: bootstrapContract.releaseValidation.validationSchemaVersion, candidateBundleKind: 'candidate', verifiedBundleKind: 'verified', hostReportType: 'HOST_VALIDATION_REPORT', deviceReportType: 'DEVICE_SMOKE_REPORT' },
   },
   ['POST ' + bootstrapContract.routes.configDevice]: {
     ok: true,
-    runtimeReload: { runtimeReloadRequested: true, runtimeReloadPreflightOk: true, runtimeReloadApplyAttempted: true, runtimeReloaded: true, runtimeReloadEventDispatchOk: true, runtimeReloadAuthoritativePath: true, runtimeReloadVerifyOk: true, runtimeReloadPartialSuccess: false, runtimeWifiReloadOk: true, runtimeNetworkReloadOk: true, runtimeHandlerCount: 1, runtimeHandlerSuccessCount: 1, runtimeHandlerFailureCount: 0, runtimeHandlerCriticalFailureCount: 0, runtimeReloadImpactDomains: ['WIFI'], runtimeReloadAppliedDomains: ['WIFI'], runtimeReloadFailedDomains: [], runtimeReloadFailurePhase: 'NONE', runtimeReloadFailureCode: 'NONE' },
+    runtimeReload: makeRuntimeReloadPayload({
+      runtimeReloadRequested: true,
+      runtimeReloadApplyAttempted: true,
+      runtimeReloaded: true,
+      runtimeMatchedHandlerCount: 1,
+      runtimeHandlerSuccessCount: 1,
+      runtimeReloadImpactDomains: ['WIFI'],
+      runtimeReloadAppliedDomains: ['WIFI'],
+      runtimeReloadDomainResults: [{ domain: 'WIFI', domainMask: 1, requested: true, dispatchMatched: true, applied: true, verifyOk: true, appliedGeneration: 1, verifyReason: 'NONE' }],
+      runtimeReloadDomainResultCount: 1,
+    }),
     wifiSaved: true, networkSaved: true, tokenSaved: true, runtimeReloadRequested: true, runtimeReloaded: true, runtimeReloadAuthoritativePath: true, filesystemReady: true, filesystemAssetsReady: true, filesystemStatus: 'READY', message: 'config saved',
     deviceConfigUpdate: { wifiSaved: true, networkSaved: true, tokenSaved: true, filesystemReady: true, filesystemAssetsReady: true, filesystemStatus: 'READY' },
   },
-  ['POST ' + bootstrapContract.routes.resetDeviceConfig]: {
-    ok: true,
+  ['POST ' + bootstrapContract.routes.resetDeviceConfig]: makeResetActionPayload('DEVICE_CONFIG', {
     message: 'device config reset',
-    resetKind: 'DEVICE_CONFIG',
-    runtimeReload: { runtimeReloadRequested: true, runtimeReloadPreflightOk: true, runtimeReloadApplyAttempted: true, runtimeReloaded: true, runtimeReloadEventDispatchOk: true, runtimeReloadAuthoritativePath: true, runtimeReloadVerifyOk: true, runtimeReloadPartialSuccess: false, runtimeWifiReloadOk: true, runtimeNetworkReloadOk: true, runtimeHandlerCount: 1, runtimeHandlerSuccessCount: 1, runtimeHandlerFailureCount: 0, runtimeHandlerCriticalFailureCount: 0, runtimeReloadImpactDomains: ['WIFI'], runtimeReloadAppliedDomains: ['WIFI'], runtimeReloadFailedDomains: [], runtimeReloadFailurePhase: 'NONE', runtimeReloadFailureCode: 'NONE' },
-    appStateReset: false, deviceConfigReset: true, auditNotified: true, auditEventDispatched: true, runtimeReloadRequested: true, runtimeReloaded: true, runtimeReloadAuthoritativePath: true, filesystemReady: true, filesystemAssetsReady: true, assetContractReady: true, filesystemStatus: 'READY', hardFailure: false, completedWithReloadFailure: false, resetAction: { resetKind: 'DEVICE_CONFIG', appStateReset: false, deviceConfigReset: true, auditNotified: true, auditEventDispatched: true },
-  },
+    runtimeReload: makeRuntimeReloadPayload({
+      runtimeReloadRequested: true,
+      runtimeReloadApplyAttempted: true,
+      runtimeReloaded: true,
+      runtimeMatchedHandlerCount: 1,
+      runtimeHandlerSuccessCount: 1,
+      runtimeReloadImpactDomains: ['WIFI'],
+      runtimeReloadAppliedDomains: ['WIFI'],
+      runtimeReloadDomainResults: [{ domain: 'WIFI', domainMask: 1, requested: true, dispatchMatched: true, applied: true, verifyOk: true, appliedGeneration: 1, verifyReason: 'NONE' }],
+      runtimeReloadDomainResultCount: 1,
+    }),
+    appStateReset: false,
+    deviceConfigReset: true,
+    auditNotified: true,
+    auditEventDispatched: true,
+    runtimeReloadRequested: true,
+    runtimeReloaded: true,
+    runtimeReloadAuthoritativePath: true,
+    filesystemReady: true,
+    filesystemAssetsReady: true,
+    assetContractReady: true,
+    filesystemStatus: 'READY',
+    hardFailure: false,
+    completedWithReloadFailure: false,
+    resetAction: { resetKind: 'DEVICE_CONFIG', appStateReset: false, deviceConfigReset: true, auditNotified: true, auditEventDispatched: true },
+  }),
   [bootstrapContract.routes.actionsStatus + '?id=1']: {
     ok: true, id: 1, type: 'COMMAND', status: 'APPLIED', actionId: 1, requestId: 1, actionType: 'COMMAND', state: 'APPLIED', acceptedAtMs: 1, startedAtMs: 2, completedAtMs: 3, message: 'accepted', commandOk: true, commandCode: 'OK', actionStatus: { id: 1, type: 'COMMAND', status: 'APPLIED', acceptedAtMs: 1, startedAtMs: 2, completedAtMs: 3, message: 'accepted', commandOk: true, commandCode: 'OK' }
   },
@@ -249,8 +344,36 @@ const fetchPayloads = {
   ['POST ' + bootstrapContract.routes.inputKey]: { ok: true, actionId: 2, requestId: 2, actionType: 'INPUT_KEY', trackPath: bootstrapContract.routes.actionsStatus + '?id=1', queueDepth: 1, trackedActionAccepted: { actionId: 2, requestId: 2, actionType: 'INPUT_KEY', trackPath: bootstrapContract.routes.actionsStatus + '?id=1', queueDepth: 1 } },
   ['POST ' + bootstrapContract.routes.displayOverlay]: { ok: true, actionId: 3, requestId: 3, actionType: 'DISPLAY_OVERLAY', trackPath: bootstrapContract.routes.actionsStatus + '?id=1', queueDepth: 1, trackedActionAccepted: { actionId: 3, requestId: 3, actionType: 'DISPLAY_OVERLAY', trackPath: bootstrapContract.routes.actionsStatus + '?id=1', queueDepth: 1 } },
   ['POST ' + bootstrapContract.routes.displayOverlayClear]: { ok: true, actionId: 4, requestId: 4, actionType: 'DISPLAY_OVERLAY_CLEAR', trackPath: bootstrapContract.routes.actionsStatus + '?id=1', queueDepth: 1, trackedActionAccepted: { actionId: 4, requestId: 4, actionType: 'DISPLAY_OVERLAY_CLEAR', trackPath: bootstrapContract.routes.actionsStatus + '?id=1', queueDepth: 1 } },
-  ['POST ' + bootstrapContract.routes.resetAppState]: { ok: true, message: 'app state reset', resetKind: 'APP_STATE', runtimeReload: { runtimeReloadRequested: false }, resetAction: { resetKind: 'APP_STATE' } },
-  ['POST ' + bootstrapContract.routes.resetFactory]: { ok: true, message: 'factory reset', resetKind: 'FACTORY', runtimeReload: { runtimeReloadRequested: true }, resetAction: { resetKind: 'FACTORY' } },
+  ['POST ' + bootstrapContract.routes.resetAppState]: makeResetActionPayload('APP_STATE', {
+    message: 'app state reset',
+    runtimeReload: makeRuntimeReloadPayload({
+      runtimeReloadRequested: false,
+      runtimeReloadApplyAttempted: false,
+      runtimeReloaded: true,
+      runtimeMatchedHandlerCount: 0,
+      runtimeHandlerSuccessCount: 0,
+      runtimeReloadImpactDomains: [],
+      runtimeReloadAppliedDomains: [],
+      runtimeReloadDomainResults: [],
+      runtimeReloadDomainResultCount: 0,
+    }),
+    resetAction: { resetKind: 'APP_STATE', appStateReset: true, deviceConfigReset: false, auditNotified: true, auditEventDispatched: true },
+  }),
+  ['POST ' + bootstrapContract.routes.resetFactory]: makeResetActionPayload('FACTORY', {
+    message: 'factory reset',
+    runtimeReload: makeRuntimeReloadPayload({
+      runtimeReloadRequested: true,
+      runtimeReloadApplyAttempted: true,
+      runtimeReloaded: true,
+      runtimeMatchedHandlerCount: 1,
+      runtimeHandlerSuccessCount: 1,
+      runtimeReloadImpactDomains: ['WIFI'],
+      runtimeReloadAppliedDomains: ['WIFI'],
+      runtimeReloadDomainResults: [{ domain: 'WIFI', domainMask: 1, requested: true, dispatchMatched: true, applied: true, verifyOk: true, appliedGeneration: 1, verifyReason: 'NONE' }],
+      runtimeReloadDomainResultCount: 1,
+    }),
+    resetAction: { resetKind: 'FACTORY', appStateReset: true, deviceConfigReset: true, auditNotified: true, auditEventDispatched: true },
+  }),
 };
 
 async function fetchStub(url, options = {}) {
@@ -300,6 +423,27 @@ function clonePayload(payload) {
   return JSON.parse(JSON.stringify(payload));
 }
 
+function deletePayloadPath(payload, keyPath) {
+  if (!keyPath) {
+    return false;
+  }
+  const parts = String(keyPath).split('.');
+  let cursor = payload;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const part = parts[i];
+    if (!cursor || typeof cursor !== 'object' || !Object.prototype.hasOwnProperty.call(cursor, part)) {
+      return false;
+    }
+    cursor = cursor[part];
+  }
+  const last = parts[parts.length - 1];
+  if (!cursor || typeof cursor !== 'object' || !Object.prototype.hasOwnProperty.call(cursor, last)) {
+    return false;
+  }
+  delete cursor[last];
+  return true;
+}
+
 function makeInvalidRoutePayload(routeKey, payload) {
   const invalid = clonePayload(payload);
   const routeSchema = bootstrapContract.routeSchemas[routeKey];
@@ -316,8 +460,7 @@ function makeInvalidRoutePayload(routeKey, payload) {
   }
   const schema = bootstrapContract.apiSchemas[routeSchema.name] || {};
   const firstRequired = (schema.required || [])[0];
-  if (firstRequired && Object.prototype.hasOwnProperty.call(invalid, firstRequired)) {
-    delete invalid[firstRequired];
+  if (deletePayloadPath(invalid, firstRequired)) {
     return invalid;
   }
   const firstSection = (schema.sections || [])[0];
@@ -486,11 +629,21 @@ function makeInvalidRoutePayload(routeKey, payload) {
   }
   fetchPayloads['POST ' + bootstrapContract.routes.configDevice] = {
     ok: true,
-    runtimeReload: { runtimeReloadRequested: true, runtimeReloaded: true, runtimeReloadAuthoritativePath: true },
+    runtimeReload: makeRuntimeReloadPayload({
+      runtimeReloadRequested: true,
+      runtimeReloadApplyAttempted: true,
+      runtimeReloaded: true,
+      runtimeMatchedHandlerCount: 1,
+      runtimeHandlerSuccessCount: 1,
+      runtimeReloadImpactDomains: ['WIFI'],
+      runtimeReloadAppliedDomains: ['WIFI'],
+      runtimeReloadDomainResults: [{ domain: 'WIFI', domainMask: 1, requested: true, dispatchMatched: true, applied: true, verifyOk: true, appliedGeneration: 1, verifyReason: 'NONE' }],
+      runtimeReloadDomainResultCount: 1,
+    }),
     wifiSaved: true, networkSaved: true, tokenSaved: true, runtimeReloadRequested: true, runtimeReloaded: true, runtimeReloadAuthoritativePath: true, filesystemReady: true, filesystemAssetsReady: true, filesystemStatus: 'READY', message: 'config saved',
     deviceConfigUpdate: { wifiSaved: true, networkSaved: true, tokenSaved: true, filesystemReady: true, filesystemAssetsReady: true, filesystemStatus: 'READY' },
   };
-  fetchPayloads['POST ' + bootstrapContract.routes.resetDeviceConfig] = { ok: true, message: 'device config reset', resetKind: 'DEVICE_CONFIG', runtimeReload: { runtimeReloadRequested: true } };
+  fetchPayloads['POST ' + bootstrapContract.routes.resetDeviceConfig] = { ok: true, message: 'device config reset', resetKind: 'DEVICE_CONFIG', runtimeReload: makeRuntimeReloadPayload({ runtimeReloadRequested: true, runtimeReloadApplyAttempted: true, runtimeMatchedHandlerCount: 1, runtimeHandlerSuccessCount: 1, runtimeReloadImpactDomains: ['WIFI'], runtimeReloadAppliedDomains: ['WIFI'], runtimeReloadDomainResults: [{ domain: 'WIFI', domainMask: 1, requested: true, dispatchMatched: true, applied: true, verifyOk: true, appliedGeneration: 1, verifyReason: 'NONE' }], runtimeReloadDomainResultCount: 1 }) };
   try {
     await context.postReset(bootstrapContract.routes.resetDeviceConfig, 'x', 'y');
     throw new Error('expected invalid reset schema rejection');

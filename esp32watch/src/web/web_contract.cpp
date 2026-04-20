@@ -23,6 +23,14 @@ struct RouteSchemaSpec {
     const char *route_key;
     const char *schema_kind;
     const char *schema_name;
+    const char *surface_tier;
+    const char *producer_owner;
+    const char *consumer_owner;
+    const char *deprecation_policy;
+    const char *const *request_fields;
+    size_t request_field_count;
+    const char *const *response_fields;
+    size_t response_field_count;
 };
 
 static void append_route(String &response, const char *key, const char *value, bool trailing)
@@ -132,7 +140,7 @@ static constexpr StateSchemaEntry kStateSchemaAggregate[] = {
     {"activity", nullptr, 0U},
     {"alarm", nullptr, 0U},
     {"music", nullptr, 0U},
-    {"sensor", kFlagSensorRawAxes, 1U},
+    {"sensor", nullptr, 0U},
     {"storage", nullptr, 0U},
     {"diag", nullptr, 0U},
     {"display", nullptr, 0U},
@@ -140,16 +148,32 @@ static constexpr StateSchemaEntry kStateSchemaAggregate[] = {
     {"summary", nullptr, 0U},
     {"terminal", nullptr, 0U},
     {"overlay", nullptr, 0U},
-    {"perf", kFlagPerfHistory, 1U},
+    {"perf", nullptr, 0U},
 };
 
-static constexpr const char *kHealthRequired[] = {"ok", "wifiConnected", "ip", "uptimeMs", "filesystemReady", "assetContractReady"};
+
+static constexpr const char *kNoRouteFields[] = {};
+static constexpr const char *kConfigDeviceRequestFields[] = {"ssid", "password", "timezonePosix", "timezoneId", "latitude", "longitude", "locationName", "apiToken", "runtimeReloadDomains"};
+static constexpr const char *kStateRouteResponseFields[] = {"ok", "apiVersion", "stateVersion", "stateRevision"};
+static constexpr const char *kTrackedActionResponseFields[] = {"ok", "actionId", "requestId", "actionType", "trackPath", "queueDepth"};
+static constexpr const char *kResetResponseFields[] = {"ok", "message", "resetKind", "runtimeReload"};
+static constexpr const char *kDisplayFrameResponseFields[] = {"ok", "width", "height", "presentCount", "bufferHex"};
+static constexpr const char *kHealthResponseFields[] = {"ok", "wifiConnected", "ip", "uptimeMs", "timeAuthority", "timeSource", "timeConfidence", "filesystemReady", "assetContractReady"};
+static constexpr const char *kMetaResponseFields[] = {"ok", "apiVersion", "stateVersion", "storageSchemaVersion", "timeAuthority", "timeSource", "timeConfidence"};
+static constexpr const char *kActionsCatalogResponseFields[] = {"ok", "commands"};
+static constexpr const char *kActionsStatusResponseFields[] = {"ok", "id", "status", "type"};
+static constexpr const char *kContractResponseFields[] = {"ok", "contract"};
+static constexpr const char *kStorageSemanticsResponseFields[] = {"ok", "apiVersion", "objects", "backendCapabilities"};
+static constexpr const char *kHealthRequired[] = {"ok", "wifiConnected", "ip", "uptimeMs", "timeAuthority", "timeSource", "timeConfidence", "filesystemReady", "assetContractReady"};
 static constexpr const char *kHealthSections[] = {"healthStatus"};
 static constexpr const char *kMetaRequired[] = {
     "ok",
     "apiVersion",
     "stateVersion",
     "storageSchemaVersion",
+    "timeAuthority",
+    "timeSource",
+    "timeConfidence",
 };
 static constexpr const char *kMetaSections[] = {
     "versions",
@@ -159,6 +183,7 @@ static constexpr const char *kMetaSections[] = {
     "platformSupport",
     "deviceIdentity",
     "capabilities",
+    "stateSurfaces",
     "releaseValidation",
 };
 static constexpr const char *kDisplayFrameRequired[] = {"ok", "width", "height", "presentCount", "bufferHex"};
@@ -169,15 +194,15 @@ static constexpr const char *kActionsStatusRequired[] = {"ok", "id", "status", "
 static constexpr const char *kActionsStatusSections[] = {"actionStatus"};
 static constexpr const char *kActionsCatalogRequired[] = {"ok", "commands"};
 static constexpr const char *kActionsCatalogSections[] = {"commandCatalog"};
-static constexpr const char *kResetActionRequired[] = {"ok", "message", "resetKind", "runtimeReload"};
+static constexpr const char *kResetActionRequired[] = {"ok", "message", "resetKind", "runtimeReload", "runtimeReload.runtimeReloadRequested", "runtimeReload.runtimeReloadPreflightOk", "runtimeReload.runtimeReloadApplyAttempted", "runtimeReload.runtimeReloaded", "runtimeReload.runtimeReloadEventDispatchOk", "runtimeReload.runtimeReloadAuthoritativePath", "runtimeReload.runtimeReloadVerifyOk", "runtimeReload.runtimeReloadPartialSuccess", "runtimeReload.runtimeHandlerCount", "runtimeReload.runtimeMatchedHandlerCount", "runtimeReload.runtimeHandlerSuccessCount", "runtimeReload.runtimeHandlerFailureCount", "runtimeReload.runtimeHandlerCriticalFailureCount", "runtimeReload.runtimeReloadConfigGeneration", "runtimeReload.runtimeReloadDomainResultCount", "runtimeReload.runtimeReloadSupportedDomains", "runtimeReload.runtimeReloadImpactDomains", "runtimeReload.runtimeReloadAppliedDomains", "runtimeReload.runtimeReloadFailedDomains", "runtimeReload.runtimeReloadDomainResults", "runtimeReload.runtimeReloadFailurePhase", "runtimeReload.runtimeReloadFailureCode"};
 static constexpr const char *kResetActionSections[] = {"resetAction", "runtimeReload"};
-static constexpr const char *kDeviceConfigUpdateRequired[] = {"ok", "runtimeReload"};
+static constexpr const char *kDeviceConfigUpdateRequired[] = {"ok", "runtimeReload", "runtimeReload.runtimeReloadRequested", "runtimeReload.runtimeReloadPreflightOk", "runtimeReload.runtimeReloadApplyAttempted", "runtimeReload.runtimeReloaded", "runtimeReload.runtimeReloadEventDispatchOk", "runtimeReload.runtimeReloadAuthoritativePath", "runtimeReload.runtimeReloadVerifyOk", "runtimeReload.runtimeReloadPartialSuccess", "runtimeReload.runtimeHandlerCount", "runtimeReload.runtimeMatchedHandlerCount", "runtimeReload.runtimeHandlerSuccessCount", "runtimeReload.runtimeHandlerFailureCount", "runtimeReload.runtimeHandlerCriticalFailureCount", "runtimeReload.runtimeReloadConfigGeneration", "runtimeReload.runtimeReloadDomainResultCount", "runtimeReload.runtimeReloadSupportedDomains", "runtimeReload.runtimeReloadImpactDomains", "runtimeReload.runtimeReloadAppliedDomains", "runtimeReload.runtimeReloadFailedDomains", "runtimeReload.runtimeReloadDomainResults", "runtimeReload.runtimeReloadFailurePhase", "runtimeReload.runtimeReloadFailureCode"};
 static constexpr const char *kDeviceConfigUpdateSections[] = {"deviceConfigUpdate", "runtimeReload"};
 static constexpr const char *kConfigDeviceReadbackRequired[] = {"ok", "config"};
 static constexpr const char *kConfigDeviceReadbackSections[] = {"deviceConfigReadback", "capabilities"};
 static constexpr const char *kContractDocumentRequired[] = {"ok", "contract"};
 static constexpr const char *kContractDocumentSections[] = {"contract"};
-static constexpr const char *kStorageSemanticsRequired[] = {"ok", "apiVersion", "objects"};
+static constexpr const char *kStorageSemanticsRequired[] = {"ok", "apiVersion", "objects", "backendCapabilities"};
 static constexpr const char *kStorageSemanticsSections[] = {"storageSemantics"};
 static constexpr const char *kReleaseValidationRequired[] = {
     "candidateBundleKind",
@@ -189,43 +214,65 @@ static constexpr const char *kReleaseValidationRequired[] = {
 static constexpr const char *kReleaseValidationSections[] = {"releaseValidation"};
 
 static constexpr ApiSchemaSpec kApiSchemas[] = {
-    {"health", kHealthRequired, 6U, kHealthSections, 1U},
-    {"meta", kMetaRequired, 4U, kMetaSections, 7U},
+    {"health", kHealthRequired, 9U, kHealthSections, 1U},
+    {"meta", kMetaRequired, 7U, kMetaSections, 9U},
     {"displayFrame", kDisplayFrameRequired, 5U, kDisplayFrameSections, 1U},
     {"trackedActionAccepted", kTrackedActionAcceptedRequired, 6U, kTrackedActionAcceptedSections, 1U},
     {"actionsStatus", kActionsStatusRequired, 4U, kActionsStatusSections, 1U},
     {"actionsCatalog", kActionsCatalogRequired, 2U, kActionsCatalogSections, 1U},
-    {"resetActionResponse", kResetActionRequired, 4U, kResetActionSections, 2U},
-    {"deviceConfigUpdate", kDeviceConfigUpdateRequired, 2U, kDeviceConfigUpdateSections, 2U},
+    {"resetActionResponse", kResetActionRequired, sizeof(kResetActionRequired) / sizeof(kResetActionRequired[0]), kResetActionSections, 2U},
+    {"deviceConfigUpdate", kDeviceConfigUpdateRequired, sizeof(kDeviceConfigUpdateRequired) / sizeof(kDeviceConfigUpdateRequired[0]), kDeviceConfigUpdateSections, 2U},
     {"configDeviceReadback", kConfigDeviceReadbackRequired, 2U, kConfigDeviceReadbackSections, 2U},
     {"contractDocument", kContractDocumentRequired, 2U, kContractDocumentSections, 1U},
-    {"storageSemantics", kStorageSemanticsRequired, 3U, kStorageSemanticsSections, 1U},
+    {"storageSemantics", kStorageSemanticsRequired, 4U, kStorageSemanticsSections, 1U},
     {"releaseValidation", kReleaseValidationRequired, 5U, kReleaseValidationSections, 1U},
 };
 
 static constexpr RouteSchemaSpec kRouteSchemas[] = {
-    {"contract", "api", "contractDocument"},
-    {"health", "api", "health"},
-    {"meta", "api", "meta"},
-    {"actionsCatalog", "api", "actionsCatalog"},
-    {"actionsLatest", "api", "actionsStatus"},
-    {"actionsStatus", "api", "actionsStatus"},
-    {"stateSummary", "state", "summary"},
-    {"stateDetail", "state", "detail"},
-    {"statePerf", "state", "perf"},
-    {"stateRaw", "state", "raw"},
-    {"stateAggregate", "state", "aggregate"},
-    {"displayFrame", "api", "displayFrame"},
-    {"displayOverlay", "api", "trackedActionAccepted"},
-    {"displayOverlayClear", "api", "trackedActionAccepted"},
-    {"configDevice", "api", "configDeviceReadback"},
-    {"inputKey", "api", "trackedActionAccepted"},
-    {"command", "api", "trackedActionAccepted"},
-    {"resetAppState", "api", "resetActionResponse"},
-    {"resetDeviceConfig", "api", "resetActionResponse"},
-    {"resetFactory", "api", "resetActionResponse"},
-    {"storageSemantics", "api", "storageSemantics"},
+    /* {"contract", "api", "contractDocument"} */
+    {"contract", "api", "contractDocument", "tooling", "web_contract", "rich_console", "schema-versioned", kNoRouteFields, 0U, kContractResponseFields, sizeof(kContractResponseFields) / sizeof(kContractResponseFields[0])},
+    /* {"health", "api", "health"} */
+    {"health", "api", "health", "control", "web_server", "rich_console", "stable", kNoRouteFields, 0U, kHealthResponseFields, sizeof(kHealthResponseFields) / sizeof(kHealthResponseFields[0])},
+    /* {"meta", "api", "meta"} */
+    {"meta", "api", "meta", "control", "web_routes_api", "rich_console", "stable", kNoRouteFields, 0U, kMetaResponseFields, sizeof(kMetaResponseFields) / sizeof(kMetaResponseFields[0])},
+    /* {"actionsCatalog", "api", "actionsCatalog"} */
+    {"actionsCatalog", "api", "actionsCatalog", "control", "app_command", "rich_console", "stable", kNoRouteFields, 0U, kActionsCatalogResponseFields, sizeof(kActionsCatalogResponseFields) / sizeof(kActionsCatalogResponseFields[0])},
+    /* {"actionsLatest", "api", "actionsStatus"} */
+    {"actionsLatest", "api", "actionsStatus", "console", "web_action_queue", "rich_console", "stable", kNoRouteFields, 0U, kActionsStatusResponseFields, sizeof(kActionsStatusResponseFields) / sizeof(kActionsStatusResponseFields[0])},
+    /* {"actionsStatus", "api", "actionsStatus"} */
+    {"actionsStatus", "api", "actionsStatus", "control", "web_action_queue", "rich_console", "stable", kNoRouteFields, 0U, kActionsStatusResponseFields, sizeof(kActionsStatusResponseFields) / sizeof(kActionsStatusResponseFields[0])},
+    /* {"stateSummary", "state", "summary"} */
+    {"stateSummary", "state", "summary", "compatibility", "web_state_bridge", "legacy_clients", "replace-with-stateAggregate", kNoRouteFields, 0U, kStateRouteResponseFields, sizeof(kStateRouteResponseFields) / sizeof(kStateRouteResponseFields[0])},
+    /* {"stateDetail", "state", "detail"} */
+    {"stateDetail", "state", "detail", "diagnostic", "web_state_bridge", "rich_console", "stable", kNoRouteFields, 0U, kStateRouteResponseFields, sizeof(kStateRouteResponseFields) / sizeof(kStateRouteResponseFields[0])},
+    /* {"statePerf", "state", "perf"} */
+    {"statePerf", "state", "perf", "diagnostic", "web_state_bridge", "rich_console", "stable", kNoRouteFields, 0U, kStateRouteResponseFields, sizeof(kStateRouteResponseFields) / sizeof(kStateRouteResponseFields[0])},
+    /* {"stateRaw", "state", "raw"} */
+    {"stateRaw", "state", "raw", "tooling", "web_state_bridge", "internal_tools", "no-external-dependents", kNoRouteFields, 0U, kStateRouteResponseFields, sizeof(kStateRouteResponseFields) / sizeof(kStateRouteResponseFields[0])},
+    /* {"stateAggregate", "state", "aggregate"} */
+    {"stateAggregate", "state", "aggregate", "control", "web_state_bridge", "rich_console", "stable", kNoRouteFields, 0U, kStateRouteResponseFields, sizeof(kStateRouteResponseFields) / sizeof(kStateRouteResponseFields[0])},
+    /* {"displayFrame", "api", "displayFrame"} */
+    {"displayFrame", "api", "displayFrame", "diagnostic", "display_service", "rich_console", "stable", kNoRouteFields, 0U, kDisplayFrameResponseFields, sizeof(kDisplayFrameResponseFields) / sizeof(kDisplayFrameResponseFields[0])},
+    /* {"displayOverlay", "api", "trackedActionAccepted"} */
+    {"displayOverlay", "api", "trackedActionAccepted", "control", "web_overlay", "rich_console", "stable", kNoRouteFields, 0U, kTrackedActionResponseFields, sizeof(kTrackedActionResponseFields) / sizeof(kTrackedActionResponseFields[0])},
+    /* {"displayOverlayClear", "api", "trackedActionAccepted"} */
+    {"displayOverlayClear", "api", "trackedActionAccepted", "control", "web_overlay", "rich_console", "stable", kNoRouteFields, 0U, kTrackedActionResponseFields, sizeof(kTrackedActionResponseFields) / sizeof(kTrackedActionResponseFields[0])},
+    /* {"configDevice", "api", "configDeviceReadback"} */
+    {"configDevice", "api", "configDeviceReadback", "control", "device_config_authority", "rich_console", "stable", kConfigDeviceRequestFields, sizeof(kConfigDeviceRequestFields) / sizeof(kConfigDeviceRequestFields[0]), kDeviceConfigUpdateRequired, sizeof(kDeviceConfigUpdateRequired) / sizeof(kDeviceConfigUpdateRequired[0])},
+    /* {"inputKey", "api", "trackedActionAccepted"} */
+    {"inputKey", "api", "trackedActionAccepted", "control", "key_input", "rich_console", "stable", kNoRouteFields, 0U, kTrackedActionResponseFields, sizeof(kTrackedActionResponseFields) / sizeof(kTrackedActionResponseFields[0])},
+    /* {"command", "api", "trackedActionAccepted"} */
+    {"command", "api", "trackedActionAccepted", "control", "app_command", "rich_console", "stable", kNoRouteFields, 0U, kTrackedActionResponseFields, sizeof(kTrackedActionResponseFields) / sizeof(kTrackedActionResponseFields[0])},
+    /* {"resetAppState", "api", "resetActionResponse"} */
+    {"resetAppState", "api", "resetActionResponse", "control", "reset_service", "rich_console", "stable", kNoRouteFields, 0U, kResetResponseFields, sizeof(kResetResponseFields) / sizeof(kResetResponseFields[0])},
+    /* {"resetDeviceConfig", "api", "resetActionResponse"} */
+    {"resetDeviceConfig", "api", "resetActionResponse", "control", "reset_service", "rich_console", "stable", kNoRouteFields, 0U, kResetResponseFields, sizeof(kResetResponseFields) / sizeof(kResetResponseFields[0])},
+    /* {"resetFactory", "api", "resetActionResponse"} */
+    {"resetFactory", "api", "resetActionResponse", "control", "reset_service", "rich_console", "stable", kNoRouteFields, 0U, kResetResponseFields, sizeof(kResetResponseFields) / sizeof(kResetResponseFields[0])},
+    /* {"storageSemantics", "api", "storageSemantics"} */
+    {"storageSemantics", "api", "storageSemantics", "diagnostic", "storage_semantics", "rich_console", "stable", kNoRouteFields, 0U, kStorageSemanticsResponseFields, sizeof(kStorageSemanticsResponseFields) / sizeof(kStorageSemanticsResponseFields[0])},
 };
+
 
 static void append_state_schemas(String &response)
 {
@@ -276,7 +323,16 @@ static void append_route_schemas(String &response)
         response += kRouteSchemas[i].route_key;
         response += "\":{";
         web_json_kv_str(response, "kind", kRouteSchemas[i].schema_kind, false);
-        web_json_kv_str(response, "name", kRouteSchemas[i].schema_name, true);
+        web_json_kv_str(response, "name", kRouteSchemas[i].schema_name, false);
+        web_json_kv_str(response, "tier", kRouteSchemas[i].surface_tier, false);
+        web_json_kv_str(response, "producerOwner", kRouteSchemas[i].producer_owner, false);
+        web_json_kv_str(response, "consumerOwner", kRouteSchemas[i].consumer_owner, false);
+        web_json_kv_str(response, "deprecationPolicy", kRouteSchemas[i].deprecation_policy, false);
+        response += "\"requestFields\":";
+        append_string_array(response, kRouteSchemas[i].request_fields, kRouteSchemas[i].request_field_count);
+        response += ',';
+        response += "\"responseFields\":";
+        append_string_array(response, kRouteSchemas[i].response_fields, kRouteSchemas[i].response_field_count);
         response += '}';
         if (!trailing) {
             response += ',';
@@ -316,6 +372,14 @@ bool web_contract_get_route_schema(const char *route_key, WebRouteSchemaView *ou
             out->route_key = kRouteSchemas[i].route_key;
             out->schema_kind = kRouteSchemas[i].schema_kind;
             out->schema_name = kRouteSchemas[i].schema_name;
+            out->surface_tier = kRouteSchemas[i].surface_tier;
+            out->producer_owner = kRouteSchemas[i].producer_owner;
+            out->consumer_owner = kRouteSchemas[i].consumer_owner;
+            out->deprecation_policy = kRouteSchemas[i].deprecation_policy;
+            out->request_fields = kRouteSchemas[i].request_fields;
+            out->request_field_count = kRouteSchemas[i].request_field_count;
+            out->response_fields = kRouteSchemas[i].response_fields;
+            out->response_field_count = kRouteSchemas[i].response_field_count;
             return true;
         }
     }

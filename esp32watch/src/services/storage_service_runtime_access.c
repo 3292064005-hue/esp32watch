@@ -139,6 +139,38 @@ const char *storage_service_get_backend_name(void)
     return storage_backend_adapter_get_backend_name();
 }
 
+
+bool storage_service_get_backend_capabilities(StorageBackendCapabilities *out)
+{
+    return storage_backend_adapter_get_capabilities(out);
+}
+
+const char *storage_service_backend_atomicity_name(StorageBackendAtomicityLevel level)
+{
+    switch (level) {
+        case STORAGE_BACKEND_ATOMICITY_OBJECT_LEVEL: return "OBJECT_LEVEL";
+        case STORAGE_BACKEND_ATOMICITY_JOURNALED: return "JOURNALED";
+        default: return "NONE";
+    }
+}
+
+const char *storage_service_backend_verify_mode_name(StorageBackendVerifyMode mode)
+{
+    switch (mode) {
+        case STORAGE_BACKEND_VERIFY_CRC: return "CRC";
+        case STORAGE_BACKEND_VERIFY_READBACK: return "READBACK";
+        default: return "NONE";
+    }
+}
+
+const char *storage_service_backend_latency_name(StorageBackendLatencyClass latency)
+{
+    switch (latency) {
+        case STORAGE_BACKEND_LATENCY_BOUNDED_STEPS: return "BOUNDED_STEPS";
+        default: return "IMMEDIATE";
+    }
+}
+
 bool storage_service_is_crc_valid(void)
 {
     return storage_service_get_stored_crc() == storage_service_get_calculated_crc();

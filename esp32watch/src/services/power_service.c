@@ -2,6 +2,7 @@
 #include "services/display_service.h"
 #include "services/diag_service.h"
 #include "services/runtime_event_service.h"
+#include "services/runtime_reload_coordinator.h"
 #include "power.h"
 #include "esp32_port_config.h"
 #include "platform_api.h"
@@ -15,6 +16,28 @@ static uint32_t g_last_idle_budget_ms;
 static uint32_t g_idle_sleep_attempt_count;
 static uint32_t g_idle_sleep_reject_count;
 static bool g_last_idle_sleep_ok;
+static bool g_power_service_initialized;
+static uint32_t g_last_applied_generation;
+
+static void power_service_note_applied_generation(void)
+{
+    g_last_applied_generation = device_config_generation();
+}
+
+static bool power_service_handle_runtime_event(RuntimeServiceEvent event, void *ctx)
+{
+    ModelDomainState domain_state = {0};
+    (void)ctx;
+    if (event != RUNTIME_SERVICE_EVENT_DEVICE_CONFIG_CHANGED) {
+        return true;
+    }
+    if (!g_power_service_initialized || model_get_domain_state(&domain_state) == NULL) {
+        return false;
+    }
+    power_service_apply_settings(&domain_state.settings);
+    power_service_note_applied_generation();
+    return true;
+}
 
 static uint32_t power_service_idle_budget_ms(bool can_sleep_cpu)
 {
@@ -36,6 +59,16 @@ static uint32_t power_service_idle_budget_ms(bool can_sleep_cpu)
 
 void power_service_init(void)
 {
+    RuntimeEventSubscription subscription = {
+        .handler = power_service_handle_runtime_event,
+        .ctx = NULL,
+        .name = "power_service",
+        .priority = 0,
+        .critical = true,
+        .event_mask = runtime_event_service_event_mask(RUNTIME_SERVICE_EVENT_DEVICE_CONFIG_CHANGED),
+        .domain_mask = RUNTIME_RELOAD_DOMAIN_POWER,
+    };
+
     power_init();
     g_sleeping = false;
     g_last_wake_reason = WAKE_REASON_BOOT;
@@ -46,11 +79,18 @@ void power_service_init(void)
     g_idle_sleep_attempt_count = 0U;
     g_idle_sleep_reject_count = 0U;
     g_last_idle_sleep_ok = true;
+    g_power_service_initialized = runtime_event_service_register_ex(&subscription);
+    if (g_power_service_initialized) {
+        power_service_note_applied_generation();
+    }
     diag_service_note_wake(g_last_wake_reason);
 }
 
 void power_service_apply_settings(const SettingsState *settings)
 {
+    if (settings == NULL) {
+        return;
+    }
     display_service_apply_settings(settings);
 }
 
@@ -191,4 +231,15 @@ void power_service_idle(bool can_sleep_cpu)
         ++g_idle_sleep_reject_count;
     }
 #endif
+}
+
+uint32_t power_service_last_applied_generation(void)
+{
+    return g_last_applied_generation;
+}
+
+bool power_service_verify_config_applied(uint32_t generation, const DeviceConfigSnapshot *cfg)
+{
+    (void)cfg;
+    return g_power_service_initialized && generation != 0U && g_last_applied_generation == generation;
 }

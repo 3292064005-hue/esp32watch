@@ -5,6 +5,31 @@ This document describes the supported path from local build outputs to a candida
 It replaces ad hoc smoke notes with one authoritative release-validation procedure.
 
 ## 2. Bundle types
+## 2.1 Release-gate model
+`release-validation.json` now carries four explicit gates:
+- `hostValid`
+- `buildValid`
+- `deviceValid`
+- `labTruthAttested`
+
+Candidate bundles must end with:
+- `hostValid=PASS`
+- `buildValid=PASS`
+- `deviceValid=NOT_RUN`
+- `labTruthAttested=NOT_RUN`
+
+Verified bundles must end with:
+- `hostValid=PASS`
+- `buildValid=PASS`
+- `deviceValid=PASS`
+- `labTruthAttested=PASS`
+
+Verified bundles additionally carry:
+- runner identity
+- lab identity
+- attestation payload
+- evidence hashes for host report, device smoke report, flash evidence, and scenario evidence
+
 ### Candidate bundle
 Produced by `tools/package_release.py`.
 A candidate bundle contains:
@@ -31,6 +56,8 @@ A verified bundle is a candidate bundle plus:
 
 ## 3. Required evidence layers
 ### Host validation
+Host validation only proves repository-side checks. It does not by itself prove that the exact branch revision compiled firmware unless the run also executed `verify_platformio_build.sh` with PlatformIO available.
+
 Minimum host validation covers:
 - partition contract check
 - Web runtime smoke
@@ -120,11 +147,16 @@ python3 tools/run_device_scenarios.py \
   --auth-token <token> \
   --device-id <id> \
   --wifi-password <wifi-pass> \
-  --power-cycle-cmd <cmd> \
-  --fault-inject-cmd <cmd> \
+  --runner-capabilities /path/to/runner-capabilities.json \
   --candidate-bundle dist/esp32watch-<env>-candidate.zip \
-  --output dist/device-scenario-evidence.json
+  --output dist/device-scenario-evidence.json \
+  --runner-identity <runner-id> \
+  --lab-identity <lab-id> \
+  --attest-physical-actions
 ```
+
+
+The runner capability manifest is the authoritative contract for physical lab actions. It must declare `powerCycle` and `faultInject` as argv arrays, and scenario execution must use that manifest rather than free-form shell strings.
 
 ### Step 8 — capture device smoke report with embedded scenario evidence
 ```bash
@@ -136,7 +168,10 @@ python3 tools/capture_device_smoke_report.py \
   --flash-evidence dist/flash-evidence.json \
   --scenario-evidence dist/device-scenario-evidence.json \
   --output dist/device-smoke-report.json \
-  --auth-token <token-if-required>
+  --auth-token <token-if-required> \
+  --runner-identity <runner-id> \
+  --lab-identity <lab-id> \
+  --attest-physical-actions
 ```
 
 `promote_release_bundle.py` consumes only the device smoke report, so the smoke report used for verified promotion must already embed the final scenario evidence payload.
@@ -158,15 +193,11 @@ python3 tools/verify_release_bundle.py \
 
 ## 5. CI validation sequence
 The repository CI flow is defined in `.github/workflows/platformio-build.yml`.
-The intended sequence is:
-1. generate contract assets and run host validation
-2. build firmware/LittleFS for the target environment
-3. package the exact candidate bundle
-4. flash the exact candidate and capture flash evidence on the device runner
-5. run live scenarios and capture command evidence
-6. capture a device smoke report that embeds the scenario evidence
-7. promote the exact candidate into a verified bundle
-8. re-run bundle verification on the verified artifact
+The intended sequence is split into two validation tiers:
+1. **PR / push validation** — generate contract assets, run host validation, build firmware/LittleFS, and package the exact candidate bundle
+2. **Release validation** — flash the exact candidate on the device runner, execute live scenarios through the runner capability manifest, capture the device smoke report, promote the verified bundle, and re-run bundle verification on the promoted artifact
+
+In GitHub Actions, the runner capability manifest is provided through `ESP32WATCH_DEVICE_RUNNER_CAPABILITIES_JSON`. Ordinary pushes/pull requests stop at host/build/candidate; release or manual release-validation runs enter the device-validation tier.
 
 CI is expected to fail closed when:
 - host validation is incomplete or failing
@@ -195,8 +226,8 @@ This flow can prove:
 ## 8. What this process still does not prove by itself
 This process does not magically prove physical truth beyond the runner environment.
 The following still depend on the real lab/runner setup:
-- whether `power-cycle-cmd` truly performs physical power removal and restoration
-- whether `fault-inject-cmd` truly triggers the intended low-level failure path
+- whether the runner capability manifest points to the intended physical power-cycle action
+- whether the runner capability manifest points to the intended low-level fault-injection action
 - board-specific electrical correctness and timing margins
 - real-world Wi-Fi/network reliability outside the controlled environment
 

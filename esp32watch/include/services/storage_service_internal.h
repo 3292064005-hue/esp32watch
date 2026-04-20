@@ -90,6 +90,7 @@ bool storage_backend_adapter_is_initialized(void);
 uint8_t storage_backend_adapter_get_version(void);
 StorageBackendType storage_backend_adapter_get_backend(void);
 const char *storage_backend_adapter_get_backend_name(void);
+bool storage_backend_adapter_get_capabilities(StorageBackendCapabilities *out);
 uint16_t storage_backend_adapter_get_stored_crc(void);
 uint16_t storage_backend_adapter_get_calculated_crc(void);
 uint32_t storage_backend_adapter_get_wear_count(void);

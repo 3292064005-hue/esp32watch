@@ -31,6 +31,6 @@ bool model_set_game_high_score(GameId game_id, uint16_t score)
 
     *slot = score;
     model_internal_persist_game_stats();
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_UI);
+    model_internal_commit_domain_mutation();
     return true;
 }

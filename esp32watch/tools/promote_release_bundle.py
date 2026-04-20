@@ -1,14 +1,29 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse
-import json
 import hashlib
+import json
 import shutil
 import tempfile
 import zipfile
 from pathlib import Path
 
 from verify_release_bundle import validate_device_report
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def canonical_sha256(payload: object | None) -> str | None:
+    if payload is None:
+        return None
+    data = json.dumps(payload, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    return sha256_bytes(data)
 
 
 def main() -> int:
@@ -35,14 +50,19 @@ def main() -> int:
             raise SystemExit('bundle is not a candidate (deviceSmokeStatus must be NOT_RUN)')
         if validation.get('hostValidationStatus') != 'PASS':
             raise SystemExit('candidate bundle host validation must already be PASS')
+        if validation.get('buildValidationStatus') != 'PASS':
+            raise SystemExit('candidate bundle build validation must already be PASS')
         device_report = json.loads(report_path.read_text(encoding='utf-8'))
         if device_report.get('status') != 'PASS':
             raise SystemExit('verified bundle promotion requires a PASS device smoke report')
         report_error = validate_device_report(device_report, args.env, 'PASS')
         if report_error is not None:
             raise SystemExit(report_error)
+        attestation = device_report.get('attestation', {})
+        if attestation.get('physicalActionsAttested') is not True:
+            raise SystemExit('verified bundle promotion requires attestation.physicalActionsAttested=true')
         expected_candidate_name = bundle.name
-        actual_candidate_hash = hashlib.sha256(bundle.read_bytes()).hexdigest()
+        actual_candidate_hash = sha256_file(bundle)
         report_candidate = device_report.get('candidateBundle', {})
         if report_candidate.get('fileName') != expected_candidate_name:
             raise SystemExit(f'device report target bundle mismatch: {report_candidate.get("fileName")} != {expected_candidate_name}')
@@ -58,13 +78,31 @@ def main() -> int:
             shutil.copyfile(report_path, normalized_report)
             validation['deviceSmokeStatus'] = 'PASS'
             validation['deviceSmokeReportPath'] = 'reports/device-smoke-report.json'
+            validation['labAttestationStatus'] = 'PASS'
             validation['bundleKind'] = 'verified'
             validation['sourceCandidateBundleName'] = expected_candidate_name
             validation['sourceCandidateBundleSha256'] = actual_candidate_hash
+            validation['runnerIdentity'] = device_report.get('generator', {}).get('runnerIdentity')
+            validation['labIdentity'] = device_report.get('generator', {}).get('labIdentity')
+            validation['attestation'] = attestation
+            validation['releaseGates'] = {
+                'hostValid': validation.get('hostValidationStatus', 'NOT_RUN'),
+                'buildValid': validation.get('buildValidationStatus', 'NOT_RUN'),
+                'deviceValid': 'PASS',
+                'labTruthAttested': 'PASS',
+            }
+            validation.setdefault('evidenceHashes', {})
+            validation['evidenceHashes']['deviceSmokeReportSha256'] = sha256_file(report_path)
+            validation['evidenceHashes']['flashEvidenceSha256'] = canonical_sha256(device_report.get('flashEvidence'))
+            validation['evidenceHashes']['scenarioEvidenceSha256'] = canonical_sha256(device_report.get('scenarioEvidence'))
+
             manifest['deviceSmokeReport'] = 'reports/device-smoke-report.json'
             manifest['bundleKind'] = 'verified'
             manifest['sourceCandidateBundleName'] = expected_candidate_name
             manifest['sourceCandidateBundleSha256'] = actual_candidate_hash
+            manifest['runnerIdentity'] = validation['runnerIdentity']
+            manifest['labIdentity'] = validation['labIdentity']
+            manifest['attestation'] = attestation
             (tmp_root / 'release-validation.json').write_text(json.dumps(validation, indent=2) + '\n', encoding='utf-8')
             (tmp_root / 'bundle-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
             with zipfile.ZipFile(out_path, 'w', compression=zipfile.ZIP_DEFLATED) as out_zip:

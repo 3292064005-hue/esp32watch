@@ -105,7 +105,7 @@ void model_trigger_alarm(uint8_t index, uint16_t due_day_id)
     model_push_popup(POPUP_ALARM, true);
     model_internal_persist_all_alarms();
     model_internal_request_runtime_sync(MODEL_RUNTIME_REQUEST_STORAGE_COMMIT, STORAGE_COMMIT_REASON_ALARM);
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_UI);
+    model_internal_commit_domain_mutation();
 }
 
 void model_ack_popup(void)
@@ -127,7 +127,7 @@ void model_ack_popup(void)
     if (g_model_runtime_state.sensor.online) {
         g_model_ui_state.sensor_fault_latched = false;
     }
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_UI);
+    model_internal_commit_domain_mutation();
 }
 
 void model_snooze_alarm(void)
@@ -142,7 +142,7 @@ void model_snooze_alarm(void)
         g_model_domain_state.alarm_ringing_index = 0xFFU;
     }
     model_internal_pop_popup();
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_UI);
+    model_internal_commit_domain_mutation();
 }
 
 void model_set_alarm_enabled_at(uint8_t index, bool enabled)

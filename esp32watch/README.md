@@ -69,8 +69,9 @@ Configured in `platformio.ini`:
 
 ### Quick Commands
 
-**Validate everything locally (no hardware needed):**
+**Run host-only validation locally (no hardware needed):**
 ```bash
+python3 -m pip install -r tools/requirements-host.txt
 ./tools/host_sanity_check.sh
 ```
 
@@ -99,10 +100,11 @@ pio run -e esp32s3_n16r8_dev -t monitor
 #### Path 1: Host-Only Validation (No Hardware Required)
 For contract verification, packaging validation, and build checks:
 ```bash
+python3 -m pip install -r tools/requirements-host.txt
 ./tools/host_sanity_check.sh
 ```
-✅ Validates: contract alignment, serialization, build graph  
-❌ Does NOT validate: GPIO timing, hardware behavior, power-loss scenarios
+✅ Validates: contract alignment, serialization, build graph, host behavior  
+❌ Does NOT validate: firmware compilation when `pio` is unavailable, GPIO timing, hardware behavior, power-loss scenarios
 
 #### Path 2: Firmware Build (PlatformIO Required)
 For local compilation and testing:
@@ -123,6 +125,11 @@ For complete device validation and release preparation:
 **Architecture & Design:**
 - [`docs/runtime-architecture.md`](docs/runtime-architecture.md) — runtime design, storage semantics, reset flows, boot recovery
 - [`docs/release-validation.md`](docs/release-validation.md) — candidate/verified bundle workflow, testing procedures
+- [`docs/compatibility-lifecycle.md`](docs/compatibility-lifecycle.md) — compatibility/rollback surface lifecycle and deprecation rules
+- [`tools/compatibility_registry.json`](tools/compatibility_registry.json) — machine-readable registry for compatibility surfaces and their required host evidence
+- [`docs/state-surface-lifecycle.md`](docs/state-surface-lifecycle.md) — production/consumer/compatibility ownership for state fields
+- [`docs/host-simulator-matrix.md`](docs/host-simulator-matrix.md) — host simulator and validation matrix boundaries
+- [`docs/control-plane-surfaces.md`](docs/control-plane-surfaces.md) — runtime/control-plane/rich-console surface split
 
 **Runtime Assets (⚠️ Not documentation — runtime contract):**
 - `data/contract-bootstrap.json` — bootstrap contract definition
@@ -193,19 +200,17 @@ pio run -e esp32s3_n16r8_dev -t buildfs
 - ❌ Real-time performance and latency
 - ❌ Peripheral driver interaction with actual hardware
 
-For complete device validation, use the **device-validation path** with real hardware and follow procedures in `docs/release-validation.md`.
+For complete device validation, use the **device-validation path** with real hardware and follow procedures in `docs/release-validation.md`.  Pull requests and ordinary pushes stop at host/build gates; release-grade validation adds flash, scenario, smoke, promotion, and verified-bundle checks. The release workflow consumes a runner capability manifest via `ESP32WATCH_DEVICE_RUNNER_CAPABILITIES_JSON`, and physical lab actions are contract-bound argv arrays rather than free-form shell commands.
 
-## 📊 Project Status
+## 📊 Validation Status
 
-**Last Updated:** 2026-04-18  
-**Build Status:** ✅ Compiling successfully  
-**Memory Usage:** 30.2% RAM, 17.9% Flash  
-**Compiler:** Xtensa ESP32-S3 (GCC 8.4.0)
+**Last Updated:** 2026-04-19  
+**Host Validation:** Run `./tools/host_sanity_check.sh` for the current branch status  
+**Firmware Build Status:** Determined only by PlatformIO build output / CI artifacts  
+**Device Verification:** Determined only by verified release bundles and device smoke evidence  
+**Current Repository Validation Level:** host/build validation can be established locally; release-grade device validation requires a release workflow run with device evidence and lab attestation
 
-### Recent Fixes
-- Fixed C/C++ linkage issues with `extern "C"` declarations
-- Resolved ArduinoJson 6.21.5 type compatibility issues
-- All compilation warnings resolved
+Repository-local files must not be treated as proof of a current successful firmware build unless they are generated from the exact branch revision under validation.
 
 ## 📝 Contributing
 

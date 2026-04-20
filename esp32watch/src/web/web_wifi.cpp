@@ -12,6 +12,7 @@ extern "C" {
 #include "services/storage_facade.h"
 #include "services/device_config.h"
 #include "services/runtime_event_service.h"
+#include "services/runtime_reload_coordinator.h"
 }
 
 namespace {
@@ -250,6 +251,8 @@ extern "C" bool web_wifi_init(void)
         .name = "web_wifi",
         .priority = 20,
         .critical = true,
+        .event_mask = runtime_event_service_event_mask(RUNTIME_SERVICE_EVENT_DEVICE_CONFIG_CHANGED),
+        .domain_mask = RUNTIME_RELOAD_DOMAIN_WIFI,
     };
     if (!runtime_event_service_register_ex(&subscription)) {
         return false;

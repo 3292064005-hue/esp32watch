@@ -5,7 +5,6 @@ import hashlib
 import json
 import shutil
 import subprocess
-import tempfile
 import threading
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TMP = ROOT / 'dist' / 'host_test_scenarios'
 BUNDLE = TMP / 'candidate.zip'
 OUTPUT = TMP / 'device-scenario-evidence.json'
+CAPABILITIES = TMP / 'runner-capabilities.json'
 POWER_FLAG = TMP / 'power.flag'
 FAULT_FLAG = TMP / 'fault.flag'
 
@@ -147,27 +147,53 @@ def main() -> int:
     shutil.rmtree(TMP, ignore_errors=True)
     candidate_sha256 = create_candidate_bundle(BUNDLE)
     fixture = Fixture(candidate_sha256)
+    capabilities = {
+        'schemaVersion': 1,
+        'runnerIdentity': 'HOST_TEST_RUNNER',
+        'labIdentity': 'HOST_TEST_LAB',
+        'powerCycle': {
+            'argv': ['python3', '-c', (
+                "import json, os; from pathlib import Path; "
+                f"Path(r'{POWER_FLAG}').write_text('1'); "
+                "Path(os.environ['ESP32WATCH_SCENARIO_EVIDENCE']).write_text(json.dumps({'label': os.environ['ESP32WATCH_SCENARIO_LABEL'], 'kind': 'power-cycle', 'source': 'host-test'}))"
+            )]
+        },
+        'faultInject': {
+            'argv': ['python3', '-c', (
+                "import json, os; from pathlib import Path; "
+                f"Path(r'{FAULT_FLAG}').write_text('1'); "
+                "Path(os.environ['ESP32WATCH_SCENARIO_EVIDENCE']).write_text(json.dumps({'label': os.environ['ESP32WATCH_SCENARIO_LABEL'], 'kind': 'fault-inject', 'source': 'host-test'}))"
+            )]
+        },
+    }
+    CAPABILITIES.parent.mkdir(parents=True, exist_ok=True)
+    CAPABILITIES.write_text(json.dumps(capabilities, indent=2) + '\n', encoding='utf-8')
     Handler.fixture = fixture
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        power_cmd = "python3 -c \"import json, os; from pathlib import Path; Path(r'{}').write_text('1'); Path(os.environ['ESP32WATCH_SCENARIO_EVIDENCE']).write_text(json.dumps({{'label': os.environ['ESP32WATCH_SCENARIO_LABEL'], 'kind': 'power-cycle', 'source': 'host-test'}}))\"".format(POWER_FLAG)
-        fault_cmd = "python3 -c \"import json, os; from pathlib import Path; Path(r'{}').write_text('1'); Path(os.environ['ESP32WATCH_SCENARIO_EVIDENCE']).write_text(json.dumps({{'label': os.environ['ESP32WATCH_SCENARIO_LABEL'], 'kind': 'fault-inject', 'source': 'host-test'}}))\"".format(FAULT_FLAG)
         subprocess.run([
             'python3', 'tools/run_device_scenarios.py',
             '--base-url', f'http://127.0.0.1:{server.server_address[1]}',
             '--candidate-bundle', str(BUNDLE),
             '--device-id', 'HOST-DEVICE',
             '--wifi-password', 'secret123',
-            '--power-cycle-cmd', power_cmd,
-            '--fault-inject-cmd', fault_cmd,
+            '--runner-capabilities', str(CAPABILITIES),
             '--output', str(OUTPUT),
+            '--runner-identity', 'HOST_TEST_RUNNER',
+            '--lab-identity', 'HOST_TEST_LAB',
+            '--attest-physical-actions',
         ], cwd=ROOT, check=True)
         payload = json.loads(OUTPUT.read_text(encoding='utf-8'))
         assert payload['reportType'] == 'DEVICE_SCENARIO_EVIDENCE'
-        assert payload['schemaVersion'] == 2
+        assert payload['schemaVersion'] == 3
         assert payload['candidateBundleSha256'] == candidate_sha256
+        assert payload['runnerIdentity'] == 'HOST_TEST_RUNNER'
+        assert payload['labIdentity'] == 'HOST_TEST_LAB'
+        assert payload['attestation']['physicalActionsAttested'] is True
+        assert payload['runnerCapabilities']['schemaVersion'] == 1
+        assert payload['attestation']['runnerCapabilitiesSha256'] == payload['runnerCapabilitiesSha256']
         for name in ('wifiProvisioning', 'persistence', 'bootLoopRecovery'):
             assert payload['scenarios'][name]['executed'] is True
         assert payload['scenarios']['wifiProvisioning']['apObserved'] is True

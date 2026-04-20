@@ -121,7 +121,7 @@ void model_set_screen_timeout_idx(uint8_t idx)
     g_model_runtime_state.screen_timeout_ms = model_internal_timeout_idx_to_ms(g_model_domain_state.settings.screen_timeout_idx);
     model_internal_persist_settings();
     request_manual_settings_commit(0U);
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_RUNTIME);
+    model_internal_commit_domain_mutation();
     model_internal_commit_runtime_mutation();
 }
 

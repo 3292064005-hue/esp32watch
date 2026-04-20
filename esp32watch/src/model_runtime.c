@@ -6,7 +6,6 @@
 #include <string.h>
 
 static uint16_t g_last_runtime_input_overflow_count;
-static uint32_t g_model_projection_dirty_mask = MODEL_PROJECTION_DIRTY_ALL;
 
 ModelDomainState g_model_domain_state;
 ModelRuntimeState g_model_runtime_state;
@@ -49,157 +48,93 @@ static void model_internal_normalize_ui_state(void)
     g_model_ui_state.has_runtime_requests = model_has_runtime_requests();
 }
 
-static void model_internal_rebuild_legacy_domain_projection(void)
+static const WatchModel *model_internal_populate_compat_snapshot(WatchModel *out)
 {
-    model_internal_normalize_domain_state();
-    g_model.now = g_model_domain_state.now;
-    g_model.time_valid = g_model_domain_state.time_valid;
-    g_model.time_state = g_model_domain_state.time_state;
-    memcpy(g_model.alarms, g_model_domain_state.alarms, sizeof(g_model.alarms));
-    g_model.alarm = g_model_domain_state.selected_alarm;
-    g_model.alarm_selected = g_model_domain_state.alarm_selected;
-    g_model.alarm_ringing_index = g_model_domain_state.alarm_ringing_index;
-    g_model.stopwatch = g_model_domain_state.stopwatch;
-    g_model.timer = g_model_domain_state.timer;
-    g_model.activity = g_model_domain_state.activity;
-    g_model.settings = g_model_domain_state.settings;
-    g_model.game_stats = g_model_domain_state.game_stats;
-    g_model.current_day_id = g_model_domain_state.current_day_id;
-}
-
-static void model_internal_rebuild_legacy_runtime_projection(void)
-{
-    g_model.sensor = g_model_runtime_state.sensor;
-    g_model.battery_mv = g_model_runtime_state.battery_mv;
-    g_model.battery_percent = g_model_runtime_state.battery_percent;
-    g_model.battery_present = g_model_runtime_state.battery_present;
-    g_model.charging = g_model_runtime_state.charging;
-    g_model.storage_ok = g_model_runtime_state.storage_ok;
-    g_model.storage_crc_ok = g_model_runtime_state.storage_crc_ok;
-    g_model.storage_version = g_model_runtime_state.storage_version;
-    g_model.storage_backend = g_model_runtime_state.storage_backend;
-    g_model.storage_stored_crc = g_model_runtime_state.storage_stored_crc;
-    g_model.storage_calc_crc = g_model_runtime_state.storage_calc_crc;
-    g_model.storage_last_commit_ms = g_model_runtime_state.storage_last_commit_ms;
-    g_model.storage_commit_count = g_model_runtime_state.storage_commit_count;
-    g_model.storage_pending_mask = g_model_runtime_state.storage_pending_mask;
-    g_model.input_queue_overflow_count = g_model_runtime_state.input_queue_overflow_count;
-    g_model.reset_reason = g_model_runtime_state.reset_reason;
-    g_model.last_wake_reason = g_model_runtime_state.last_wake_reason;
-    g_model.last_sleep_reason = g_model_runtime_state.last_sleep_reason;
-    g_model.last_sleep_ms = g_model_runtime_state.last_sleep_ms;
-    g_model.storage_last_commit_ok = g_model_runtime_state.storage_last_commit_ok;
-    g_model.storage_last_commit_reason = g_model_runtime_state.storage_last_commit_reason;
-    g_model.storage_dirty_source_mask = g_model_runtime_state.storage_dirty_source_mask;
-    g_model.last_user_activity_ms = g_model_runtime_state.last_user_activity_ms;
-    g_model.last_wake_ms = g_model_runtime_state.last_wake_ms;
-    g_model.last_render_ms = g_model_runtime_state.last_render_ms;
-    g_model.screen_timeout_ms = g_model_runtime_state.screen_timeout_ms;
-}
-
-static void model_internal_rebuild_legacy_ui_projection(void)
-{
-    model_internal_normalize_ui_state();
-    g_model.popup = g_model_ui_state.popup;
-    g_model.popup_latched = g_model_ui_state.popup_latched;
-    memcpy(g_model.popup_queue, g_model_ui_state.popup_queue, sizeof(g_model.popup_queue));
-    g_model.popup_queue_count = g_model_ui_state.popup_queue_count;
-    g_model.sensor_fault_latched = g_model_ui_state.sensor_fault_latched;
-}
-
-void model_internal_mark_projection_dirty(uint32_t flags)
-{
-    if ((flags & MODEL_PROJECTION_DIRTY_ALL) == 0U) {
-        return;
+    if (out == NULL) {
+        return NULL;
     }
-    g_model_projection_dirty_mask |= (flags & MODEL_PROJECTION_DIRTY_ALL);
+
+    model_internal_normalize_domain_state();
+    model_internal_normalize_ui_state();
+    memset(out, 0, sizeof(*out));
+
+    out->now = g_model_domain_state.now;
+    out->time_valid = g_model_domain_state.time_valid;
+    out->time_state = g_model_domain_state.time_state;
+    memcpy(out->alarms, g_model_domain_state.alarms, sizeof(out->alarms));
+    out->alarm = g_model_domain_state.selected_alarm;
+    out->alarm_selected = g_model_domain_state.alarm_selected;
+    out->alarm_ringing_index = g_model_domain_state.alarm_ringing_index;
+    out->stopwatch = g_model_domain_state.stopwatch;
+    out->timer = g_model_domain_state.timer;
+    out->activity = g_model_domain_state.activity;
+    out->settings = g_model_domain_state.settings;
+    out->game_stats = g_model_domain_state.game_stats;
+    out->current_day_id = g_model_domain_state.current_day_id;
+
+    out->sensor = g_model_runtime_state.sensor;
+    out->battery_mv = g_model_runtime_state.battery_mv;
+    out->battery_percent = g_model_runtime_state.battery_percent;
+    out->battery_present = g_model_runtime_state.battery_present;
+    out->charging = g_model_runtime_state.charging;
+    out->storage_ok = g_model_runtime_state.storage_ok;
+    out->storage_crc_ok = g_model_runtime_state.storage_crc_ok;
+    out->storage_version = g_model_runtime_state.storage_version;
+    out->storage_backend = g_model_runtime_state.storage_backend;
+    out->storage_stored_crc = g_model_runtime_state.storage_stored_crc;
+    out->storage_calc_crc = g_model_runtime_state.storage_calc_crc;
+    out->storage_last_commit_ms = g_model_runtime_state.storage_last_commit_ms;
+    out->storage_commit_count = g_model_runtime_state.storage_commit_count;
+    out->storage_pending_mask = g_model_runtime_state.storage_pending_mask;
+    out->input_queue_overflow_count = g_model_runtime_state.input_queue_overflow_count;
+    out->reset_reason = g_model_runtime_state.reset_reason;
+    out->last_wake_reason = g_model_runtime_state.last_wake_reason;
+    out->last_sleep_reason = g_model_runtime_state.last_sleep_reason;
+    out->last_sleep_ms = g_model_runtime_state.last_sleep_ms;
+    out->storage_last_commit_ok = g_model_runtime_state.storage_last_commit_ok;
+    out->storage_last_commit_reason = g_model_runtime_state.storage_last_commit_reason;
+    out->storage_dirty_source_mask = g_model_runtime_state.storage_dirty_source_mask;
+    out->last_user_activity_ms = g_model_runtime_state.last_user_activity_ms;
+    out->last_wake_ms = g_model_runtime_state.last_wake_ms;
+    out->last_render_ms = g_model_runtime_state.last_render_ms;
+    out->screen_timeout_ms = g_model_runtime_state.screen_timeout_ms;
+
+    out->popup = g_model_ui_state.popup;
+    out->popup_latched = g_model_ui_state.popup_latched;
+    memcpy(out->popup_queue, g_model_ui_state.popup_queue, sizeof(out->popup_queue));
+    out->popup_queue_count = g_model_ui_state.popup_queue_count;
+    out->sensor_fault_latched = g_model_ui_state.sensor_fault_latched;
+    return out;
 }
+
 
 void model_internal_flush_read_models(void)
 {
-    const uint32_t dirty_mask = g_model_projection_dirty_mask;
-
-    if (dirty_mask == MODEL_PROJECTION_DIRTY_NONE) {
-        return;
-    }
-
-#if !MODEL_ENABLE_LEGACY_PROJECTION
-    g_model_projection_dirty_mask = MODEL_PROJECTION_DIRTY_NONE;
-    return;
-#endif
-
-    if ((dirty_mask & MODEL_PROJECTION_DIRTY_DOMAIN) != 0U) {
-        model_internal_rebuild_legacy_domain_projection();
-    }
-    if ((dirty_mask & MODEL_PROJECTION_DIRTY_RUNTIME) != 0U) {
-        model_internal_rebuild_legacy_runtime_projection();
-    }
-    if ((dirty_mask & MODEL_PROJECTION_DIRTY_UI) != 0U) {
-        model_internal_rebuild_legacy_ui_projection();
-    }
-    g_model_projection_dirty_mask = MODEL_PROJECTION_DIRTY_NONE;
+    model_internal_normalize_domain_state();
+    model_internal_normalize_ui_state();
 }
 
-void model_internal_commit_legacy_mutation_with_flags(uint32_t flags)
+const WatchModel *model_internal_build_compat_snapshot(WatchModel *out)
 {
-    /*
-     * The aggregate WatchModel view is a compatibility projection only.
-     * Any attempted direct edits are discarded by rebuilding the requested
-     * projection slices from the authoritative split-state domains.
-     */
-    model_internal_mark_projection_dirty((flags & MODEL_PROJECTION_DIRTY_ALL) != 0U ? flags : MODEL_PROJECTION_DIRTY_ALL);
-    model_internal_flush_read_models();
+    return model_internal_populate_compat_snapshot(out);
 }
 
-void model_internal_commit_legacy_mutation(void)
-{
-    model_internal_commit_legacy_mutation_with_flags(MODEL_PROJECTION_DIRTY_ALL);
-}
-
-void model_internal_commit_runtime_mutation_with_flags(uint32_t flags)
-{
-    model_internal_mark_projection_dirty(flags | MODEL_PROJECTION_DIRTY_RUNTIME);
-    model_internal_flush_read_models();
-}
 
 void model_internal_commit_runtime_mutation(void)
 {
-    model_internal_commit_runtime_mutation_with_flags(MODEL_PROJECTION_DIRTY_RUNTIME);
-}
-
-void model_internal_commit_domain_mutation_with_flags(uint32_t flags)
-{
-    model_internal_mark_projection_dirty(flags | MODEL_PROJECTION_DIRTY_DOMAIN);
     model_internal_flush_read_models();
 }
 
 void model_internal_commit_domain_mutation(void)
 {
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN);
-}
-
-void model_internal_commit_ui_mutation_with_flags(uint32_t flags)
-{
-    model_internal_mark_projection_dirty(flags | MODEL_PROJECTION_DIRTY_UI);
     model_internal_flush_read_models();
 }
 
 void model_internal_commit_ui_mutation(void)
 {
-    model_internal_commit_ui_mutation_with_flags(MODEL_PROJECTION_DIRTY_UI);
-}
-
-void model_internal_sync_split_state_from_legacy(void)
-{
-    /* Legacy writes are not authoritative anymore; rebuild the projection only. */
-    model_internal_commit_legacy_mutation_with_flags(MODEL_PROJECTION_DIRTY_ALL);
-}
-
-void model_internal_sync_legacy_from_split_state(void)
-{
-    model_internal_mark_projection_dirty(MODEL_PROJECTION_DIRTY_ALL);
     model_internal_flush_read_models();
 }
+
 
 void model_flush_read_snapshots(void)
 {

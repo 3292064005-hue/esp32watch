@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import zipfile
 from pathlib import Path
 
 VALIDATION_STATUS_VALUES = ('PASS', 'FAIL', 'NOT_RUN')
-VALIDATION_SCHEMA_VERSION = 6
+VALIDATION_SCHEMA_VERSION = 7
 HOST_REPORT_NAME = 'reports/host-validation.json'
 DEVICE_REPORT_NAME = 'reports/device-smoke-report.json'
 
@@ -15,6 +16,10 @@ def require(path: Path) -> Path:
     if not path.exists():
         raise FileNotFoundError(path)
     return path
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def normalize_report_path(source: Path | None, normalized_name: str) -> tuple[Path | None, str | None]:
@@ -32,8 +37,27 @@ def build_validation_payload(env: str,
         'validationSchemaVersion': VALIDATION_SCHEMA_VERSION,
         'env': env,
         'hostValidationStatus': host_validation_status,
+        'buildValidationStatus': 'PASS',
         'deviceSmokeStatus': device_smoke_status,
+        'labAttestationStatus': 'NOT_RUN',
         'bundleKind': 'candidate' if device_smoke_status == 'NOT_RUN' else 'verified',
+        'releaseGates': {
+            'hostValid': host_validation_status,
+            'buildValid': 'PASS',
+            'deviceValid': device_smoke_status,
+            'labTruthAttested': 'NOT_RUN',
+        },
+        'runnerIdentity': None,
+        'labIdentity': None,
+        'attestation': {
+            'physicalActionsAttested': False,
+        },
+        'evidenceHashes': {
+            'hostValidationReportSha256': None,
+            'deviceSmokeReportSha256': None,
+            'flashEvidenceSha256': None,
+            'scenarioEvidenceSha256': None,
+        },
     }
     if host_validation_report_path is not None:
         payload['hostValidationReportPath'] = host_validation_report_path
@@ -88,14 +112,16 @@ def main() -> int:
         raise SystemExit('package_release.py only emits candidate bundles; use promote_release_bundle.py for verified bundles')
     if args.host_validation_status != 'PASS':
         raise SystemExit('package_release.py requires --host-validation-status PASS for candidate bundles')
+
     validation = build_validation_payload(env,
                                           args.host_validation_status,
                                           host_report_internal,
                                           args.device_smoke_status,
                                           device_report_internal)
+    if host_report_source is not None:
+        validation['evidenceHashes']['hostValidationReportSha256'] = sha256_file(host_report_source)
 
-    bundle_suffix = 'candidate'
-    bundle = out_dir / f'esp32watch-{env}-{bundle_suffix}.zip'
+    bundle = out_dir / f'esp32watch-{env}-candidate.zip'
     meta = {
         'env': env,
         'bundleKind': 'candidate',
@@ -128,6 +154,7 @@ def main() -> int:
         zf.writestr('bundle-manifest.json', json.dumps(meta, indent=2) + '\n')
     print(bundle)
     return 0
+
 
 if __name__ == '__main__':
     raise SystemExit(main())

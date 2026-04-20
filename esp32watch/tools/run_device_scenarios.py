@@ -14,11 +14,16 @@ from typing import Any
 from urllib import error, parse, request
 
 TERMINAL_ACTION_STATES = {"APPLIED", "REJECTED", "FAILED"}
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+RUNNER_CAPABILITIES_SCHEMA_VERSION = 1
 
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+
+def canonical_sha256(payload: Any) -> str:
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
 
 
 def merge_url(base_url: str, path: str) -> str:
@@ -66,38 +71,50 @@ def route(contract: dict[str, Any], key: str, fallback: str) -> str:
     return value if isinstance(value, str) and value else fallback
 
 
-def wait_until(predicate, *, timeout_sec: float, interval_sec: float = 0.5, label: str) -> dict[str, Any]:
-    deadline = time.time() + timeout_sec
-    last = None
-    while time.time() < deadline:
-        last = predicate()
-        if last is not None:
-            return last
+def wait_until(predicate, *, timeout_sec: float, interval_sec: float = 0.5, label: str) -> Any:
+    deadline = time.monotonic() + timeout_sec
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            result = predicate()
+            if result:
+                return result
+        except SystemExit:
+            raise
+        except Exception as exc:
+            last_error = exc
         time.sleep(interval_sec)
-    raise SystemExit(f'timed out waiting for {label}')
+    if last_error is not None:
+        raise SystemExit(f'timeout waiting for {label}: {last_error}')
+    raise SystemExit(f'timeout waiting for {label}')
 
 
 def poll_action(base_url: str, contract: dict[str, Any], action_id: int, auth_token: str | None, timeout_sec: float) -> dict[str, Any]:
-    actions_status = route(contract, 'actionsStatus', '/api/actions/status')
-    def check():
-        status, payload = http_json('GET', merge_url(base_url, f'{actions_status}?id={action_id}'), auth_token=auth_token, timeout_sec=timeout_sec)
-        if status != 200:
-            return None
-        state = payload.get('status') or payload.get('actionStatus', {}).get('status')
+    actions_status_template = route(contract, 'actionsStatus', '/api/actions/status/{id}')
+    if '{id}' in actions_status_template:
+        status_path = actions_status_template.replace('{id}', str(action_id))
+    else:
+        sep = '&' if '?' in actions_status_template else '?'
+        status_path = f'{actions_status_template}{sep}id={action_id}'
+    status_url = merge_url(base_url, status_path)
+
+    def predicate() -> dict[str, Any] | None:
+        status, payload = http_json('GET', status_url, auth_token=auth_token, timeout_sec=timeout_sec)
+        if status != 200 or not payload.get('ok'):
+            raise SystemExit(f'failed polling action status {action_id}: HTTP {status} {payload}')
+        action_status = payload.get('actionStatus', {}) if isinstance(payload.get('actionStatus'), dict) else {}
+        state = payload.get('status') or action_status.get('status')
         if state in TERMINAL_ACTION_STATES:
             return payload
         return None
-    return wait_until(check, timeout_sec=timeout_sec, interval_sec=0.2, label=f'action {action_id}')
+
+    return wait_until(predicate, timeout_sec=timeout_sec, label=f'action {action_id} completion')
 
 
-def post_tracked_command(base_url: str,
-                         contract: dict[str, Any],
-                         auth_token: str | None,
-                         timeout_sec: float,
-                         command_type: str,
-                         **payload: Any) -> dict[str, Any]:
-    body = {'type': command_type}
-    body.update(payload)
+def post_tracked_command(base_url: str, contract: dict[str, Any], auth_token: str | None, timeout_sec: float, command_type: str, *, value: int | None = None) -> dict[str, Any]:
+    body: dict[str, Any] = {'type': command_type}
+    if value is not None:
+        body['value'] = value
     status, ack = http_json('POST', merge_url(base_url, route(contract, 'command', '/api/command')), auth_token=auth_token, payload=body, timeout_sec=timeout_sec)
     if status != 200 or not ack.get('ok'):
         raise SystemExit(f'command `{command_type}` rejected: HTTP {status} {ack}')
@@ -134,20 +151,56 @@ def command_evidence(path: Path) -> dict[str, Any] | None:
     return payload
 
 
-def run_shell(command: str, label: str, evidence_path: Path) -> dict[str, Any]:
+def validate_argv(argv: Any, label: str) -> list[str]:
+    if not isinstance(argv, list) or len(argv) == 0:
+        raise SystemExit(f'runner capability `{label}` must declare a non-empty argv array')
+    normalized: list[str] = []
+    for entry in argv:
+        if not isinstance(entry, str) or entry == '':
+            raise SystemExit(f'runner capability `{label}` argv entries must be non-empty strings')
+        normalized.append(entry)
+    return normalized
+
+
+def load_runner_capabilities(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise SystemExit(f'runner capability manifest not found: {path}')
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(payload, dict):
+        raise SystemExit('runner capability manifest must be a JSON object')
+    schema_version = payload.get('schemaVersion', RUNNER_CAPABILITIES_SCHEMA_VERSION)
+    if schema_version != RUNNER_CAPABILITIES_SCHEMA_VERSION:
+        raise SystemExit(f'unsupported runner capability schema version: {schema_version}')
+    power_cycle = payload.get('powerCycle')
+    fault_inject = payload.get('faultInject')
+    if not isinstance(power_cycle, dict) or not isinstance(fault_inject, dict):
+        raise SystemExit('runner capability manifest must define powerCycle and faultInject objects')
+    normalized = {
+        'schemaVersion': RUNNER_CAPABILITIES_SCHEMA_VERSION,
+        'powerCycle': {'argv': validate_argv(power_cycle.get('argv'), 'powerCycle')},
+        'faultInject': {'argv': validate_argv(fault_inject.get('argv'), 'faultInject')},
+    }
+    if isinstance(payload.get('runnerIdentity'), str) and payload['runnerIdentity']:
+        normalized['runnerIdentity'] = payload['runnerIdentity']
+    if isinstance(payload.get('labIdentity'), str) and payload['labIdentity']:
+        normalized['labIdentity'] = payload['labIdentity']
+    return normalized
+
+
+def run_argv(argv: list[str], label: str, evidence_path: Path) -> dict[str, Any]:
     env = os.environ.copy()
     env['ESP32WATCH_SCENARIO_LABEL'] = label
     env['ESP32WATCH_SCENARIO_EVIDENCE'] = str(evidence_path)
     started_at = now_utc()
-    proc = subprocess.run(command, shell=True, env=env)
+    proc = subprocess.run(argv, shell=False, env=env)
     finished_at = now_utc()
     evidence = command_evidence(evidence_path)
     if proc.returncode != 0:
-        raise SystemExit(f'{label} command failed: {command}')
+        raise SystemExit(f'{label} command failed: {argv}')
     if evidence is None:
-        raise SystemExit(f'{label} command completed without scenario evidence: {command}')
+        raise SystemExit(f'{label} command completed without scenario evidence: {argv}')
     return {
-        'command': command,
+        'argv': argv,
         'startedAtUtc': started_at,
         'finishedAtUtc': finished_at,
         'exitCode': proc.returncode,
@@ -174,16 +227,24 @@ def main() -> int:
     parser.add_argument('--output', required=True)
     parser.add_argument('--auth-token', default='')
     parser.add_argument('--wifi-password', required=True)
-    parser.add_argument('--power-cycle-cmd', required=True)
-    parser.add_argument('--fault-inject-cmd', required=True)
+    parser.add_argument('--runner-capabilities', required=True)
     parser.add_argument('--timeout-sec', type=float, default=20.0)
     parser.add_argument('--post-reset-wait-sec', type=float, default=1.0)
+    parser.add_argument('--runner-identity', default='LOCAL_DEVICE_RUNNER')
+    parser.add_argument('--lab-identity', default='UNSPECIFIED_LAB')
+    parser.add_argument('--attest-physical-actions', action='store_true')
     args = parser.parse_args()
 
     auth_token = args.auth_token or None
     candidate_sha256 = load_candidate_sha256(Path(args.candidate_bundle))
     base_url = args.base_url.rstrip('/')
     contract = load_runtime_contract(base_url, auth_token, args.timeout_sec)
+    runner_capabilities = load_runner_capabilities(Path(args.runner_capabilities))
+    if runner_capabilities.get('runnerIdentity') not in (None, args.runner_identity):
+        raise SystemExit('runner capability manifest runnerIdentity must match --runner-identity when provided')
+    if runner_capabilities.get('labIdentity') not in (None, args.lab_identity):
+        raise SystemExit('runner capability manifest labIdentity must match --lab-identity when provided')
+    runner_capabilities_sha256 = canonical_sha256(runner_capabilities)
 
     original_config = get_config(base_url, contract, auth_token, args.timeout_sec)
     original_aggregate = get_aggregate(base_url, contract, auth_token, args.timeout_sec)
@@ -213,10 +274,7 @@ def main() -> int:
         'longitude': original_config.get('longitude', 0.0),
         'locationName': original_config.get('locationName', ''),
     }
-    status, payload = http_json('POST', merge_url(base_url, route(contract, 'configDevice', '/api/config/device')),
-                                auth_token=auth_token,
-                                payload=reprovision_body,
-                                timeout_sec=args.timeout_sec)
+    status, payload = http_json('POST', merge_url(base_url, route(contract, 'configDevice', '/api/config/device')), auth_token=auth_token, payload=reprovision_body, timeout_sec=args.timeout_sec)
     if status != 200 or not payload.get('ok'):
         raise SystemExit(f'reprovisioning config update failed: HTTP {status} {payload}')
 
@@ -239,7 +297,7 @@ def main() -> int:
 
     with TemporaryDirectory(prefix='esp32watch_scenarios_') as tmpdir:
         tmp = Path(tmpdir)
-        power_meta = run_shell(args.power_cycle_cmd, 'power-cycle', tmp / 'power-cycle.json')
+        power_meta = run_argv(runner_capabilities['powerCycle']['argv'], 'power-cycle', tmp / 'power-cycle.json')
 
         def wait_for_persisted_state():
             agg = get_aggregate(base_url, contract, auth_token, args.timeout_sec)
@@ -249,7 +307,7 @@ def main() -> int:
         persisted_aggregate = wait_until(wait_for_persisted_state, timeout_sec=args.timeout_sec, label='persisted app-state after power cycle')
         boot_after_power_cycle = aggregate_boot_count(persisted_aggregate)
 
-        fault_meta = run_shell(args.fault_inject_cmd, 'fault-inject', tmp / 'fault-inject.json')
+        fault_meta = run_argv(runner_capabilities['faultInject']['argv'], 'fault-inject', tmp / 'fault-inject.json')
 
         def wait_for_safe_mode():
             agg = get_aggregate(base_url, contract, auth_token, args.timeout_sec)
@@ -269,7 +327,6 @@ def main() -> int:
             return None
         cleared_aggregate = wait_until(wait_for_safe_mode_clear, timeout_sec=args.timeout_sec, label='safe mode clear')
 
-        # Restore visible app-state knobs to the original values before exiting.
         if original_brightness.endswith('/4') and original_brightness[0].isdigit():
             post_tracked_command(base_url, contract, auth_token, args.timeout_sec, 'setBrightness', value=max(0, int(original_brightness[0]) - 1))
         if len(original_face) == 2 and original_face.startswith('F') and original_face[1].isdigit():
@@ -281,6 +338,18 @@ def main() -> int:
             'schemaVersion': SCHEMA_VERSION,
             'generatedAtUtc': now_utc(),
             'deviceId': args.device_id,
+            'runnerIdentity': args.runner_identity,
+            'labIdentity': args.lab_identity,
+            'runnerCapabilities': runner_capabilities,
+            'runnerCapabilitiesSha256': runner_capabilities_sha256,
+            'attestation': {
+                'physicalActionsAttested': args.attest_physical_actions,
+                'runnerIdentity': args.runner_identity,
+                'labIdentity': args.lab_identity,
+                'runnerCapabilitiesSha256': runner_capabilities_sha256,
+                'powerCycleCommandConfigured': True,
+                'faultInjectCommandConfigured': True,
+            },
             'candidateBundleSha256': candidate_sha256,
             'commandEvidence': {
                 'powerCycle': {

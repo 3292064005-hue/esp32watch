@@ -21,11 +21,44 @@ const state = {
   contract: MINIMAL_CONTRACT,
   storageSemantics: null,
   polling: false,
-  formDirty: false
+  formDirty: false,
+  lastSnapshotRevision: null,
+  lastFrameRevision: null,
+  lastMetaRevision: null,
+  lastHealthRevision: null,
+  lastConfigRevision: null
 };
 
 let oledContext = null;
 let oledImageData = null;
+
+const RESET_ACTIONS = {
+  resetAppState: {
+    routeKey: "resetAppState",
+    successMessage: "App state reset",
+    failureMessage: "App state reset completed with runtime follow-up warnings"
+  },
+  factoryReset: {
+    routeKey: "resetFactory",
+    successMessage: "Factory reset completed",
+    failureMessage: "Factory reset completed, but runtime reload failed"
+  },
+  resetDeviceConfig: {
+    routeKey: "resetDeviceConfig",
+    successMessage: "Device config reset",
+    failureMessage: "Device config reset, but runtime reload failed"
+  }
+};
+
+
+function stableRevision(value) {
+  if (value == null) return null;
+  try {
+    return JSON.stringify(value);
+  } catch (_) {
+    return String(value);
+  }
+}
 
 function contractRoute(name) {
   return state.contract?.routes?.[name] || null;
@@ -96,11 +129,18 @@ function contractRouteSchema(routeKey) {
   return schema && typeof schema === "object" ? schema : null;
 }
 
+
+function payloadHasRouteResponseFields(payload, routeKey) {
+  const schema = contractRouteSchema(routeKey);
+  if (!schema?.responseFields) return true;
+  return schema.responseFields.every(key => payloadHasPath(payload || {}, key));
+}
+
 function validateRoutePayload(routeKey, payload, errorMessage) {
   const routeSchema = contractRouteSchema(routeKey);
   if (!routeSchema) return payload;
   if (routeSchema.kind === "state") {
-    if (!payloadHasDeclaredSections(payload, routeSchema.name)) {
+    if (!payloadHasDeclaredSections(payload, routeSchema.name) || !payloadHasRouteResponseFields(payload, routeKey)) {
       throw new Error(errorMessage || `${routeKey} payload does not match runtime contract state schema`);
     }
     return payload;
@@ -152,10 +192,23 @@ async function apiWithSchema(routeKey, fallbackPath, schemaName, options = {}) {
     : validateRoutePayload(routeKey, payload, `${routeKey} payload does not match runtime contract schema`);
 }
 
+function payloadHasPath(payload, keyPath) {
+  if (!keyPath) return true;
+  const parts = String(keyPath).split('.');
+  let cursor = payload;
+  for (const part of parts) {
+    if (cursor === null || cursor === undefined || !Object.prototype.hasOwnProperty.call(cursor, part)) {
+      return false;
+    }
+    cursor = cursor[part];
+  }
+  return true;
+}
+
 function payloadHasRequiredKeys(payload, schemaName) {
   const schema = contractApiSchema(schemaName);
   if (!schema?.required) return true;
-  return schema.required.every(key => Object.prototype.hasOwnProperty.call(payload || {}, key));
+  return schema.required.every(key => payloadHasPath(payload || {}, key));
 }
 
 function payloadHasDeclaredSections(payload, viewName) {
@@ -290,16 +343,49 @@ async function refreshState() {
       apiWithSchema("configDevice", "/api/config/device", "configDeviceReadback")
     ]);
 
-    if (!payloadHasDeclaredSections(aggregate, "aggregate")) {
+    if (!payloadHasDeclaredSections(aggregate, "aggregate") || !payloadHasRouteResponseFields(aggregate, "stateAggregate")) {
       throw new Error("state aggregate payload does not match runtime contract schema");
     }
+
+    try {
+      const perfPayload = await api(contractRoute("statePerf") || "/api/state/perf");
+      if (!payloadHasDeclaredSections(perfPayload, "perf") || !payloadHasRouteResponseFields(perfPayload, "statePerf")) {
+        throw new Error("state perf payload does not match runtime contract schema");
+      }
+      if (aggregate && perfPayload?.perf) {
+        aggregate.perf = perfPayload.perf;
+      }
+    } catch (_) {
+      if (aggregate && typeof aggregate === "object" && !aggregate.perf) {
+        aggregate.perf = { stages: [], history: [] };
+      }
+    }
+
+    const nextSnapshotRevision = aggregate?.stateRevision ?? null;
+    const nextFrameRevision = frame?.presentCount ?? null;
+    const nextMetaRevision = stableRevision(meta);
+    const nextHealthRevision = stableRevision(health);
+    const nextConfigRevision = stableRevision(configReadback?.config || aggregate?.config || null);
+    const renderNeeded = state.lastSnapshotRevision !== nextSnapshotRevision ||
+      state.lastFrameRevision !== nextFrameRevision ||
+      state.lastMetaRevision !== nextMetaRevision ||
+      state.lastHealthRevision !== nextHealthRevision ||
+      state.lastConfigRevision !== nextConfigRevision ||
+      !state.snapshot || !state.frame;
 
     state.snapshot = aggregate || null;
     state.frame = frame;
     state.health = health || null;
     state.config = configReadback?.config || aggregate?.config || null;
     state.meta = meta || null;
-    renderAll();
+    state.lastSnapshotRevision = nextSnapshotRevision;
+    state.lastFrameRevision = nextFrameRevision;
+    state.lastMetaRevision = nextMetaRevision;
+    state.lastHealthRevision = nextHealthRevision;
+    state.lastConfigRevision = nextConfigRevision;
+    if (renderNeeded) {
+      renderAll();
+    }
   } catch (err) {
     toast(err.message, "error");
   } finally {
@@ -363,6 +449,7 @@ function renderTopbar() {
   const page = s.system?.page || "-";
   const timeSource = s.system?.timeSource || "-";
   const timeConfidence = s.system?.timeConfidence || "NONE";
+  const timeAuthority = s.system?.timeAuthority || "NONE";
   const wifi = s.wifi?.mode || "IDLE";
   const safe = s.diag?.safeModeActive ? "SAFE" : "OK";
   const app = s.system?.appReady
@@ -378,7 +465,7 @@ function renderTopbar() {
         : "ASSET MISSING");
 
   document.getElementById("deviceMeta").textContent =
-    `PAGE ${page}  TIME ${timeSource}/${timeConfidence}  NET ${wifi}  APP ${app}  SYS ${safe}  API v${apiVersion}  ${assetStatus}`;
+    `PAGE ${page}  TIME ${timeSource}/${timeConfidence}/${timeAuthority}  NET ${wifi}  APP ${app}  SYS ${safe}  API v${apiVersion}  ${assetStatus}`;
 
   const tags = splitTags(s.summary?.headerTags);
   document.getElementById("tagBar").innerHTML = tags
@@ -622,9 +709,23 @@ async function sendCommand(type) {
   if (knownCommands.length > 0 && !knownCommands.includes(type)) {
     throw new Error(`unsupported command type: ${type}`);
   }
-  const message = type === "resetAppState" ? "App state reset"
-    : (type === "factoryReset" ? "Factory reset completed" : `Command applied: ${type}`);
-  await runTrackedAction(contractRoute("command"), { type }, message);
+  await runTrackedAction(contractRoute("command"), { type }, `Command applied: ${type}`);
+}
+
+function resetActionConfig(type) {
+  return RESET_ACTIONS[type] || null;
+}
+
+async function sendResetAction(type) {
+  const reset = resetActionConfig(type);
+  if (!reset) {
+    throw new Error(`unsupported reset type: ${type}`);
+  }
+  const path = contractRoute(reset.routeKey);
+  if (!path) {
+    throw new Error(`runtime contract missing route for ${reset.routeKey}`);
+  }
+  await postReset(path, reset.successMessage, reset.failureMessage);
 }
 
 async function postReset(path, successMessage, failureMessage) {
@@ -702,7 +803,7 @@ async function saveConfig() {
 }
 
 async function resetConfig() {
-  await postReset(contractRoute("resetDeviceConfig"), "Device config reset", "Device config reset, but runtime reload failed");
+  await sendResetAction("resetDeviceConfig");
 }
 
 function getOledContext() {
@@ -810,7 +911,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-command]").forEach(btn => {
     btn.addEventListener("click", () => {
       const cmd = btn.dataset.command;
-      sendCommand(cmd).catch(err => toast(err.message, "error"));
+      const reset = resetActionConfig(cmd);
+      const runner = reset ? sendResetAction(cmd) : sendCommand(cmd);
+      Promise.resolve(runner).catch(err => toast(err.message, "error"));
     });
   });
 

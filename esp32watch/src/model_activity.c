@@ -31,7 +31,7 @@ void model_update_activity(bool wrist_raise, uint8_t activity_level,
         g_model_runtime_state.sensor.steps_total += steps_inc;
         g_model_runtime_state.last_user_activity_ms = now_ms;
     }
-    model_internal_commit_domain_mutation_with_flags(MODEL_PROJECTION_DIRTY_DOMAIN | MODEL_PROJECTION_DIRTY_RUNTIME);
+    model_internal_commit_domain_mutation();
     model_internal_commit_runtime_mutation();
 }
 

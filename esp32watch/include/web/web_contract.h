@@ -6,12 +6,12 @@
 
 class String;
 
-static constexpr uint32_t WEB_API_VERSION = 17U;
-static constexpr uint32_t WEB_STATE_VERSION = 11U;
-static constexpr uint32_t WEB_COMMAND_CATALOG_VERSION = 3U;
-static constexpr uint32_t WEB_RUNTIME_CONTRACT_VERSION = 11U;
-static constexpr uint32_t WEB_ASSET_CONTRACT_VERSION = 11U;
-static constexpr uint32_t WEB_RELEASE_VALIDATION_SCHEMA_VERSION = 6U;
+static constexpr uint32_t WEB_API_VERSION = 19U;
+static constexpr uint32_t WEB_STATE_VERSION = 13U;
+static constexpr uint32_t WEB_COMMAND_CATALOG_VERSION = 4U;
+static constexpr uint32_t WEB_RUNTIME_CONTRACT_VERSION = 13U;
+static constexpr uint32_t WEB_ASSET_CONTRACT_VERSION = 13U;
+static constexpr uint32_t WEB_RELEASE_VALIDATION_SCHEMA_VERSION = 7U;
 
 static constexpr const char *WEB_ROUTE_CONTRACT = "/api/contract";
 static constexpr const char *WEB_ROUTE_HEALTH = "/api/health";
@@ -48,6 +48,14 @@ struct WebRouteSchemaView {
     const char *route_key;
     const char *schema_kind;
     const char *schema_name;
+    const char *surface_tier;
+    const char *producer_owner;
+    const char *consumer_owner;
+    const char *deprecation_policy;
+    const char *const *request_fields;
+    size_t request_field_count;
+    const char *const *response_fields;
+    size_t response_field_count;
 };
 
 bool web_contract_get_api_schema(const char *name, WebApiSchemaView *out);

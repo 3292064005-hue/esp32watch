@@ -1,6 +1,6 @@
 {
-  "assetContractVersion": 11,
-  "generatedAtUtc": "2026-04-18T02:54:59Z",
+  "assetContractVersion": 13,
+  "generatedAtUtc": "2026-04-21T02:14:48Z",
   "app": "esp32watch-web-console",
   "entrypoints": [
     "index.html",
@@ -14,11 +14,11 @@
     "contract-bootstrap.json"
   ],
   "bootstrapContract": {
-    "runtimeContractVersion": 11,
-    "apiVersion": 17,
-    "stateVersion": 11,
-    "commandCatalogVersion": 3,
-    "assetContractVersion": 11,
+    "runtimeContractVersion": 13,
+    "apiVersion": 19,
+    "stateVersion": 13,
+    "commandCatalogVersion": 4,
+    "assetContractVersion": 13,
     "routes": {
       "contract": "/api/contract",
       "health": "/api/health",
@@ -45,87 +45,361 @@
     "routeSchemas": {
       "contract": {
         "kind": "api",
-        "name": "contractDocument"
+        "name": "contractDocument",
+        "tier": "tooling",
+        "producerOwner": "web_contract",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "schema-versioned",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "contract"
+        ]
       },
       "health": {
         "kind": "api",
-        "name": "health"
+        "name": "health",
+        "tier": "control",
+        "producerOwner": "web_server",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "wifiConnected",
+          "ip",
+          "uptimeMs",
+          "timeAuthority",
+          "timeSource",
+          "timeConfidence",
+          "filesystemReady",
+          "assetContractReady"
+        ]
       },
       "meta": {
         "kind": "api",
-        "name": "meta"
+        "name": "meta",
+        "tier": "control",
+        "producerOwner": "web_routes_api",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "apiVersion",
+          "stateVersion",
+          "storageSchemaVersion",
+          "timeAuthority",
+          "timeSource",
+          "timeConfidence"
+        ]
       },
       "actionsCatalog": {
         "kind": "api",
-        "name": "actionsCatalog"
+        "name": "actionsCatalog",
+        "tier": "control",
+        "producerOwner": "app_command",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "commands"
+        ]
       },
       "actionsLatest": {
         "kind": "api",
-        "name": "actionsStatus"
+        "name": "actionsStatus",
+        "tier": "console",
+        "producerOwner": "web_action_queue",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "id",
+          "status",
+          "type"
+        ]
       },
       "actionsStatus": {
         "kind": "api",
-        "name": "actionsStatus"
+        "name": "actionsStatus",
+        "tier": "control",
+        "producerOwner": "web_action_queue",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "id",
+          "status",
+          "type"
+        ]
       },
       "stateSummary": {
         "kind": "state",
-        "name": "summary"
+        "name": "summary",
+        "tier": "compatibility",
+        "producerOwner": "web_state_bridge",
+        "consumerOwner": "legacy_clients",
+        "deprecationPolicy": "replace-with-stateAggregate",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "apiVersion",
+          "stateVersion",
+          "stateRevision"
+        ]
       },
       "stateDetail": {
         "kind": "state",
-        "name": "detail"
+        "name": "detail",
+        "tier": "diagnostic",
+        "producerOwner": "web_state_bridge",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "apiVersion",
+          "stateVersion",
+          "stateRevision"
+        ]
       },
       "statePerf": {
         "kind": "state",
-        "name": "perf"
+        "name": "perf",
+        "tier": "diagnostic",
+        "producerOwner": "web_state_bridge",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "apiVersion",
+          "stateVersion",
+          "stateRevision"
+        ]
       },
       "stateRaw": {
         "kind": "state",
-        "name": "raw"
+        "name": "raw",
+        "tier": "tooling",
+        "producerOwner": "web_state_bridge",
+        "consumerOwner": "internal_tools",
+        "deprecationPolicy": "no-external-dependents",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "apiVersion",
+          "stateVersion",
+          "stateRevision"
+        ]
       },
       "stateAggregate": {
         "kind": "state",
-        "name": "aggregate"
+        "name": "aggregate",
+        "tier": "control",
+        "producerOwner": "web_state_bridge",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "apiVersion",
+          "stateVersion",
+          "stateRevision"
+        ]
       },
       "displayFrame": {
         "kind": "api",
-        "name": "displayFrame"
+        "name": "displayFrame",
+        "tier": "diagnostic",
+        "producerOwner": "display_service",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "width",
+          "height",
+          "presentCount",
+          "bufferHex"
+        ]
       },
       "displayOverlay": {
         "kind": "api",
-        "name": "trackedActionAccepted"
+        "name": "trackedActionAccepted",
+        "tier": "control",
+        "producerOwner": "web_overlay",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "actionId",
+          "requestId",
+          "actionType",
+          "trackPath",
+          "queueDepth"
+        ]
       },
       "displayOverlayClear": {
         "kind": "api",
-        "name": "trackedActionAccepted"
+        "name": "trackedActionAccepted",
+        "tier": "control",
+        "producerOwner": "web_overlay",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "actionId",
+          "requestId",
+          "actionType",
+          "trackPath",
+          "queueDepth"
+        ]
       },
       "configDevice": {
         "kind": "api",
-        "name": "configDeviceReadback"
+        "name": "configDeviceReadback",
+        "tier": "control",
+        "producerOwner": "device_config_authority",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [
+          "ssid",
+          "password",
+          "timezonePosix",
+          "timezoneId",
+          "latitude",
+          "longitude",
+          "locationName",
+          "apiToken",
+          "runtimeReloadDomains"
+        ],
+        "responseFields": [
+          "ok",
+          "runtimeReload",
+          "runtimeReload.runtimeReloadRequested",
+          "runtimeReload.runtimeReloadPreflightOk",
+          "runtimeReload.runtimeReloadApplyAttempted",
+          "runtimeReload.runtimeReloaded",
+          "runtimeReload.runtimeReloadEventDispatchOk",
+          "runtimeReload.runtimeReloadAuthoritativePath",
+          "runtimeReload.runtimeReloadVerifyOk",
+          "runtimeReload.runtimeReloadPartialSuccess",
+          "runtimeReload.runtimeHandlerCount",
+          "runtimeReload.runtimeMatchedHandlerCount",
+          "runtimeReload.runtimeHandlerSuccessCount",
+          "runtimeReload.runtimeHandlerFailureCount",
+          "runtimeReload.runtimeHandlerCriticalFailureCount",
+          "runtimeReload.runtimeReloadConfigGeneration",
+          "runtimeReload.runtimeReloadDomainResultCount",
+          "runtimeReload.runtimeReloadSupportedDomains",
+          "runtimeReload.runtimeReloadImpactDomains",
+          "runtimeReload.runtimeReloadAppliedDomains",
+          "runtimeReload.runtimeReloadFailedDomains",
+          "runtimeReload.runtimeReloadDomainResults",
+          "runtimeReload.runtimeReloadFailurePhase",
+          "runtimeReload.runtimeReloadFailureCode"
+        ]
       },
       "inputKey": {
         "kind": "api",
-        "name": "trackedActionAccepted"
+        "name": "trackedActionAccepted",
+        "tier": "control",
+        "producerOwner": "key_input",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "actionId",
+          "requestId",
+          "actionType",
+          "trackPath",
+          "queueDepth"
+        ]
       },
       "command": {
         "kind": "api",
-        "name": "trackedActionAccepted"
+        "name": "trackedActionAccepted",
+        "tier": "control",
+        "producerOwner": "app_command",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "actionId",
+          "requestId",
+          "actionType",
+          "trackPath",
+          "queueDepth"
+        ]
       },
       "resetAppState": {
         "kind": "api",
-        "name": "resetActionResponse"
+        "name": "resetActionResponse",
+        "tier": "control",
+        "producerOwner": "reset_service",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "message",
+          "resetKind",
+          "runtimeReload"
+        ]
       },
       "resetDeviceConfig": {
         "kind": "api",
-        "name": "resetActionResponse"
+        "name": "resetActionResponse",
+        "tier": "control",
+        "producerOwner": "reset_service",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "message",
+          "resetKind",
+          "runtimeReload"
+        ]
       },
       "resetFactory": {
         "kind": "api",
-        "name": "resetActionResponse"
+        "name": "resetActionResponse",
+        "tier": "control",
+        "producerOwner": "reset_service",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "message",
+          "resetKind",
+          "runtimeReload"
+        ]
       },
       "storageSemantics": {
         "kind": "api",
-        "name": "storageSemantics"
+        "name": "storageSemantics",
+        "tier": "diagnostic",
+        "producerOwner": "storage_semantics",
+        "consumerOwner": "rich_console",
+        "deprecationPolicy": "stable",
+        "requestFields": [],
+        "responseFields": [
+          "ok",
+          "apiVersion",
+          "objects",
+          "backendCapabilities"
+        ]
       }
     },
     "stateSchemas": {
@@ -272,9 +546,7 @@
         },
         {
           "section": "sensor",
-          "flags": [
-            "WEB_STATE_SECTION_FLAG_SENSOR_INCLUDE_RAW_AXES"
-          ]
+          "flags": []
         },
         {
           "section": "storage",
@@ -308,9 +580,7 @@
         },
         {
           "section": "perf",
-          "flags": [
-            "WEB_STATE_SECTION_FLAG_PERF_INCLUDE_HISTORY"
-          ]
+          "flags": []
         }
       ]
     },
@@ -319,7 +589,7 @@
       "verifiedBundleKind": "verified",
       "hostReportType": "HOST_VALIDATION_REPORT",
       "deviceReportType": "DEVICE_SMOKE_REPORT",
-      "validationSchemaVersion": 6
+      "validationSchemaVersion": 7
     },
     "apiSchemas": {
       "health": {
@@ -329,6 +599,9 @@
           "wifiConnected",
           "ip",
           "uptimeMs",
+          "timeAuthority",
+          "timeSource",
+          "timeConfidence",
           "filesystemReady",
           "assetContractReady"
         ],
@@ -342,7 +615,10 @@
           "ok",
           "apiVersion",
           "stateVersion",
-          "storageSchemaVersion"
+          "storageSchemaVersion",
+          "timeAuthority",
+          "timeSource",
+          "timeConfidence"
         ],
         "sections": [
           "versions",
@@ -351,7 +627,9 @@
           "runtimeEvents",
           "platformSupport",
           "deviceIdentity",
-          "capabilities"
+          "capabilities",
+          "stateSurfaces",
+          "releaseValidation"
         ]
       },
       "displayFrame": {
@@ -409,7 +687,29 @@
           "ok",
           "message",
           "resetKind",
-          "runtimeReload"
+          "runtimeReload",
+          "runtimeReload.runtimeReloadRequested",
+          "runtimeReload.runtimeReloadPreflightOk",
+          "runtimeReload.runtimeReloadApplyAttempted",
+          "runtimeReload.runtimeReloaded",
+          "runtimeReload.runtimeReloadEventDispatchOk",
+          "runtimeReload.runtimeReloadAuthoritativePath",
+          "runtimeReload.runtimeReloadVerifyOk",
+          "runtimeReload.runtimeReloadPartialSuccess",
+          "runtimeReload.runtimeHandlerCount",
+          "runtimeReload.runtimeMatchedHandlerCount",
+          "runtimeReload.runtimeHandlerSuccessCount",
+          "runtimeReload.runtimeHandlerFailureCount",
+          "runtimeReload.runtimeHandlerCriticalFailureCount",
+          "runtimeReload.runtimeReloadConfigGeneration",
+          "runtimeReload.runtimeReloadDomainResultCount",
+          "runtimeReload.runtimeReloadSupportedDomains",
+          "runtimeReload.runtimeReloadImpactDomains",
+          "runtimeReload.runtimeReloadAppliedDomains",
+          "runtimeReload.runtimeReloadFailedDomains",
+          "runtimeReload.runtimeReloadDomainResults",
+          "runtimeReload.runtimeReloadFailurePhase",
+          "runtimeReload.runtimeReloadFailureCode"
         ],
         "sections": [
           "resetAction",
@@ -420,7 +720,29 @@
         "type": "object",
         "required": [
           "ok",
-          "runtimeReload"
+          "runtimeReload",
+          "runtimeReload.runtimeReloadRequested",
+          "runtimeReload.runtimeReloadPreflightOk",
+          "runtimeReload.runtimeReloadApplyAttempted",
+          "runtimeReload.runtimeReloaded",
+          "runtimeReload.runtimeReloadEventDispatchOk",
+          "runtimeReload.runtimeReloadAuthoritativePath",
+          "runtimeReload.runtimeReloadVerifyOk",
+          "runtimeReload.runtimeReloadPartialSuccess",
+          "runtimeReload.runtimeHandlerCount",
+          "runtimeReload.runtimeMatchedHandlerCount",
+          "runtimeReload.runtimeHandlerSuccessCount",
+          "runtimeReload.runtimeHandlerFailureCount",
+          "runtimeReload.runtimeHandlerCriticalFailureCount",
+          "runtimeReload.runtimeReloadConfigGeneration",
+          "runtimeReload.runtimeReloadDomainResultCount",
+          "runtimeReload.runtimeReloadSupportedDomains",
+          "runtimeReload.runtimeReloadImpactDomains",
+          "runtimeReload.runtimeReloadAppliedDomains",
+          "runtimeReload.runtimeReloadFailedDomains",
+          "runtimeReload.runtimeReloadDomainResults",
+          "runtimeReload.runtimeReloadFailurePhase",
+          "runtimeReload.runtimeReloadFailureCode"
         ],
         "sections": [
           "deviceConfigUpdate",
@@ -453,7 +775,8 @@
         "required": [
           "ok",
           "apiVersion",
-          "objects"
+          "objects",
+          "backendCapabilities"
         ],
         "sections": [
           "storageSemantics"
@@ -481,9 +804,9 @@
       "sha256": "e364b0887d856710ecfaedd7450a6c76a9ceddfd4bbb0ba2b5dc6a6bbecb7ed5"
     },
     "app.js": {
-      "bytes": 30806,
-      "fnv1a32": "C40240F4",
-      "sha256": "f06d125c13c0f652d46e23169610e6c88aeb51fee038feaa6790d250e709cdc8"
+      "bytes": 34291,
+      "fnv1a32": "811A2430",
+      "sha256": "0ccc66db2cbb4c0a5f05b229f671b647690b53cff1673a09b2528ddc184fd9a2"
     },
     "app.css": {
       "bytes": 8720,
@@ -491,9 +814,9 @@
       "sha256": "b82b17e162091874fb870a124e1ce8df73b9456bfe952209c4b320c53dc9e9a0"
     },
     "contract-bootstrap.json": {
-      "bytes": 9306,
-      "fnv1a32": "280396C1",
-      "sha256": "d4c5e89e7679d9d3042bfcdc399c144e0dfa7a224f5ba68728cea5fd2b489543"
+      "bytes": 19281,
+      "fnv1a32": "FEC9C760",
+      "sha256": "e118bccf4e250f97a3359c96a4cea767c06f24c0b5b45c707afc3e833765fd66"
     }
   }
 }

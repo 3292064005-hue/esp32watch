@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import zipfile
 from pathlib import Path
@@ -8,7 +9,7 @@ from pathlib import Path
 VALIDATION_STATUS_VALUES = {'PASS', 'FAIL', 'NOT_RUN'}
 HOST_REPORT_SCHEMA_VERSION = 1
 DEVICE_REPORT_SCHEMA_VERSION = 6
-VALIDATION_SCHEMA_VERSION = 6
+VALIDATION_SCHEMA_VERSION = 7
 REQUIRED_DEVICE_CHECKS = (
     'boot',
     'webFallback',
@@ -33,6 +34,9 @@ REQUIRED_SCENARIOS = {
 def fail(msg: str) -> int:
     print(f"[FAIL] {msg}")
     return 1
+
+def canonical_sha256(payload: object) -> str:
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
 
 
 def validate_host_report(report: dict, env: str, expected_status: str) -> str | None:
@@ -100,10 +104,25 @@ def validate_device_report(report: dict, env: str, expected_status: str) -> str 
         return 'device report generator.tool must be capture_device_smoke_report.py'
     if generator.get('captureMode') != 'LIVE_HTTP_CAPTURE':
         return 'device report generator.captureMode must be LIVE_HTTP_CAPTURE'
-    if generator.get('schemaVersion') != 4:
-        return 'device report generator.schemaVersion must be 4'
+    if generator.get('schemaVersion') != 5:
+        return 'device report generator.schemaVersion must be 5'
     if generator.get('captureRunner') not in {'CI_DEVICE_RUNNER', 'LOCAL_DEVICE_RUNNER'}:
         return 'device report generator.captureRunner must be CI_DEVICE_RUNNER or LOCAL_DEVICE_RUNNER'
+    if not isinstance(generator.get('runnerIdentity'), str) or not generator.get('runnerIdentity'):
+        return 'device report generator.runnerIdentity must be a non-empty string'
+    if not isinstance(generator.get('labIdentity'), str) or not generator.get('labIdentity'):
+        return 'device report generator.labIdentity must be a non-empty string'
+
+
+    attestation = report.get('attestation')
+    if not isinstance(attestation, dict):
+        return 'device report attestation must be an object'
+    if not isinstance(attestation.get('physicalActionsAttested'), bool):
+        return 'device report attestation.physicalActionsAttested must be boolean'
+    if attestation.get('runnerIdentity') != generator.get('runnerIdentity'):
+        return 'device report attestation.runnerIdentity must match generator.runnerIdentity'
+    if attestation.get('labIdentity') != generator.get('labIdentity'):
+        return 'device report attestation.labIdentity must match generator.labIdentity'
 
     evidence = report.get('evidence')
     if not isinstance(evidence, dict):
@@ -152,6 +171,8 @@ def validate_device_report(report: dict, env: str, expected_status: str) -> str 
 
     flash_evidence = report.get('flashEvidence')
     if expected_status == 'PASS':
+        if attestation.get('physicalActionsAttested') is not True:
+            return 'device report PASS payload requires attestation.physicalActionsAttested=true'
         if not isinstance(flash_evidence, dict):
             return 'device report PASS payload requires flashEvidence object'
         if flash_evidence.get('flashTool') != 'flash_candidate_bundle.py':
@@ -187,10 +208,36 @@ def validate_device_report(report: dict, env: str, expected_status: str) -> str 
             return 'device report PASS payload requires scenarioEvidence object'
         if scenario_evidence.get('reportType') != 'DEVICE_SCENARIO_EVIDENCE':
             return 'device report PASS payload requires scenarioEvidence.reportType=DEVICE_SCENARIO_EVIDENCE'
-        if scenario_evidence.get('schemaVersion') != 2:
-            return 'device report PASS payload requires scenarioEvidence.schemaVersion=2'
+        if scenario_evidence.get('schemaVersion') != 3:
+            return 'device report PASS payload requires scenarioEvidence.schemaVersion=3'
         if scenario_evidence.get('candidateBundleSha256') != candidate.get('sha256'):
             return 'device report PASS payload requires scenarioEvidence.candidateBundleSha256 to match candidateBundle.sha256'
+        scenario_attestation = scenario_evidence.get('attestation')
+        if not isinstance(scenario_attestation, dict) or scenario_attestation.get('physicalActionsAttested') is not True:
+            return 'device report PASS payload requires scenarioEvidence.attestation.physicalActionsAttested=true'
+        if scenario_attestation.get('runnerIdentity') != generator.get('runnerIdentity'):
+            return 'device report PASS payload requires scenarioEvidence runner identity to match generator'
+        if scenario_attestation.get('labIdentity') != generator.get('labIdentity'):
+            return 'device report PASS payload requires scenarioEvidence lab identity to match generator'
+        runner_caps = scenario_evidence.get('runnerCapabilities')
+        if not isinstance(runner_caps, dict):
+            return 'device report PASS payload requires scenarioEvidence.runnerCapabilities object'
+        if runner_caps.get('schemaVersion') != 1:
+            return 'device report PASS payload requires scenarioEvidence.runnerCapabilities.schemaVersion=1'
+        for command_key in ('powerCycle', 'faultInject'):
+            command = runner_caps.get(command_key)
+            if not isinstance(command, dict):
+                return f'device report PASS payload requires scenarioEvidence.runnerCapabilities.{command_key} object'
+            argv = command.get('argv')
+            if not isinstance(argv, list) or len(argv) == 0 or any((not isinstance(entry, str) or entry == '') for entry in argv):
+                return f'device report PASS payload requires scenarioEvidence.runnerCapabilities.{command_key}.argv to be a non-empty string array'
+        runner_caps_sha = scenario_evidence.get('runnerCapabilitiesSha256')
+        if not isinstance(runner_caps_sha, str) or len(runner_caps_sha) != 64:
+            return 'device report PASS payload requires scenarioEvidence.runnerCapabilitiesSha256 64-char hex'
+        if runner_caps_sha != canonical_sha256(runner_caps):
+            return 'device report PASS payload runnerCapabilitiesSha256 mismatch'
+        if scenario_attestation.get('runnerCapabilitiesSha256') != runner_caps_sha:
+            return 'device report PASS payload requires scenarioEvidence.attestation.runnerCapabilitiesSha256 to match runnerCapabilitiesSha256'
         scenarios = scenario_evidence.get('scenarios')
         if not isinstance(scenarios, dict):
             return 'device report PASS payload requires scenarioEvidence.scenarios object'
@@ -330,15 +377,58 @@ def main() -> int:
             return fail(f"release-validation schemaVersion mismatch: {validation.get('validationSchemaVersion')} != {VALIDATION_SCHEMA_VERSION}")
 
         host_status = validation.get('hostValidationStatus')
+        build_status = validation.get('buildValidationStatus')
         device_status = validation.get('deviceSmokeStatus')
+        lab_status = validation.get('labAttestationStatus')
         if host_status not in VALIDATION_STATUS_VALUES:
             return fail(f'invalid hostValidationStatus: {host_status}')
+        if build_status not in VALIDATION_STATUS_VALUES:
+            return fail(f'invalid buildValidationStatus: {build_status}')
         if device_status not in VALIDATION_STATUS_VALUES:
             return fail(f'invalid deviceSmokeStatus: {device_status}')
+        if lab_status not in VALIDATION_STATUS_VALUES:
+            return fail(f'invalid labAttestationStatus: {lab_status}')
+
+        gates = validation.get('releaseGates')
+        if not isinstance(gates, dict):
+            return fail('release-validation releaseGates must be an object')
+        if gates.get('hostValid') != host_status or gates.get('buildValid') != build_status or gates.get('deviceValid') != device_status or gates.get('labTruthAttested') != lab_status:
+            return fail('release-validation releaseGates must mirror top-level validation statuses')
+
+        evidence_hashes = validation.get('evidenceHashes')
+        if not isinstance(evidence_hashes, dict):
+            return fail('release-validation evidenceHashes must be an object')
+        for key in ('hostValidationReportSha256', 'deviceSmokeReportSha256', 'flashEvidenceSha256', 'scenarioEvidenceSha256'):
+            value = evidence_hashes.get(key)
+            if value is not None and (not isinstance(value, str) or len(value) != 64):
+                return fail(f'release-validation evidenceHashes.{key} must be null or 64-char hex')
+
+        attestation = validation.get('attestation')
+        if not isinstance(attestation, dict) or not isinstance(attestation.get('physicalActionsAttested'), bool):
+            return fail('release-validation attestation.physicalActionsAttested must be boolean')
 
         expected_kind = 'verified' if device_status != 'NOT_RUN' else 'candidate'
         if validation.get('bundleKind') != expected_kind:
             return fail(f"release-validation bundleKind mismatch: {validation.get('bundleKind')} != {expected_kind}")
+
+
+        if build_status != 'PASS':
+            return fail('release-validation buildValidationStatus must be PASS for packaged bundles')
+        if device_status == 'NOT_RUN':
+            if lab_status != 'NOT_RUN' or attestation.get('physicalActionsAttested') is not False:
+                return fail('candidate bundle must not claim lab attestation')
+        else:
+            if lab_status != 'PASS' or attestation.get('physicalActionsAttested') is not True:
+                return fail('verified bundle requires PASS lab attestation')
+            if not isinstance(validation.get('runnerIdentity'), str) or not validation.get('runnerIdentity'):
+                return fail('verified bundle requires runnerIdentity')
+            if not isinstance(validation.get('labIdentity'), str) or not validation.get('labIdentity'):
+                return fail('verified bundle requires labIdentity')
+            if not isinstance(validation.get('sourceCandidateBundleName'), str) or not validation.get('sourceCandidateBundleName'):
+                return fail('verified bundle requires sourceCandidateBundleName')
+            source_hash = validation.get('sourceCandidateBundleSha256')
+            if not isinstance(source_hash, str) or len(source_hash) != 64:
+                return fail('verified bundle requires sourceCandidateBundleSha256')
 
         host_report_path = validation.get('hostValidationReportPath')
         if host_status == 'NOT_RUN':
@@ -347,10 +437,14 @@ def main() -> int:
         else:
             if not isinstance(host_report_path, str) or host_report_path not in names:
                 return fail('host validation report missing from bundle')
-            host_report = json.loads(zf.read(host_report_path).decode('utf-8'))
+            host_report_bytes = zf.read(host_report_path)
+            host_report = json.loads(host_report_bytes.decode('utf-8'))
             err = validate_host_report(host_report, args.env, host_status)
             if err:
                 return fail(err)
+            expected_hash = evidence_hashes.get('hostValidationReportSha256')
+            if expected_hash and __import__('hashlib').sha256(host_report_bytes).hexdigest() != expected_hash:
+                return fail('host validation report hash mismatch')
 
         device_report_path = validation.get('deviceSmokeReportPath')
         if device_status == 'NOT_RUN':
@@ -359,10 +453,27 @@ def main() -> int:
         else:
             if not isinstance(device_report_path, str) or device_report_path not in names:
                 return fail('device smoke report missing from bundle')
-            device_report = json.loads(zf.read(device_report_path).decode('utf-8'))
+            device_report_bytes = zf.read(device_report_path)
+            device_report = json.loads(device_report_bytes.decode('utf-8'))
             err = validate_device_report(device_report, args.env, device_status)
             if err:
                 return fail(err)
+            expected_hash = evidence_hashes.get('deviceSmokeReportSha256')
+            if expected_hash and __import__('hashlib').sha256(device_report_bytes).hexdigest() != expected_hash:
+                return fail('device smoke report hash mismatch')
+            if device_status != 'NOT_RUN':
+                def canonical_sha256(payload):
+                    return __import__('hashlib').sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
+                flash_hash = evidence_hashes.get('flashEvidenceSha256')
+                if flash_hash and canonical_sha256(device_report.get('flashEvidence')) != flash_hash:
+                    return fail('flash evidence hash mismatch')
+                scenario_hash = evidence_hashes.get('scenarioEvidenceSha256')
+                if scenario_hash and canonical_sha256(device_report.get('scenarioEvidence')) != scenario_hash:
+                    return fail('scenario evidence hash mismatch')
+                if validation.get('runnerIdentity') != device_report.get('generator', {}).get('runnerIdentity'):
+                    return fail('verified bundle runnerIdentity mismatch device report generator.runnerIdentity')
+                if validation.get('labIdentity') != device_report.get('generator', {}).get('labIdentity'):
+                    return fail('verified bundle labIdentity mismatch device report generator.labIdentity')
 
     print('[OK] release bundle verified')
     return 0

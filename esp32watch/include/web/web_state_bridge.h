@@ -32,6 +32,9 @@ typedef struct {
     char current_page[16];
     char time_source[24];
     char time_confidence[16];
+    char time_authority[16];
+    char time_init_status[16];
+    char time_init_reason[32];
     bool time_valid;
     bool time_authoritative;
     uint32_t time_source_age_ms;
@@ -40,6 +43,9 @@ typedef struct {
     bool fatal_stop_requested;
     char startup_failure_stage[24];
     char startup_recovery_stage[24];
+    char degraded_code[32];
+    char degraded_owner[24];
+    char degraded_recovery_hint[96];
     char header_tags[40];
     char system_face[8];
     char brightness_label[12];

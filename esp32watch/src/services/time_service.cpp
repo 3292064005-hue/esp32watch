@@ -9,6 +9,8 @@ extern "C" {
 
 static Preferences g_time_prefs;
 static TimeSourceSnapshot g_time_source_snapshot;
+static TimeInitStatus g_time_init_status = TIME_INIT_STATUS_UNAVAILABLE;
+static const char *g_time_init_reason = "UNINITIALIZED";
 static uint32_t g_epoch_base;
 static uint32_t g_base_ms;
 static bool g_time_loaded;
@@ -39,9 +41,24 @@ static uint8_t time_days_in_month(uint16_t year, uint8_t month)
     return dim;
 }
 
+static TimeAuthorityLevel time_authority_for_source(TimeSourceType source, bool valid)
+{
+    if (!valid) {
+        return TIME_AUTHORITY_NONE;
+    }
+    switch (source) {
+        case TIME_SOURCE_DEVICE_CLOCK: return TIME_AUTHORITY_HARDWARE;
+        case TIME_SOURCE_NETWORK_SYNC:
+        case TIME_SOURCE_COMPANION_SYNC: return TIME_AUTHORITY_NETWORK;
+        case TIME_SOURCE_HOST_SYNC: return TIME_AUTHORITY_HOST;
+        case TIME_SOURCE_RECOVERY:
+        default: return TIME_AUTHORITY_RECOVERY;
+    }
+}
+
 static bool time_source_is_authoritative(TimeSourceType source)
 {
-    return source == TIME_SOURCE_NETWORK_SYNC || source == TIME_SOURCE_COMPANION_SYNC;
+    return source == TIME_SOURCE_DEVICE_CLOCK || source == TIME_SOURCE_NETWORK_SYNC || source == TIME_SOURCE_COMPANION_SYNC;
 }
 
 static TimeConfidenceLevel time_confidence_for_source(TimeSourceType source, bool valid)
@@ -50,15 +67,52 @@ static TimeConfidenceLevel time_confidence_for_source(TimeSourceType source, boo
         return TIME_CONFIDENCE_NONE;
     }
     switch (source) {
+        case TIME_SOURCE_DEVICE_CLOCK:
         case TIME_SOURCE_NETWORK_SYNC:
         case TIME_SOURCE_COMPANION_SYNC:
             return TIME_CONFIDENCE_HIGH;
         case TIME_SOURCE_HOST_SYNC:
             return TIME_CONFIDENCE_MEDIUM;
         case TIME_SOURCE_RECOVERY:
-        case TIME_SOURCE_DEVICE_CLOCK:
         default:
             return TIME_CONFIDENCE_LOW;
+    }
+}
+
+static void time_update_init_status_for_source(TimeSourceType source, uint32_t epoch, bool valid)
+{
+    if (!valid) {
+        g_time_init_status = TIME_INIT_STATUS_UNAVAILABLE;
+        g_time_init_reason = "RECOVERY_INVALID";
+        return;
+    }
+
+    if (source == TIME_SOURCE_RECOVERY && epoch <= kEpochFloor) {
+        g_time_init_status = TIME_INIT_STATUS_DEGRADED;
+        g_time_init_reason = "RECOVERY_FLOOR";
+        return;
+    }
+
+    g_time_init_status = TIME_INIT_STATUS_READY;
+    switch (source) {
+        case TIME_SOURCE_HOST_SYNC:
+            g_time_init_reason = "HOST_SYNC";
+            break;
+        case TIME_SOURCE_NETWORK_SYNC:
+            g_time_init_reason = "NETWORK_SYNC";
+            break;
+        case TIME_SOURCE_COMPANION_SYNC:
+            g_time_init_reason = "COMPANION_SYNC";
+            break;
+        case TIME_SOURCE_DEVICE_CLOCK:
+            g_time_init_reason = "DEVICE_CLOCK";
+            break;
+        case TIME_SOURCE_RECOVERY:
+            g_time_init_reason = "RECOVERY_PERSISTED";
+            break;
+        default:
+            g_time_init_reason = "UPDATED";
+            break;
     }
 }
 
@@ -82,14 +136,17 @@ static void time_save_epoch(uint32_t epoch)
     g_time_prefs.end();
 }
 
-static void time_load_epoch(void)
+static bool time_load_epoch(void)
 {
+    bool prefs_opened = false;
+
     if (g_time_loaded) {
-        return;
+        return true;
     }
 
     g_epoch_base = kEpochFloor;
-    if (persist_preferences_begin(g_time_prefs, PERSIST_PREFS_DOMAIN_TIME_RECOVERY, true)) {
+    prefs_opened = persist_preferences_begin(g_time_prefs, PERSIST_PREFS_DOMAIN_TIME_RECOVERY, true);
+    if (prefs_opened) {
         g_epoch_base = g_time_prefs.getULong("epoch", kEpochFloor);
         g_time_prefs.end();
     }
@@ -99,19 +156,63 @@ static void time_load_epoch(void)
 
     g_base_ms = millis();
     g_time_loaded = true;
+    return prefs_opened;
+}
+
+static bool time_try_load_platform_clock(uint32_t *epoch_out)
+{
+    uint32_t epoch = 0U;
+
+    if (epoch_out == NULL) {
+        return false;
+    }
+    if (!platform_rtc_wall_clock_supported(&platform_rtc_main)) {
+        return false;
+    }
+    if (platform_rtc_get_epoch(&platform_rtc_main, &epoch) != PLATFORM_STATUS_OK) {
+        return false;
+    }
+    if (!time_service_is_reasonable_epoch(epoch)) {
+        return false;
+    }
+    *epoch_out = epoch;
+    return true;
 }
 
 extern "C" bool time_service_init(void)
 {
-    uint32_t now_ms;
-    uint32_t epoch;
-    bool valid;
+    uint32_t now_ms = platform_time_now_ms();
+    uint32_t epoch = 0U;
+    bool valid = false;
+    bool prefs_opened = false;
 
-    time_load_epoch();
-    now_ms = platform_time_now_ms();
-    epoch = time_service_get_epoch();
+    prefs_opened = time_load_epoch();
+    if (time_try_load_platform_clock(&epoch)) {
+        g_epoch_base = epoch;
+        g_base_ms = now_ms;
+        time_save_epoch(epoch);
+        time_update_snapshot(TIME_SOURCE_DEVICE_CLOCK, epoch, true, now_ms);
+        time_update_init_status_for_source(TIME_SOURCE_DEVICE_CLOCK, epoch, true);
+        return true;
+    }
+
+    epoch = g_epoch_base;
     valid = time_service_is_reasonable_epoch(epoch);
     time_update_snapshot(TIME_SOURCE_RECOVERY, epoch, valid, now_ms);
+
+    if (!valid) {
+        g_time_init_status = TIME_INIT_STATUS_UNAVAILABLE;
+        g_time_init_reason = prefs_opened ? "RECOVERY_INVALID" : "PREFERENCES_UNAVAILABLE";
+        return false;
+    }
+
+    if (epoch > kEpochFloor) {
+        g_time_init_status = TIME_INIT_STATUS_READY;
+        g_time_init_reason = prefs_opened ? "RECOVERY_PERSISTED" : "RECOVERY_RECENT";
+    } else {
+        g_time_init_status = TIME_INIT_STATUS_DEGRADED;
+        g_time_init_reason = prefs_opened ? "RECOVERY_FLOOR" : "PREFERENCES_FALLBACK_FLOOR";
+    }
     return true;
 }
 
@@ -221,6 +322,7 @@ extern "C" bool time_service_get_datetime_snapshot(DateTime *out, TimeSourceSnap
     g_time_source_snapshot.valid = valid;
     g_time_source_snapshot.source_age_ms = now_ms - g_time_source_snapshot.updated_at_ms;
     g_time_source_snapshot.confidence = time_confidence_for_source(g_time_source_snapshot.source, valid);
+    g_time_source_snapshot.authority = time_authority_for_source(g_time_source_snapshot.source, valid);
     g_time_source_snapshot.authoritative = time_source_is_authoritative(g_time_source_snapshot.source);
 
     if (out != NULL) {
@@ -244,7 +346,11 @@ extern "C" bool time_service_set_epoch_from_source(uint32_t epoch, TimeSourceTyp
     g_epoch_base = epoch;
     g_base_ms = now_ms;
     time_save_epoch(epoch);
+    if (source == TIME_SOURCE_NETWORK_SYNC || source == TIME_SOURCE_COMPANION_SYNC || source == TIME_SOURCE_DEVICE_CLOCK) {
+        (void)platform_rtc_set_epoch(&platform_rtc_main, epoch);
+    }
     time_update_snapshot(source, epoch, true, now_ms);
+    time_update_init_status_for_source(source, epoch, true);
     return true;
 }
 
@@ -270,10 +376,12 @@ extern "C" void time_service_note_recovery_epoch(uint32_t epoch, bool valid)
         g_base_ms = now_ms;
         time_save_epoch(epoch);
         time_update_snapshot(TIME_SOURCE_RECOVERY, epoch, true, now_ms);
+        time_update_init_status_for_source(TIME_SOURCE_RECOVERY, epoch, true);
         return;
     }
 
     time_update_snapshot(TIME_SOURCE_RECOVERY, epoch, false, now_ms);
+    time_update_init_status_for_source(TIME_SOURCE_RECOVERY, epoch, false);
 }
 
 extern "C" bool time_service_get_source_snapshot(TimeSourceSnapshot *out)
@@ -283,6 +391,27 @@ extern "C" bool time_service_get_source_snapshot(TimeSourceSnapshot *out)
     }
 
     return time_service_get_datetime_snapshot(NULL, out);
+}
+
+
+extern "C" TimeInitStatus time_service_init_status(void)
+{
+    return g_time_init_status;
+}
+
+extern "C" const char *time_service_init_status_name(TimeInitStatus status)
+{
+    switch (status) {
+        case TIME_INIT_STATUS_READY: return "READY";
+        case TIME_INIT_STATUS_DEGRADED: return "DEGRADED";
+        case TIME_INIT_STATUS_UNAVAILABLE: return "UNAVAILABLE";
+        default: return "UNKNOWN";
+    }
+}
+
+extern "C" const char *time_service_init_reason(void)
+{
+    return g_time_init_reason != nullptr ? g_time_init_reason : "UNKNOWN";
 }
 
 extern "C" const char *time_service_source_name(TimeSourceType source)
@@ -305,6 +434,29 @@ extern "C" const char *time_service_confidence_name(TimeConfidenceLevel confiden
         case TIME_CONFIDENCE_MEDIUM: return "MEDIUM";
         case TIME_CONFIDENCE_HIGH: return "HIGH";
         default: return "UNKNOWN";
+    }
+}
+
+
+extern "C" TimeAuthorityLevel time_service_authority_level(void)
+{
+    TimeSourceSnapshot snapshot = {};
+    if (!time_service_get_source_snapshot(&snapshot)) {
+        return TIME_AUTHORITY_NONE;
+    }
+    return snapshot.authority;
+}
+
+extern "C" const char *time_service_authority_name(TimeAuthorityLevel authority)
+{
+    switch (authority) {
+        case TIME_AUTHORITY_RECOVERY: return "RECOVERY";
+        case TIME_AUTHORITY_HOST: return "HOST";
+        case TIME_AUTHORITY_NETWORK: return "NETWORK";
+        case TIME_AUTHORITY_HARDWARE: return "HARDWARE";
+        case TIME_AUTHORITY_NONE:
+        default:
+            return "NONE";
     }
 }
 

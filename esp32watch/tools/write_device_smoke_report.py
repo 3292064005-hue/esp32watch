@@ -21,6 +21,12 @@ REQUIRED_CHECKS = (
     'deviceIdentity',
 )
 VALID_CHECK_STATUSES = {'PASS', 'FAIL', 'NOT_RUN', 'UNSUPPORTED'}
+RUNNER_CAPABILITIES = {
+    'schemaVersion': 1,
+    'powerCycle': {'argv': ['host-power-cycle']},
+    'faultInject': {'argv': ['host-fault-inject']},
+}
+RUNNER_CAPABILITIES_SHA256 = hashlib.sha256(json.dumps(RUNNER_CAPABILITIES, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
 
 
 def main() -> int:
@@ -33,6 +39,9 @@ def main() -> int:
     parser.add_argument('--candidate-bundle', required=True)
     parser.add_argument('--check', action='append', default=[])
     parser.add_argument('--capture-runner', choices=('CI_DEVICE_RUNNER', 'LOCAL_DEVICE_RUNNER'), default='LOCAL_DEVICE_RUNNER')
+    parser.add_argument('--runner-identity', default='LOCAL_DEVICE_RUNNER')
+    parser.add_argument('--lab-identity', default='UNSPECIFIED_LAB')
+    parser.add_argument('--attest-physical-actions', action='store_true')
     args = parser.parse_args()
 
     status_map = {}
@@ -57,9 +66,19 @@ def main() -> int:
 
     scenario_evidence = {
         'reportType': 'DEVICE_SCENARIO_EVIDENCE',
-        'schemaVersion': 2,
+        'schemaVersion': 3,
         'captureRunner': args.capture_runner,
         'deviceId': args.device_id,
+        'runnerIdentity': args.runner_identity,
+        'labIdentity': args.lab_identity,
+        'runnerCapabilities': RUNNER_CAPABILITIES,
+        'runnerCapabilitiesSha256': RUNNER_CAPABILITIES_SHA256,
+        'attestation': {
+            'physicalActionsAttested': args.attest_physical_actions,
+            'runnerIdentity': args.runner_identity,
+            'labIdentity': args.lab_identity,
+            'runnerCapabilitiesSha256': RUNNER_CAPABILITIES_SHA256,
+        },
         'candidateBundleSha256': candidate_sha256,
         'commandEvidence': {
             'powerCycle': {
@@ -111,10 +130,13 @@ def main() -> int:
         'generator': {
             'tool': 'capture_device_smoke_report.py',
             'captureMode': 'LIVE_HTTP_CAPTURE',
-            'schemaVersion': 4,
+            'schemaVersion': 5,
             'captureRunner': args.capture_runner,
+            'runnerIdentity': args.runner_identity,
+            'labIdentity': args.lab_identity,
             'note': 'fixture-only report; verifier must reject this for verified promotion unless scenario evidence semantics are satisfied by a live runner',
         },
+        'attestation': {'physicalActionsAttested': args.attest_physical_actions, 'runnerIdentity': args.runner_identity, 'labIdentity': args.lab_identity},
         'device': {
             'id': args.device_id,
             'board': args.board,

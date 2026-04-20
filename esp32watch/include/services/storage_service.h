@@ -21,6 +21,40 @@ typedef struct {
     bool flash_backend_active;
 } StorageWearStats;
 
+
+typedef enum {
+    STORAGE_BACKEND_ATOMICITY_NONE = 0,
+    STORAGE_BACKEND_ATOMICITY_OBJECT_LEVEL,
+    STORAGE_BACKEND_ATOMICITY_JOURNALED
+} StorageBackendAtomicityLevel;
+
+typedef enum {
+    STORAGE_BACKEND_VERIFY_NONE = 0,
+    STORAGE_BACKEND_VERIFY_CRC,
+    STORAGE_BACKEND_VERIFY_READBACK
+} StorageBackendVerifyMode;
+
+typedef enum {
+    STORAGE_BACKEND_LATENCY_IMMEDIATE = 0,
+    STORAGE_BACKEND_LATENCY_BOUNDED_STEPS
+} StorageBackendLatencyClass;
+
+typedef struct {
+    StorageBackendType backend;
+    const char *backend_name;
+    bool flash_ready;
+    bool bkp_ready;
+    bool app_state_durable_ready;
+    bool power_loss_guaranteed;
+    bool supports_atomic_commit;
+    bool supports_rollback_abort;
+    uint8_t max_commit_ticks;
+    StorageBackendAtomicityLevel atomicity;
+    StorageBackendVerifyMode verify_mode;
+    StorageBackendLatencyClass latency_class;
+} StorageBackendCapabilities;
+
+
 /**
  * @brief Initialize storage backends, validate persisted data, and capture runtime shadow state.
  *
@@ -39,6 +73,10 @@ bool storage_service_last_migration_ok(void);
 const char *storage_service_backend_phase_name(void);
 StorageBackendType storage_service_get_backend(void);
 const char *storage_service_get_backend_name(void);
+bool storage_service_get_backend_capabilities(StorageBackendCapabilities *out);
+const char *storage_service_backend_atomicity_name(StorageBackendAtomicityLevel level);
+const char *storage_service_backend_verify_mode_name(StorageBackendVerifyMode mode);
+const char *storage_service_backend_latency_name(StorageBackendLatencyClass latency);
 bool storage_service_is_crc_valid(void);
 uint16_t storage_service_get_stored_crc(void);
 uint16_t storage_service_get_calculated_crc(void);

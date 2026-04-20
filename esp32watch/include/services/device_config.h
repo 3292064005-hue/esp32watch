@@ -21,6 +21,8 @@ typedef struct {
     bool set_wifi;
     bool set_network;
     bool set_api_token;
+    bool request_runtime_reload;
+    uint32_t runtime_reload_domain_mask;
     char wifi_ssid[DEVICE_CONFIG_WIFI_SSID_MAX_LEN + 1U];
     char wifi_password[DEVICE_CONFIG_WIFI_PASSWORD_MAX_LEN + 1U];
     char timezone_posix[DEVICE_CONFIG_TIMEZONE_POSIX_MAX_LEN + 1U];

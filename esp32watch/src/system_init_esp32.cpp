@@ -31,11 +31,93 @@ static SystemInitStage g_safe_mode_boot_recovery_stage;
 static SystemStartupReport g_startup_report;
 static SystemInitStageStatus g_stage_status[SYSTEM_INIT_STAGE_APP + 1U];
 
+typedef struct {
+    SystemInitStage stage;
+    uint32_t prerequisite_mask;
+} RuntimeServicePlanEntry;
+
+enum : uint32_t {
+    RUNTIME_PREREQ_NONE = 0U,
+    RUNTIME_PREREQ_STORAGE = 1U << 0,
+    RUNTIME_PREREQ_TIME = 1U << 1
+};
+
+static constexpr RuntimeServicePlanEntry kRuntimeServicePlanStorageAuthorityFirst[] = {
+    {SYSTEM_INIT_STAGE_STORAGE_SERVICE, RUNTIME_PREREQ_NONE},
+    {SYSTEM_INIT_STAGE_TIME_SERVICE, RUNTIME_PREREQ_STORAGE},
+    {SYSTEM_INIT_STAGE_NETWORK_SYNC_SERVICE, RUNTIME_PREREQ_STORAGE | RUNTIME_PREREQ_TIME},
+};
+
+static constexpr RuntimeServicePlanEntry kRuntimeServicePlanLegacyConsumerFirst[] = {
+    {SYSTEM_INIT_STAGE_TIME_SERVICE, RUNTIME_PREREQ_NONE},
+    {SYSTEM_INIT_STAGE_NETWORK_SYNC_SERVICE, RUNTIME_PREREQ_TIME},
+    {SYSTEM_INIT_STAGE_STORAGE_SERVICE, RUNTIME_PREREQ_NONE},
+};
+
 extern "C" PlatformI2cBus platform_i2c_main;
 extern "C" PlatformRtcDevice platform_rtc_main;
 extern "C" PlatformAdcDevice platform_adc_main;
 extern "C" PlatformUartPort platform_uart_main;
 extern "C" PlatformWatchdog platform_watchdog_main;
+
+static SystemRuntimeInitProfile system_runtime_init_profile_internal(void)
+{
+#if SYSTEM_RUNTIME_INIT_STORAGE_AUTHORITY_FIRST
+    return SYSTEM_RUNTIME_INIT_PROFILE_STORAGE_AUTHORITY_FIRST;
+#else
+    return SYSTEM_RUNTIME_INIT_PROFILE_LEGACY_CONSUMER_FIRST;
+#endif
+}
+
+static const RuntimeServicePlanEntry *system_runtime_service_plan_entries_internal(size_t *count_out)
+{
+    const RuntimeServicePlanEntry *entries = NULL;
+    size_t count = 0U;
+
+    switch (system_runtime_init_profile_internal()) {
+        case SYSTEM_RUNTIME_INIT_PROFILE_LEGACY_CONSUMER_FIRST:
+            entries = kRuntimeServicePlanLegacyConsumerFirst;
+            count = sizeof(kRuntimeServicePlanLegacyConsumerFirst) / sizeof(kRuntimeServicePlanLegacyConsumerFirst[0]);
+            break;
+        case SYSTEM_RUNTIME_INIT_PROFILE_STORAGE_AUTHORITY_FIRST:
+        default:
+            entries = kRuntimeServicePlanStorageAuthorityFirst;
+            count = sizeof(kRuntimeServicePlanStorageAuthorityFirst) / sizeof(kRuntimeServicePlanStorageAuthorityFirst[0]);
+            break;
+    }
+
+    if (count_out != NULL) {
+        *count_out = count;
+    }
+    return entries;
+}
+
+static bool system_runtime_service_prerequisites_satisfied_internal(uint32_t prerequisite_mask)
+{
+    if ((prerequisite_mask & RUNTIME_PREREQ_STORAGE) != 0U &&
+        !system_init_stage_completed(SYSTEM_INIT_STAGE_STORAGE_SERVICE)) {
+        return false;
+    }
+    if ((prerequisite_mask & RUNTIME_PREREQ_TIME) != 0U &&
+        !system_init_stage_completed(SYSTEM_INIT_STAGE_TIME_SERVICE)) {
+        return false;
+    }
+    return true;
+}
+
+static bool system_runtime_service_stage_init_internal(SystemInitStage stage)
+{
+    switch (stage) {
+        case SYSTEM_INIT_STAGE_STORAGE_SERVICE:
+            return storage_service_init();
+        case SYSTEM_INIT_STAGE_TIME_SERVICE:
+            return time_service_init();
+        case SYSTEM_INIT_STAGE_NETWORK_SYNC_SERVICE:
+            return network_sync_service_init();
+        default:
+            return false;
+    }
+}
 
 static void system_record_stage(SystemInitStage stage)
 {
@@ -301,21 +383,71 @@ extern "C" bool system_board_peripheral_init(void)
 
 extern "C" bool system_runtime_service_init(void)
 {
-    if (!time_service_init()) {
-        return system_handle_stage_failure(SYSTEM_INIT_STAGE_TIME_SERVICE, 0U, SYSTEM_FATAL_POLICY_STOP);
-    }
-    system_mark_stage_completed_internal(SYSTEM_INIT_STAGE_TIME_SERVICE);
+    size_t plan_count = 0U;
+    const RuntimeServicePlanEntry *plan = system_runtime_service_plan_entries_internal(&plan_count);
 
-    if (!network_sync_service_init()) {
-        return system_handle_stage_failure(SYSTEM_INIT_STAGE_NETWORK_SYNC_SERVICE, 0U, SYSTEM_FATAL_POLICY_STOP);
-    }
-    system_mark_stage_completed_internal(SYSTEM_INIT_STAGE_NETWORK_SYNC_SERVICE);
+    for (size_t i = 0U; i < plan_count; ++i) {
+        const RuntimeServicePlanEntry &entry = plan[i];
 
-    if (!storage_service_init()) {
-        return system_handle_stage_failure(SYSTEM_INIT_STAGE_STORAGE_SERVICE, 0U, SYSTEM_FATAL_POLICY_STOP);
+#if SYSTEM_RUNTIME_INIT_ENABLE_ORDER_ASSERTS
+        if (!system_runtime_service_prerequisites_satisfied_internal(entry.prerequisite_mask)) {
+            return system_handle_stage_failure(entry.stage, entry.prerequisite_mask, SYSTEM_FATAL_POLICY_STOP);
+        }
+#endif
+
+        if (!system_runtime_service_stage_init_internal(entry.stage)) {
+            return system_handle_stage_failure(entry.stage, entry.prerequisite_mask, SYSTEM_FATAL_POLICY_STOP);
+        }
+        system_mark_stage_completed_internal(entry.stage);
     }
-    system_mark_stage_completed_internal(SYSTEM_INIT_STAGE_STORAGE_SERVICE);
     return true;
+}
+
+extern "C" SystemRuntimeInitProfile system_runtime_init_profile(void)
+{
+    return system_runtime_init_profile_internal();
+}
+
+extern "C" const char *system_runtime_init_profile_name(void)
+{
+    switch (system_runtime_init_profile_internal()) {
+        case SYSTEM_RUNTIME_INIT_PROFILE_LEGACY_CONSUMER_FIRST:
+            return "LEGACY_CONSUMER_FIRST";
+        case SYSTEM_RUNTIME_INIT_PROFILE_STORAGE_AUTHORITY_FIRST:
+        default:
+            return "STORAGE_AUTHORITY_FIRST";
+    }
+}
+
+extern "C" uint8_t system_runtime_service_plan_length(void)
+{
+    size_t count = 0U;
+    (void)system_runtime_service_plan_entries_internal(&count);
+    return static_cast<uint8_t>(count);
+}
+
+extern "C" SystemInitStage system_runtime_service_plan_stage(uint8_t index)
+{
+    size_t count = 0U;
+    const RuntimeServicePlanEntry *plan = system_runtime_service_plan_entries_internal(&count);
+
+    if (index >= count) {
+        return SYSTEM_INIT_STAGE_NONE;
+    }
+    return plan[index].stage;
+}
+
+extern "C" bool system_runtime_service_stage_prerequisites_met(SystemInitStage stage)
+{
+    size_t count = 0U;
+    const RuntimeServicePlanEntry *plan = system_runtime_service_plan_entries_internal(&count);
+
+    for (size_t i = 0U; i < count; ++i) {
+        if (plan[i].stage == stage) {
+            return system_runtime_service_prerequisites_satisfied_internal(plan[i].prerequisite_mask);
+        }
+    }
+    return false;
 }
 
 extern "C" bool system_web_service_init(void)
@@ -361,7 +493,7 @@ extern "C" const char *system_init_stage_name(SystemInitStage stage)
         case SYSTEM_INIT_STAGE_GPIO: return "GPIO";
         case SYSTEM_INIT_STAGE_UART: return "UART";
         case SYSTEM_INIT_STAGE_BKP: return "BKP";
-        case SYSTEM_INIT_STAGE_RTC: return "RTC";
+        case SYSTEM_INIT_STAGE_RTC: return "RTC_DOMAIN";
         case SYSTEM_INIT_STAGE_I2C: return "I2C";
         case SYSTEM_INIT_STAGE_ADC: return "ADC";
         case SYSTEM_INIT_STAGE_IWDG: return "IWDG";

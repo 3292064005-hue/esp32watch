@@ -70,6 +70,46 @@ const char *storage_backend_adapter_get_backend_name(void)
     return "RTC_RESET_DOMAIN";
 }
 
+
+static void storage_backend_adapter_fill_capabilities(StorageBackendCapabilities *out)
+{
+    if (out == NULL) {
+        return;
+    }
+    memset(out, 0, sizeof(*out));
+    out->backend = storage_backend_adapter_get_backend();
+    out->backend_name = storage_backend_adapter_get_backend_name();
+    out->flash_ready = storage_backend_adapter_flash_ready();
+    out->bkp_ready = storage_backend_adapter_bkp_ready();
+    out->app_state_durable_ready = storage_backend_adapter_app_state_durable_ready();
+    if (out->flash_ready) {
+        out->power_loss_guaranteed = true;
+        out->supports_atomic_commit = true;
+        out->supports_rollback_abort = true;
+        out->max_commit_ticks = 32U;
+        out->atomicity = STORAGE_BACKEND_ATOMICITY_JOURNALED;
+        out->verify_mode = STORAGE_BACKEND_VERIFY_CRC;
+        out->latency_class = STORAGE_BACKEND_LATENCY_BOUNDED_STEPS;
+        return;
+    }
+    out->power_loss_guaranteed = false;
+    out->supports_atomic_commit = false;
+    out->supports_rollback_abort = false;
+    out->max_commit_ticks = 4U;
+    out->atomicity = STORAGE_BACKEND_ATOMICITY_OBJECT_LEVEL;
+    out->verify_mode = STORAGE_BACKEND_VERIFY_NONE;
+    out->latency_class = STORAGE_BACKEND_LATENCY_IMMEDIATE;
+}
+
+bool storage_backend_adapter_get_capabilities(StorageBackendCapabilities *out)
+{
+    if (out == NULL) {
+        return false;
+    }
+    storage_backend_adapter_fill_capabilities(out);
+    return true;
+}
+
 uint16_t storage_backend_adapter_get_stored_crc(void)
 {
     if (storage_backend_adapter_flash_ready()) {
@@ -267,7 +307,14 @@ bool storage_backend_adapter_commit_all(const SettingsState *settings,
         return false;
     }
 
-    for (uint8_t guard = 0U; guard < 16U; ++guard) {
+    StorageBackendCapabilities capabilities = {0};
+    (void)storage_backend_adapter_get_capabilities(&capabilities);
+    if (capabilities.max_commit_ticks == 0U) {
+        storage_backend_adapter_abort_commit();
+        return false;
+    }
+
+    for (uint8_t guard = 0U; guard < capabilities.max_commit_ticks; ++guard) {
         StorageBackendCommitTickResult result = storage_backend_adapter_commit_tick();
         if (result == STORAGE_BACKEND_COMMIT_TICK_DONE_OK) {
             return true;

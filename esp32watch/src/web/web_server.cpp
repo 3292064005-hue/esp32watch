@@ -5,6 +5,8 @@
 #include "web/web_state_bridge.h"
 #include "web/web_fs_config.h"
 #include "web/web_contract.h"
+#include "web/web_asset_contract_parser.h"
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
 #include <string.h>
@@ -238,6 +240,8 @@ static bool web_validate_asset_contract(void)
 {
     String contract_json;
     const char *required_entries[] = {"index.html", "app.js", "app.css", "contract-bootstrap.json"};
+    StaticJsonDocument<16384> doc;
+    bool parsed_with_json = false;
 
     web_reset_asset_contract_state();
     if (!web_read_asset_contract(contract_json)) {
@@ -245,11 +249,32 @@ static bool web_validate_asset_contract(void)
     }
 
     g_loaded_asset_contract_hash = web_hash_bytes_fnv1a32((const uint8_t *)contract_json.c_str(), (size_t)contract_json.length());
-    (void)web_contract_find_string_field(contract_json,
-                                         "\"generatedAtUtc\"",
-                                         g_asset_contract_generated_at,
-                                         sizeof(g_asset_contract_generated_at));
-    g_loaded_asset_contract_version = web_parse_asset_contract_version(contract_json);
+    DeserializationError error = deserializeJson(doc, contract_json.c_str());
+    if (error) {
+        Serial.printf("[WEB] Asset contract JSON parse failed, trying compatibility parser: %s\n", error.c_str());
+    } else {
+        parsed_with_json = true;
+    }
+
+    if (parsed_with_json) {
+        g_loaded_asset_contract_version = doc["assetContractVersion"].as<uint32_t>();
+        const char *generated_at = doc["generatedAtUtc"].as<const char *>();
+        if (generated_at == nullptr || generated_at[0] == '\0') {
+            generated_at = "UNKNOWN";
+        }
+        strncpy(g_asset_contract_generated_at, generated_at, sizeof(g_asset_contract_generated_at) - 1U);
+        g_asset_contract_generated_at[sizeof(g_asset_contract_generated_at) - 1U] = '\0';
+    } else {
+        g_loaded_asset_contract_version = web_parse_asset_contract_version(contract_json);
+        if (!web_contract_find_string_field(contract_json,
+                                            "\"generatedAtUtc\"",
+                                            g_asset_contract_generated_at,
+                                            sizeof(g_asset_contract_generated_at))) {
+            strncpy(g_asset_contract_generated_at, "UNKNOWN", sizeof(g_asset_contract_generated_at) - 1U);
+            g_asset_contract_generated_at[sizeof(g_asset_contract_generated_at) - 1U] = '\0';
+        }
+    }
+
     if (g_loaded_asset_contract_version != WEB_ASSET_CONTRACT_VERSION) {
         Serial.printf("[WEB] Asset contract version mismatch fs=%lu fw=%lu\n",
                       (unsigned long)g_loaded_asset_contract_version,
@@ -257,18 +282,37 @@ static bool web_validate_asset_contract(void)
         return false;
     }
 
+    JsonVariant files;
+    if (parsed_with_json) {
+        files = doc["files"];
+    }
+    if (parsed_with_json && files.isNull()) {
+        Serial.println("[WEB] Asset contract missing files object, trying compatibility parser");
+        parsed_with_json = false;
+    }
+
     for (size_t i = 0; i < (sizeof(required_entries) / sizeof(required_entries[0])); ++i) {
         const char *name = required_entries[i];
-        char expected_hash[9];
         char actual_hex[9];
+        char expected_hash_buffer[9] = {0};
         char path[32];
         uint32_t actual_hash;
         WebAssetHashRecord *record = web_find_asset_hash_record(name);
+        const char *expected_hash = nullptr;
 
-        if (!web_contract_find_hash(contract_json, name, expected_hash)) {
+        if (parsed_with_json) {
+            JsonVariant file_entry = files[name];
+            expected_hash = file_entry["fnv1a32"].as<const char *>();
+        }
+        if ((expected_hash == nullptr || strlen(expected_hash) != 8U) &&
+            !web_contract_find_hash(contract_json, name, expected_hash_buffer)) {
             Serial.printf("[WEB] Asset contract missing hash for %s\n", name);
             return false;
         }
+        if (expected_hash == nullptr || strlen(expected_hash) != 8U) {
+            expected_hash = expected_hash_buffer;
+        }
+
         snprintf(path, sizeof(path), "/%s", name);
         actual_hash = web_hash_file_fnv1a32(path);
         if (actual_hash == 0U) {

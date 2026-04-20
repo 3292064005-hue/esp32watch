@@ -143,3 +143,39 @@ Repository host validation cannot by itself prove:
 - real TLS/network timing
 
 Those claims require real device evidence.
+
+
+## Startup ordering note
+
+Authority services start before consumer services on the active boot path:
+1. storage/config authority
+2. time recovery baseline
+3. network/time consumer services
+
+The active plan is now explicit in code via `system_runtime_init_profile()`, `system_runtime_service_plan_stage()`, and prerequisite assertions checked by `system_runtime_service_init()`. The default profile is `STORAGE_AUTHORITY_FIRST`; rollback remains available through the `SYSTEM_RUNTIME_INIT_STORAGE_AUTHORITY_FIRST=0` build override.
+
+This keeps persisted configuration and durability truth available before runtime consumers attempt reload or sync behavior while preserving a bounded rollback switch for staged rollout.
+
+
+- Compatibility aggregate reads are synthesized on demand; retired write-side legacy mutation/sync entry points are no longer part of the supported internal surface.
+- Runtime-service rollback remains available through `SYSTEM_RUNTIME_INIT_STORAGE_AUTHORITY_FIRST=0`, and host validation exercises both startup profiles.
+
+
+## 11. RTC init-stage semantics
+`SYSTEM_INIT_STAGE_RTC` now means **RTC reset-domain / backup-domain readiness**, not proof that the platform exposes a persistent wall-clock authority. Runtime callers must interpret wall-clock capability through `platformSupport.rtcWallClock` and `platformSupport.rtcWallClockPersistent`, not through the init-stage label alone.
+
+For the current ESP32-S3 profile:
+- `SYSTEM_INIT_STAGE_RTC` / `RTC_DOMAIN` can complete successfully
+- `platformSupport.rtcResetDomain` is true
+- `platformSupport.rtcWallClock` is false
+- `platformSupport.rtcWallClockPersistent` is false
+
+## 12. Time authority model
+The active time authority ladder is:
+- `HARDWARE` — platform RTC provides a reasonable wall-clock epoch
+- `NETWORK` — NTP / companion / network sync has established a trustworthy epoch
+- `HOST` — host-provided time in controlled test flows
+- `RECOVERY` — persisted recovery epoch only
+- `NONE` — no usable epoch baseline
+
+State, meta, and health outputs must describe this authority explicitly through `timeAuthority`, and startup/init diagnostics must not imply wall-clock truth solely because `RTC_DOMAIN` completed.
