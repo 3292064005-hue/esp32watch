@@ -98,6 +98,8 @@ The intended flow is:
 
 Fallback service-local reconfiguration paths are not the active design target.
 
+The reload/event topology is code-owned by `runtime_reload_event_manifest`; `docs/runtime-reload-event-matrix.md` and `tools/host_tests/test_runtime_reload_event_matrix.py` must stay aligned with that manifest. Hot-apply domains require a live `RuntimeEventSubscription`, a verification hook, and an applied-generation hook. Persisted-only and reboot-required domains must be explicitly represented rather than inferred from missing subscribers.
+
 ### Current verification boundary
 The active verify path is service-level and authoritative-path aware:
 - generation alignment is checked after apply
@@ -179,3 +181,7 @@ The active time authority ladder is:
 - `NONE` — no usable epoch baseline
 
 State, meta, and health outputs must describe this authority explicitly through `timeAuthority`, and startup/init diagnostics must not imply wall-clock truth solely because `RTC_DOMAIN` completed.
+
+## 13. Companion protocol contract
+
+The companion protocol exposes its advertised version, capabilities, GET subject catalog, and EXPORT subject catalog through `companion_proto_contract.*`. Parser and handler code must not advertise a command or subject that is not implemented by the active protocol surface. The advertised capability list intentionally includes only implemented command capabilities such as `safeclr` and `sensorreinit`; unsupported experimental commands must stay absent until parser and handler support are implemented together.

@@ -42,10 +42,20 @@ void web_route_module_registry_reset(void)
     g_initialized = false;
 }
 
-bool web_route_module_register(const char *name, void (*register_fn)(AsyncWebServer &server))
+bool web_route_module_register(const char *name,
+                               void (*register_fn)(AsyncWebServer &server),
+                               const WebRouteCatalogEntry *routes,
+                               size_t route_count,
+                               const WebApiSchemaCatalogEntry *api_schemas,
+                               size_t api_schema_count,
+                               const WebStateSchemaCatalogEntry *state_schemas,
+                               size_t state_schema_count)
 {
     WebRouteModuleNode *node;
-    if (name == nullptr || register_fn == nullptr) {
+    if (name == nullptr || register_fn == nullptr ||
+        (route_count != 0U && routes == nullptr) ||
+        (api_schema_count != 0U && api_schemas == nullptr) ||
+        (state_schema_count != 0U && state_schemas == nullptr)) {
         return false;
     }
     node = static_cast<WebRouteModuleNode *>(std::calloc(1U, sizeof(*node)));
@@ -54,6 +64,12 @@ bool web_route_module_register(const char *name, void (*register_fn)(AsyncWebSer
     }
     node->module.name = name;
     node->module.register_fn = register_fn;
+    node->module.routes = routes;
+    node->module.route_count = route_count;
+    node->module.api_schemas = api_schemas;
+    node->module.api_schema_count = api_schema_count;
+    node->module.state_schemas = state_schemas;
+    node->module.state_schema_count = state_schema_count;
     if (g_module_tail != nullptr) {
         g_module_tail->next = node;
     } else {

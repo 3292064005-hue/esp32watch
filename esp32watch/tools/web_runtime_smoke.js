@@ -3,7 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const appJs = fs.readFileSync(path.join(__dirname, '..', 'data', 'app.js'), 'utf8');
+const appScriptSources = [
+  'app-core.js',
+  'app-render.js',
+  'app-actions.js',
+  'app.js',
+].map((name) => fs.readFileSync(path.join(__dirname, '..', 'data', name), 'utf8'));
 const bootstrapContract = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'contract-bootstrap.json'), 'utf8'));
 const pageRoutesSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'web', 'web_routes_page.cpp'), 'utf8');
 
@@ -158,16 +163,6 @@ const fetchPayloads = {
     overlay: { active: false, text: '', expireAtMs: 0 },
     perf: { loopCount: 3, maxLoopMs: 12, lastCheckpoint: 'WEB', lastCheckpointResult: 'OK', actionQueueDepth: 0, actionQueueDropCount: 0, stages: [], history: [] }
   },
-  [bootstrapContract.routes.stateSummary]: {
-    ok: true,
-    apiVersion: bootstrapContract.apiVersion,
-    stateVersion: bootstrapContract.stateVersion,
-    stateRevision: 101,
-    wifi: { mode: 'STA', status: 'CONNECTED', ip: '192.168.1.10', provisioningApActive: false },
-    system: { page: 'WATCHFACE', timeSource: 'NTP', timeConfidence: 'HIGH', appReady: true, appDegraded: false, uptimeMs: 123456 },
-    summary: { headerTags: 'SYNC READY', networkLine: 'SYNCED', diagLabel: 'OK', storageLabel: 'OK', sensorLabel: 'ONLINE' },
-    weather: { syncStatus: 'SYNCED', tlsMode: 'STRICT' },
-  },
   [bootstrapContract.routes.stateDetail]: {
     ok: true,
     apiVersion: bootstrapContract.apiVersion,
@@ -258,7 +253,6 @@ const fetchPayloads = {
       authToken: true,
       overlayControl: true,
       trackedMutations: true,
-      stateSummary: true,
       stateDetail: true,
       statePerf: true,
       stateRaw: true,
@@ -279,12 +273,12 @@ const fetchPayloads = {
     provisioningSerialPasswordLogEnabled: false,
     versions: { apiVersion: bootstrapContract.apiVersion, stateVersion: bootstrapContract.stateVersion, storageSchemaVersion: 7, runtimeContractVersion: bootstrapContract.runtimeContractVersion, commandCatalogVersion: bootstrapContract.commandCatalogVersion },
     storageRuntime: { flashStorageSupported: false, flashStorageReady: false, storageMigrationAttempted: false, storageMigrationOk: false, appStateBackend: 'NVS_APP_STATE', deviceConfigBackend: 'NVS_A_B', appStateDurability: 'DURABLE', deviceConfigDurability: 'DURABLE', appStatePowerLossGuaranteed: true, deviceConfigPowerLossGuaranteed: true, appStateMixedDurability: false, appStateResetDomainObjectCount: 0, appStateDurableObjectCount: 1, backendCapabilities: { available: true, backend: 'preferences' } },
-    assetContract: { webControlPlaneReady: true, webConsoleReady: true, filesystemReady: true, filesystemAssetsReady: true, assetContractReady: true, assetContractHashVerified: true, assetContractVersion: bootstrapContract.assetContractVersion, assetContractHash: 123, assetContractGeneratedAt: '2026-04-14T00:00:00Z', filesystemStatus: 'READY', assetExpectedHashIndexHtml: 'A', assetActualHashIndexHtml: 'A', assetExpectedHashAppJs: 'B', assetActualHashAppJs: 'B', assetExpectedHashAppCss: 'C', assetActualHashAppCss: 'C', assetExpectedHashContractBootstrap: 'D', assetActualHashContractBootstrap: 'D' },
+    assetContract: { webControlPlaneReady: true, webConsoleReady: true, filesystemReady: true, filesystemAssetsReady: true, assetContractReady: true, assetContractHashVerified: true, assetContractVersion: bootstrapContract.assetContractVersion, assetContractHash: 123, assetContractGeneratedAt: '2026-04-14T00:00:00Z', filesystemStatus: 'READY', assetExpectedHashIndexHtml: 'A', assetActualHashIndexHtml: 'A', assetExpectedHashAppCoreJs: 'B0', assetActualHashAppCoreJs: 'B0', assetExpectedHashAppRenderJs: 'B1', assetActualHashAppRenderJs: 'B1', assetExpectedHashAppActionsJs: 'B2', assetActualHashAppActionsJs: 'B2', assetExpectedHashAppJs: 'B', assetActualHashAppJs: 'B', assetExpectedHashAppCss: 'C', assetActualHashAppCss: 'C', assetExpectedHashContractBootstrap: 'D', assetActualHashContractBootstrap: 'D' },
     runtimeEvents: { runtimeEventHandlers: 1, runtimeEventCapacity: 8, runtimeEventRegistrationRejectCount: 0, runtimeEventPublishCount: 1, runtimeEventPublishFailCount: 0, runtimeEventLastSuccessCount: 1, runtimeEventLastFailureCount: 0, runtimeEventLastCriticalFailureCount: 0, runtimeEventLast: 'CONFIG_UPDATE', runtimeEventLastFailed: 'NONE', runtimeEventLastFailedHandlerIndex: -1, handlers: [{ index: 0, name: 'cfg', priority: 0, critical: true }] },
     platformSupport: { rtcResetDomain: true, rtcWallClock: false, rtcWallClockPersistent: false, idleLightSleep: true, watchdog: false, flashJournal: true },
     deviceIdentity: { boardProfile: 'esp32watch', chipModel: 'ESP32-S3', efuseMac: 'AA:BB:CC:DD:EE:FF' },
-    capabilities: { configProvisioning: true, securedProvisioningAp: true, authToken: true, overlayControl: true, trackedMutations: true, stateSummary: true, stateDetail: true, statePerf: true, stateRaw: true, controlLockInProvisioningAp: true },
-    stateSurfaces: { controlPlane: ['stateAggregate'], diagnostics: ['stateDetail', 'statePerf', 'storageSemantics'], compatibility: ['stateSummary'], internal: ['stateRaw'] },
+    capabilities: { configProvisioning: true, securedProvisioningAp: true, authToken: true, overlayControl: true, trackedMutations: true, stateDetail: true, statePerf: true, stateRaw: true, controlLockInProvisioningAp: true },
+    stateSurfaces: { controlPlane: ['stateAggregate'], diagnostics: ['stateDetail', 'statePerf', 'storageSemantics'], compatibility: [], internal: ['stateRaw'] },
     releaseValidation: { schemaVersion: bootstrapContract.releaseValidation.validationSchemaVersion, candidateBundleKind: 'candidate', verifiedBundleKind: 'verified', hostReportType: 'HOST_VALIDATION_REPORT', deviceReportType: 'DEVICE_SMOKE_REPORT' },
   },
   ['POST ' + bootstrapContract.routes.configDevice]: {
@@ -471,7 +465,10 @@ function makeInvalidRoutePayload(routeKey, payload) {
 }
 
 (async () => {
-  vm.runInNewContext(`${appJs}\n;globalThis.__smokeState = state;`, context, { filename: 'app.js' });
+  for (const [index, scriptSource] of appScriptSources.entries()) {
+    const suffix = index === appScriptSources.length - 1 ? '\n;globalThis.__smokeState = state;' : '';
+    vm.runInNewContext(`${scriptSource}${suffix}`, context, { filename: `app-bundle-${index}.js` });
+  }
   if (typeof listeners.DOMContentLoaded !== 'function') {
     throw new Error('DOMContentLoaded listener missing');
   }
@@ -498,7 +495,6 @@ function makeInvalidRoutePayload(routeKey, payload) {
     actionsCatalog: fetchPayloads[bootstrapContract.routes.actionsCatalog],
     actionsLatest: fetchPayloads[bootstrapContract.routes.actionsLatest],
     actionsStatus: fetchPayloads[bootstrapContract.routes.actionsStatus + '?id=1'],
-    stateSummary: fetchPayloads[bootstrapContract.routes.stateSummary],
     stateDetail: fetchPayloads[bootstrapContract.routes.stateDetail],
     statePerf: fetchPayloads[bootstrapContract.routes.statePerf],
     stateRaw: fetchPayloads[bootstrapContract.routes.stateRaw],

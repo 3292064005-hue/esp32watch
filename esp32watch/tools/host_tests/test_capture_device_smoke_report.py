@@ -6,6 +6,7 @@ import json
 import shutil
 import socketserver
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -314,7 +315,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def run_capture(base_url: str, candidate: Path, output: Path) -> subprocess.CompletedProcess:
     return subprocess.run([
-        'python3', 'tools/capture_device_smoke_report.py',
+        sys.executable, 'tools/capture_device_smoke_report.py',
         '--base-url', base_url,
         '--env', ENV,
         '--device-id', 'HOST-DEVICE',

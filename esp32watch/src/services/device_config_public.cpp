@@ -5,6 +5,7 @@ extern "C" {
 }
 
 #include "services/device_config_internal.hpp"
+#include "services/device_config_authority.h"
 
 static bool constant_time_equals(const char *lhs, const char *rhs)
 {
@@ -41,7 +42,8 @@ extern "C" bool device_config_save_wifi(const char *ssid, const char *password)
     update.set_wifi = true;
     copy_string(update.wifi_ssid, sizeof(update.wifi_ssid), ssid);
     copy_string(update.wifi_password, sizeof(update.wifi_password), password);
-    return device_config_apply_update(&update);
+    DeviceConfigAuthorityApplyReport apply = {};
+    return device_config_authority_apply_update(&update, &apply);
 }
 
 extern "C" bool device_config_save_network_profile(const char *timezone_posix,
@@ -63,7 +65,8 @@ extern "C" bool device_config_save_network_profile(const char *timezone_posix,
     copy_string(update.location_name, sizeof(update.location_name), location_name);
     update.latitude = latitude;
     update.longitude = longitude;
-    return device_config_apply_update(&update);
+    DeviceConfigAuthorityApplyReport apply = {};
+    return device_config_authority_apply_update(&update, &apply);
 }
 
 extern "C" bool device_config_save_api_token(const char *token)
@@ -77,7 +80,8 @@ extern "C" bool device_config_save_api_token(const char *token)
     seed_update_from_current(&update);
     update.set_api_token = true;
     copy_string(update.api_token, sizeof(update.api_token), token);
-    return device_config_apply_update(&update);
+    DeviceConfigAuthorityApplyReport apply = {};
+    return device_config_authority_apply_update(&update, &apply);
 }
 
 extern "C" bool device_config_get_wifi_password(char *out, uint32_t out_size)
@@ -117,17 +121,9 @@ extern "C" bool device_config_authenticate_token(const char *token)
 
 extern "C" bool device_config_restore_defaults(void)
 {
-    DeviceConfigSnapshot defaults_snapshot;
-    char default_wifi_password[DEVICE_CONFIG_WIFI_PASSWORD_MAX_LEN + 1U] = {0};
-    char default_api_token[DEVICE_CONFIG_API_TOKEN_MAX_LEN + 1U] = {0};
-
+    DeviceConfigAuthorityApplyReport apply = {};
     device_config_init();
-    seed_defaults_snapshot(&defaults_snapshot,
-                           default_wifi_password,
-                           sizeof(default_wifi_password),
-                           default_api_token,
-                           sizeof(default_api_token));
-    return persist_snapshot(defaults_snapshot, default_wifi_password, default_api_token);
+    return device_config_authority_restore_defaults(&apply);
 }
 
 extern "C" uint32_t device_config_generation(void)

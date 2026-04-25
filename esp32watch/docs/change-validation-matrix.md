@@ -17,6 +17,7 @@ Required:
 Required:
 - authority-layer validation updated
 - runtime reload domain mapping reviewed
+- runtime reload/event manifest updated when domain or event topology changes
 - hot-apply vs reboot-required behavior documented
 - host behavior coverage added or updated
 - migration/backward-compatibility impact recorded

@@ -1,6 +1,7 @@
 #include "services/device_config_authority.h"
 #include "services/device_config_codec.h"
 #include "services/storage_facade.h"
+#include "services/storage_facade_device_config_backend.h"
 #include <string.h>
 
 static void apply_report_init(DeviceConfigAuthorityApplyReport *out)
@@ -143,7 +144,7 @@ bool device_config_authority_apply_update(const DeviceConfigUpdate *update,
     device_config_canonicalize_update(&persist_update);
     authority_compute_diff(&persist_update, &current_cfg, current_wifi_password, current_api_token, report);
 
-    if (!storage_facade_apply_device_config_update(&persist_update)) {
+    if (!storage_facade_device_config_backend_apply_update(&persist_update)) {
         return false;
     }
 
@@ -165,7 +166,7 @@ bool device_config_authority_restore_defaults(DeviceConfigAuthorityApplyReport *
     DeviceConfigAuthorityApplyReport *report = out != NULL ? out : &local_report;
 
     apply_report_init(report);
-    if (!storage_facade_restore_device_config_defaults()) {
+    if (!storage_facade_device_config_backend_restore_defaults()) {
         return false;
     }
     report->committed = true;

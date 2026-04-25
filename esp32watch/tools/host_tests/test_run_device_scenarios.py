@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 import threading
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -152,14 +153,14 @@ def main() -> int:
         'runnerIdentity': 'HOST_TEST_RUNNER',
         'labIdentity': 'HOST_TEST_LAB',
         'powerCycle': {
-            'argv': ['python3', '-c', (
+            'argv': [sys.executable, '-c', (
                 "import json, os; from pathlib import Path; "
                 f"Path(r'{POWER_FLAG}').write_text('1'); "
                 "Path(os.environ['ESP32WATCH_SCENARIO_EVIDENCE']).write_text(json.dumps({'label': os.environ['ESP32WATCH_SCENARIO_LABEL'], 'kind': 'power-cycle', 'source': 'host-test'}))"
             )]
         },
         'faultInject': {
-            'argv': ['python3', '-c', (
+            'argv': [sys.executable, '-c', (
                 "import json, os; from pathlib import Path; "
                 f"Path(r'{FAULT_FLAG}').write_text('1'); "
                 "Path(os.environ['ESP32WATCH_SCENARIO_EVIDENCE']).write_text(json.dumps({'label': os.environ['ESP32WATCH_SCENARIO_LABEL'], 'kind': 'fault-inject', 'source': 'host-test'}))"
@@ -174,7 +175,7 @@ def main() -> int:
     thread.start()
     try:
         subprocess.run([
-            'python3', 'tools/run_device_scenarios.py',
+            sys.executable, 'tools/run_device_scenarios.py',
             '--base-url', f'http://127.0.0.1:{server.server_address[1]}',
             '--candidate-bundle', str(BUNDLE),
             '--device-id', 'HOST-DEVICE',

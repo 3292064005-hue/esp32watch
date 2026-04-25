@@ -225,7 +225,6 @@ void append_capabilities(String &response)
     web_json_kv_bool(response, "authToken", true, false);
     web_json_kv_bool(response, "overlayControl", true, false);
     web_json_kv_bool(response, "trackedMutations", true, false);
-    web_json_kv_bool(response, "stateSummary", true, false);
     web_json_kv_bool(response, "stateDetail", true, false);
     web_json_kv_bool(response, "statePerf", true, false);
     web_json_kv_bool(response, "stateRaw", true, false);
@@ -238,7 +237,7 @@ void append_state_surface_catalog(String &response)
     response += "\"stateSurfaces\":{";
     response += "\"controlPlane\":[\"stateAggregate\"],";
     response += "\"diagnostics\":[\"stateDetail\",\"statePerf\",\"storageSemantics\"],";
-    response += "\"compatibility\":[\"stateSummary\"],";
+    response += "\"compatibility\":[],";
     response += "\"internal\":[\"stateRaw\"]";
     response += "}";
 }
@@ -375,6 +374,12 @@ static void append_meta_asset_contract_section(String &response, bool append_tra
     web_json_kv_str(response, "filesystemStatus", web_server_filesystem_status(), false);
     web_json_kv_str(response, "assetExpectedHashIndexHtml", web_server_asset_expected_hash("index.html"), false);
     web_json_kv_str(response, "assetActualHashIndexHtml", web_server_asset_actual_hash("index.html"), false);
+    web_json_kv_str(response, "assetExpectedHashAppCoreJs", web_server_asset_expected_hash("app-core.js"), false);
+    web_json_kv_str(response, "assetActualHashAppCoreJs", web_server_asset_actual_hash("app-core.js"), false);
+    web_json_kv_str(response, "assetExpectedHashAppRenderJs", web_server_asset_expected_hash("app-render.js"), false);
+    web_json_kv_str(response, "assetActualHashAppRenderJs", web_server_asset_actual_hash("app-render.js"), false);
+    web_json_kv_str(response, "assetExpectedHashAppActionsJs", web_server_asset_expected_hash("app-actions.js"), false);
+    web_json_kv_str(response, "assetActualHashAppActionsJs", web_server_asset_actual_hash("app-actions.js"), false);
     web_json_kv_str(response, "assetExpectedHashAppJs", web_server_asset_expected_hash("app.js"), false);
     web_json_kv_str(response, "assetActualHashAppJs", web_server_asset_actual_hash("app.js"), false);
     web_json_kv_str(response, "assetExpectedHashAppCss", web_server_asset_expected_hash("app.css"), false);
@@ -719,6 +724,18 @@ static bool append_api_schema_sections(String &response,
     return true;
 }
 
+static bool append_api_schema_sections_for_route_method(String &response,
+                                                        const char *route_key,
+                                                        const char *method,
+                                                        const ApiSchemaEmitContext &ctx)
+{
+    WebApiSchemaView schema = {};
+    if (!web_contract_get_route_api_schema_for_method(route_key, method, &schema)) {
+        return false;
+    }
+    return append_api_schema_sections(response, schema.sections, schema.section_count, ctx);
+}
+
 static bool append_api_schema_sections_for_route(String &response,
                                                  const char *route_key,
                                                  const ApiSchemaEmitContext &ctx)
@@ -775,7 +792,7 @@ void append_device_config_update_schema_sections(String &response,
     ctx.filesystem_ready = filesystem_ready;
     ctx.filesystem_assets_ready = filesystem_assets_ready;
     ctx.filesystem_status = filesystem_status;
-    (void)append_api_schema_sections_for_route(response, "configDevice", ctx);
+    (void)append_api_schema_sections_for_route_method(response, "configDevice", "POST", ctx);
 }
 
 void append_config_device_readback_schema_sections(String &response,
@@ -785,7 +802,7 @@ void append_config_device_readback_schema_sections(String &response,
     ApiSchemaEmitContext ctx = {};
     ctx.device_config = &cfg;
     ctx.storage_runtime = &storage_runtime;
-    (void)append_api_schema_sections_for_route(response, "configDevice", ctx);
+    (void)append_api_schema_sections_for_route_method(response, "configDevice", "GET", ctx);
 }
 
 void append_health_schema_sections(String &response)

@@ -18,6 +18,7 @@ required_doc = [
     'Device validation policy',
     'runtime contract updated',
     'host behavior coverage added or updated',
+    'runtime reload/event manifest updated when domain or event topology changes',
 ]
 
 required_template = [

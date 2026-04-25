@@ -65,3 +65,15 @@ src/web/web_routes_api_contract_meta.cpp
 src/web/web_routes_api_config_mutation.cpp
 src/web/web_routes_api_control.cpp
 include/web/web_routes_api_support.h
+include/services/runtime_reload_event_manifest.h
+src/services/runtime_reload_event_manifest.c
+docs/runtime-reload-event-matrix.md
+tools/host_tests/test_runtime_reload_event_matrix.py
+tools/host_tests/test_runtime_reload_event_manifest.c
+tools/host_sanity_check.sh
+tools/host_validate_local.sh
+tools/host_tests/test_workflow_yaml.py
+tools/verify_host_python_requirements.py
+tools/requirements-host.txt
+README.md
+docs/runtime-architecture.md

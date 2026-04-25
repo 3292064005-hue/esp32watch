@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import subprocess
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -25,11 +26,12 @@ with tempfile.TemporaryDirectory() as tmpdir:
     out = root / 'flash-evidence.json'
     write_bundle(bundle)
     subprocess.run([
-        'python3', str(SCRIPT), '--bundle', str(bundle), '--port', '/dev/ttyUSB0', '--dry-run', '--output', str(out)
+        sys.executable, str(SCRIPT), '--bundle', str(bundle), '--port', '/dev/ttyUSB0',
+        '--python-bin', sys.executable, '--dry-run', '--output', str(out)
     ], check=True)
     payload = json.loads(out.read_text(encoding='utf-8'))
     assert payload['flashMode'] == 'DRY_RUN'
     assert payload['appOffset'] == 0x10000
     assert payload['littlefsOffset'] == 0x310000
-    assert payload['command'][0:3] == ['python3', '-m', 'esptool']
+    assert payload['command'][0:3] == [sys.executable, '-m', 'esptool']
 print('[OK] flash_candidate_bundle dry-run report validated')

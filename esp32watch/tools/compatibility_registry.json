@@ -63,41 +63,6 @@
       ]
     },
     {
-      "id": "state_summary_route",
-      "label": "stateSummary compatibility route",
-      "owner": "web control plane",
-      "category": "web-route",
-      "reason_retained": "Preserve legacy summary polling callers while stateAggregate becomes the canonical control-plane route",
-      "removal_condition": "Remove when all compatibility consumers switch to stateAggregate and the compatibility route is no longer documented",
-      "doc_anchor": "stateSummary compatibility route",
-      "evidence": [
-        {
-          "file": "docs/compatibility-lifecycle.md",
-          "snippets": [
-            "stateSummary compatibility route"
-          ]
-        },
-        {
-          "file": "src/web/web_contract.cpp",
-          "snippets": [
-            "{\"stateSummary\", \"state\", \"summary\"}"
-          ]
-        },
-        {
-          "file": "data/contract-bootstrap.json",
-          "snippets": [
-            "stateSummary"
-          ]
-        },
-        {
-          "file": "tools/host_tests/test_compatibility_lifecycle.py",
-          "snippets": [
-            "stateSummary"
-          ]
-        }
-      ]
-    },
-    {
       "id": "legacy_command_aliases",
       "label": "Legacy command aliases in Web/API",
       "owner": "web control plane",

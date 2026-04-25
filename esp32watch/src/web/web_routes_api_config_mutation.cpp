@@ -418,9 +418,6 @@ void web_handle_config_device_post_common(AsyncWebServerRequest *request)
 
     String response = "{";
     response += "\"ok\":true,";
-    response += "\"runtimeReload\":{";
-    append_runtime_reload_payload(response, apply.reload, true);
-    response += "},";
     web_json_kv_bool(response, "wifiSaved", apply.wifi_saved, false);
     web_json_kv_bool(response, "networkSaved", apply.network_saved, false);
     web_json_kv_bool(response, "tokenSaved", apply.token_saved, false);

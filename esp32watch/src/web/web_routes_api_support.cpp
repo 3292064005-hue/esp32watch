@@ -340,9 +340,6 @@ void send_reset_action_response(AsyncWebServerRequest *request,
     response += "\"ok\":";
     response += ok ? "true," : "false,";
     web_json_kv_str(response, "message", message, false);
-    response += "\"runtimeReload\":{";
-    append_runtime_reload_payload(response, report.reload, true);
-    response += "},";
     append_reset_report_payload(response, report, false);
     web_json_kv_bool(response, "filesystemReady", web_server_filesystem_ready(), false);
     web_json_kv_bool(response, "filesystemAssetsReady", web_server_filesystem_assets_ready(), false);

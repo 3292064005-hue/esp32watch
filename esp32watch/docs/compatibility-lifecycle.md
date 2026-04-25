@@ -8,7 +8,6 @@ This document codifies the active compatibility and rollback surfaces retained b
 | --- | --- | --- | --- |
 | `LEGACY_CONSUMER_FIRST` init profile | system init | Validate migration order and rollback during storage authority transition | Remove after two release cycles with no rollback use |
 | Compatibility state snapshot (`model_get`, `model_get_domain_state`) | model runtime | Preserve read-only consumers while telemetry moved to authoritative services | Remove when all consumers switch to authoritative runtime surfaces |
-| `stateSummary` compatibility route | web control plane | Preserve legacy summary polling callers while `stateAggregate` becomes the canonical control-plane route | Remove when all compatibility consumers switch to `stateAggregate` and the compatibility route is no longer documented |
 | Legacy command aliases in Web/API | web control plane | Support previously shipped automation callers | Remove after command catalog version bump and migration note |
 
 ## Rules

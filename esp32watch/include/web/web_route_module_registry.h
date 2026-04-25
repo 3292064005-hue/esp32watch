@@ -3,14 +3,28 @@
 
 #include <stddef.h>
 #include <ESPAsyncWebServer.h>
+#include "web/web_route_catalog.h"
 
 struct WebRouteModuleDescriptor {
     const char *name;
     void (*register_fn)(AsyncWebServer &server);
+    const WebRouteCatalogEntry *routes;
+    size_t route_count;
+    const WebApiSchemaCatalogEntry *api_schemas;
+    size_t api_schema_count;
+    const WebStateSchemaCatalogEntry *state_schemas;
+    size_t state_schema_count;
 };
 
 void web_route_module_registry_reset(void);
-bool web_route_module_register(const char *name, void (*register_fn)(AsyncWebServer &server));
+bool web_route_module_register(const char *name,
+                               void (*register_fn)(AsyncWebServer &server),
+                               const WebRouteCatalogEntry *routes,
+                               size_t route_count,
+                               const WebApiSchemaCatalogEntry *api_schemas,
+                               size_t api_schema_count,
+                               const WebStateSchemaCatalogEntry *state_schemas,
+                               size_t state_schema_count);
 typedef void (*WebRouteModuleInstaller)(void);
 
 bool web_route_module_register_provider(const char *name, WebRouteModuleInstaller installer);

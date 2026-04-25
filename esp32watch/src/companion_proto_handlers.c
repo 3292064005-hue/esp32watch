@@ -1,4 +1,5 @@
 #include "companion_proto_internal.h"
+#include "companion_proto_contract.h"
 #include "app_command.h"
 #include "services/diag_service.h"
 #include <stdbool.h>
@@ -6,6 +7,9 @@
 
 static size_t companion_proto_handle_get_subject(const char *subject, char *out, size_t out_size)
 {
+    if (!companion_proto_contract_supports_get_subject(subject)) {
+        return companion_proto_write_response(out, out_size, "ERR bad subject");
+    }
     if (companion_proto_token_eq(subject, "INFO")) return companion_proto_format_info(out, out_size);
     if (companion_proto_token_eq(subject, "SETTINGS")) return companion_proto_format_settings(out, out_size);
     if (companion_proto_token_eq(subject, "DIAG")) return companion_proto_format_diag(out, out_size);
@@ -15,19 +19,20 @@ static size_t companion_proto_handle_get_subject(const char *subject, char *out,
     if (companion_proto_token_eq(subject, "STORAGE")) return companion_proto_format_storage(out, out_size);
     if (companion_proto_token_eq(subject, "CLOCK")) return companion_proto_format_clock(out, out_size);
     if (companion_proto_token_eq(subject, "PERF")) return companion_proto_format_perf(out, out_size);
-    if (companion_proto_token_eq(subject, "PROTO")) return companion_proto_format_proto(out, out_size);
-    return companion_proto_write_response(out, out_size, "ERR bad subject");
+    return companion_proto_format_proto(out, out_size);
 }
 
 static size_t companion_proto_handle_export_subject(const char *subject, char *out, size_t out_size)
 {
+    if (!companion_proto_contract_supports_export_subject(subject)) {
+        return companion_proto_write_response(out, out_size, "ERR bad subject");
+    }
     if (companion_proto_token_eq(subject, "STORAGE")) return companion_proto_format_storage(out, out_size);
     if (companion_proto_token_eq(subject, "ACTIVITY")) return companion_proto_format_activity(out, out_size);
     if (companion_proto_token_eq(subject, "DIAG")) return companion_proto_format_diag(out, out_size);
     if (companion_proto_token_eq(subject, "CLOCK")) return companion_proto_format_clock(out, out_size);
     if (companion_proto_token_eq(subject, "PERF")) return companion_proto_format_perf(out, out_size);
-    if (companion_proto_token_eq(subject, "PROTO")) return companion_proto_format_proto(out, out_size);
-    return companion_proto_write_response(out, out_size, "ERR bad subject");
+    return companion_proto_format_proto(out, out_size);
 }
 
 /**

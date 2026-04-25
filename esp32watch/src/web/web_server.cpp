@@ -38,8 +38,11 @@ typedef struct {
 
 static WebAssetHashRecord g_asset_hashes[] = {
     {"index.html", "UNKNOWN", "UNKNOWN"},
-    {"app.js", "UNKNOWN", "UNKNOWN"},
     {"app.css", "UNKNOWN", "UNKNOWN"},
+    {"app-core.js", "UNKNOWN", "UNKNOWN"},
+    {"app-render.js", "UNKNOWN", "UNKNOWN"},
+    {"app-actions.js", "UNKNOWN", "UNKNOWN"},
+    {"app.js", "UNKNOWN", "UNKNOWN"},
     {"contract-bootstrap.json", "UNKNOWN", "UNKNOWN"},
 };
 
@@ -239,7 +242,7 @@ static uint32_t web_parse_asset_contract_version(const String &json)
 static bool web_validate_asset_contract(void)
 {
     String contract_json;
-    const char *required_entries[] = {"index.html", "app.js", "app.css", "contract-bootstrap.json"};
+    const char *required_entries[] = {"index.html", "app.css", "app-core.js", "app-render.js", "app-actions.js", "app.js", "contract-bootstrap.json"};
     StaticJsonDocument<16384> doc;
     bool parsed_with_json = false;
 
@@ -347,8 +350,11 @@ static bool web_mount_littlefs(void)
     if (LittleFS.begin(false, base_path, 10, partition_label)) {
         Serial.println("[WEB] LittleFS mounted successfully");
         g_littlefs_assets_ready = LittleFS.exists("/index.html") &&
-                                  LittleFS.exists("/app.js") &&
                                   LittleFS.exists("/app.css") &&
+                                  LittleFS.exists("/app-core.js") &&
+                                  LittleFS.exists("/app-render.js") &&
+                                  LittleFS.exists("/app-actions.js") &&
+                                  LittleFS.exists("/app.js") &&
                                   LittleFS.exists("/contract-bootstrap.json");
         g_asset_contract_ready = web_validate_asset_contract();
         if (!g_littlefs_assets_ready) {
@@ -379,8 +385,11 @@ static bool web_mount_littlefs(void)
         return false;
     }
     g_littlefs_assets_ready = LittleFS.exists("/index.html") &&
-                              LittleFS.exists("/app.js") &&
                               LittleFS.exists("/app.css") &&
+                              LittleFS.exists("/app-core.js") &&
+                              LittleFS.exists("/app-render.js") &&
+                              LittleFS.exists("/app-actions.js") &&
+                              LittleFS.exists("/app.js") &&
                               LittleFS.exists("/contract-bootstrap.json");
     g_asset_contract_ready = web_validate_asset_contract();
     if (!g_littlefs_assets_ready) {

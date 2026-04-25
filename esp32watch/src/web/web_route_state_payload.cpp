@@ -157,18 +157,10 @@ static void append_state_versions(String &response)
 }
 
 enum WebStatePayloadView {
-    WEB_STATE_PAYLOAD_SUMMARY = 0,
-    WEB_STATE_PAYLOAD_DETAIL,
+    WEB_STATE_PAYLOAD_DETAIL = 0,
     WEB_STATE_PAYLOAD_PERF,
     WEB_STATE_PAYLOAD_RAW,
     WEB_STATE_PAYLOAD_AGGREGATE,
-};
-
-static const WebStateSectionSpec g_web_state_view_summary[] = {
-    {WEB_STATE_SECTION_WIFI, WEB_STATE_SECTION_FLAG_NONE},
-    {WEB_STATE_SECTION_SYSTEM, WEB_STATE_SECTION_FLAG_NONE},
-    {WEB_STATE_SECTION_SUMMARY, WEB_STATE_SECTION_FLAG_SUMMARY_INCLUDE_NETWORK_LABEL},
-    {WEB_STATE_SECTION_WEATHER, WEB_STATE_SECTION_FLAG_NONE},
 };
 
 static const WebStateSectionSpec g_web_state_view_detail[] = {
@@ -222,10 +214,6 @@ static const WebStateSectionSpec *web_state_view_schema(WebStatePayloadView view
     size_t count = sizeof(g_web_state_view_aggregate) / sizeof(g_web_state_view_aggregate[0]);
 
     switch (view) {
-        case WEB_STATE_PAYLOAD_SUMMARY:
-            schema = g_web_state_view_summary;
-            count = sizeof(g_web_state_view_summary) / sizeof(g_web_state_view_summary[0]);
-            break;
         case WEB_STATE_PAYLOAD_DETAIL:
             schema = g_web_state_view_detail;
             count = sizeof(g_web_state_view_detail) / sizeof(g_web_state_view_detail[0]);
@@ -724,11 +712,6 @@ static void send_state_payload_response(AsyncWebServerRequest *request,
 
     append_state_payload(response, bundle, view);
     request->send(200, "application/json", response);
-}
-
-void web_send_state_summary_response(AsyncWebServerRequest *request)
-{
-    send_state_payload_response(request, WEB_STATE_PAYLOAD_SUMMARY, false, 3072U);
 }
 
 void web_send_state_detail_response(AsyncWebServerRequest *request)

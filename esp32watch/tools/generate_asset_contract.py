@@ -4,12 +4,13 @@ import argparse
 import hashlib
 import json
 import re
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 BOOTSTRAP_CONTRACT_NAME = 'contract-bootstrap.json'
-ENTRYPOINTS = ['index.html', 'app.js', 'app.css']
+ENTRYPOINTS = ['index.html', 'app.css', 'app-core.js', 'app-render.js', 'app-actions.js', 'app.js']
 REQUIRED_FILES = ENTRYPOINTS + [BOOTSTRAP_CONTRACT_NAME]
 FNV_OFFSET = 2166136261
 FNV_PRIME = 16777619
@@ -17,16 +18,25 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_CONTRACT_HEADER = ROOT / 'include' / 'web' / 'web_contract.h'
 WEB_CONTRACT_CPP = ROOT / 'src' / 'web' / 'web_contract.cpp'
 WEB_ROUTES_API_CPP = ROOT / 'src' / 'web' / 'web_routes_api.cpp'
+WEB_CONTRACT_EMIT_SOURCES = [
+    'src/web/web_contract.cpp',
+    'src/web/web_json.cpp',
+    'src/web/web_route_catalog_registry.cpp',
+    'src/web/web_route_module_registry.cpp',
+    'src/web/web_route_module_manifest.cpp',
+    'src/web/web_route_module_core.cpp',
+    'src/web/web_route_module_actions.cpp',
+    'src/web/web_route_module_config.cpp',
+    'src/web/web_route_module_reset.cpp',
+    'src/web/web_route_module_state.cpp',
+    'src/web/web_route_module_display.cpp',
+    'src/web/web_route_module_input.cpp',
+]
 
 VERSION_RE = re.compile(r'static constexpr uint32_t (WEB_[A-Z_]+) = (\d+)U;')
 ROUTE_VALUE_RE = re.compile(r'static constexpr const char \*(WEB_ROUTE_[A-Z0-9_]+) = "([^"]+)";')
-APPEND_ROUTE_RE = re.compile(r'append_route\(response, "([^"]+)", (WEB_ROUTE_[A-Z0-9_]+), (?:true|false)\);')
-ROUTE_SCHEMA_ENTRY_RE = re.compile(r'\{\"([^\"]+)\",\s*\"([^\"]+)\",\s*\"([^\"]+)\"\}')
 STATE_VIEW_ARRAY_RE = re.compile(r'static const WebStateSectionSpec (g_web_state_view_[a-z]+)\[] = \{(.*?)\};', re.S)
 STATE_VIEW_ENTRY_RE = re.compile(r'\{(WEB_STATE_SECTION_[A-Z_]+),\s*([^}]+)\}')
-STRING_ARRAY_RE = re.compile(r'static constexpr const char \*(k[A-Za-z0-9_]+)\[] = \{(.*?)\};', re.S)
-STRING_LITERAL_RE = re.compile(r'"([^"]+)"')
-API_SCHEMA_SPEC_RE = re.compile(r'\{"([^"]+)",\s*(k[A-Za-z0-9_]+),\s*\d+U,\s*(k[A-Za-z0-9_]+),\s*\d+U\}')
 
 STATE_SECTION_NAME_MAP = {
     'WEB_STATE_SECTION_WIFI': 'wifi',
@@ -87,57 +97,15 @@ def parse_state_view_schemas() -> dict:
 
 
 
-def parse_string_arrays(source: str) -> dict:
-    arrays = {}
-    for name, body in STRING_ARRAY_RE.findall(source):
-        arrays[name] = STRING_LITERAL_RE.findall(body)
-    return arrays
-
-
-def parse_api_schemas() -> dict:
-    cpp_text = WEB_CONTRACT_CPP.read_text(encoding='utf-8')
-    arrays = parse_string_arrays(cpp_text)
-    marker = 'static constexpr ApiSchemaSpec kApiSchemas[] = {'
-    start = cpp_text.find(marker)
-    if start < 0:
-        return {}
-    end = cpp_text.find('};', start)
-    if end < 0:
-        return {}
-    body = cpp_text[start:end]
-    schemas = {}
-    for name, required_key, sections_key in API_SCHEMA_SPEC_RE.findall(body):
-        schemas[name] = {
-            'type': 'object',
-            'required': arrays.get(required_key, []),
-            'sections': arrays.get(sections_key, []),
-        }
-    return schemas
-
-
-def parse_route_schemas() -> dict:
-    cpp_text = WEB_CONTRACT_CPP.read_text(encoding='utf-8')
-    marker = 'static constexpr RouteSchemaSpec kRouteSchemas[] = {'
-    start = cpp_text.find(marker)
-    if start < 0:
-        return {}
-    end = cpp_text.find('};', start)
-    if end < 0:
-        return {}
-    body = cpp_text[start:end]
-    route_schemas = {}
-    for route_key, schema_kind, schema_name in ROUTE_SCHEMA_ENTRY_RE.findall(body):
-        route_schemas[route_key] = {'kind': schema_kind, 'name': schema_name}
-    return route_schemas
-
 def emit_runtime_contract_bootstrap() -> dict:
     build_dir = ROOT / 'dist' / 'host_contract_emit'
     build_dir.mkdir(parents=True, exist_ok=True)
     binary = build_dir / 'web_contract_emit'
     source = ROOT / 'tools' / 'host_tests' / 'test_web_contract_emit.cpp'
+    cxx = os.environ.get('CXX', 'g++')
     subprocess.run([
-        'g++', '-std=c++17', '-Itools/host_stubs', '-Iinclude', '-Isrc',
-        str(source), 'src/web/web_contract.cpp', 'src/web/web_json.cpp', '-o', str(binary)
+        cxx, '-std=c++17', '-Itools/host_stubs', '-Iinclude', '-Isrc',
+        str(source), *WEB_CONTRACT_EMIT_SOURCES, '-o', str(binary)
     ], cwd=ROOT, check=True)
     payload = json.loads(subprocess.check_output([str(binary)], cwd=ROOT, text=True))
     contract = payload.get('contract')

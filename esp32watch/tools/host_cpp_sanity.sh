@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 STUB_DIR="tools/host_stubs"
+CXX="${CXX:-g++}"
 COMMON_DEFINES=(
   -DAPP_BOARD_PROFILE_ESP32S3_WATCH
   -DESP32_I2C_SDA_GPIO=8
@@ -54,6 +55,7 @@ CPP_FILES=(
   src/web/web_route_module_state.cpp
   src/web/web_route_module_display.cpp
   src/web/web_route_module_input.cpp
+  src/web/web_route_catalog_registry.cpp
   src/web/web_route_handlers_core.cpp
   src/web/web_route_handlers_actions.cpp
   src/web/web_route_handlers_config.cpp
@@ -72,6 +74,6 @@ CPP_FILES=(
   src/reset_reason_esp32.cpp
 )
 for f in "${CPP_FILES[@]}"; do
-  g++ -std=c++17 -fsyntax-only "${COMMON_DEFINES[@]}" -I"${STUB_DIR}" -Iinclude -Isrc "$f"
+  "${CXX}" -std=c++17 -fsyntax-only "${COMMON_DEFINES[@]}" -I"${STUB_DIR}" -Iinclude -Isrc "$f"
 done
 echo "[OK] host C++ stub syntax check passed for ${#CPP_FILES[@]} translation units"

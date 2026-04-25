@@ -69,10 +69,14 @@ Configured in `platformio.ini`:
 
 ### Quick Commands
 
-**Run host-only validation locally (no hardware needed):**
+**Run host-only validation locally (no hardware needed; host Python checks are stdlib-only):**
 ```bash
-python3 -m pip install -r tools/requirements-host.txt
-./tools/host_sanity_check.sh
+bash ./tools/host_sanity_check.sh
+```
+
+**Run the standardized local trusted validation entrypoint:**
+```bash
+bash ./tools/host_validate_local.sh
 ```
 
 **Build firmware (dev profile):**
@@ -100,10 +104,14 @@ pio run -e esp32s3_n16r8_dev -t monitor
 #### Path 1: Host-Only Validation (No Hardware Required)
 For contract verification, packaging validation, and build checks:
 ```bash
-python3 -m pip install -r tools/requirements-host.txt
-./tools/host_sanity_check.sh
+bash ./tools/host_sanity_check.sh
 ```
-✅ Validates: contract alignment, serialization, build graph, host behavior  
+
+**Run the standardized local trusted validation entrypoint:**
+```bash
+bash ./tools/host_validate_local.sh
+```
+✅ Validates: contract alignment, serialization, build graph, reload/event manifest topology, workflow guards, host behavior  
 ❌ Does NOT validate: firmware compilation when `pio` is unavailable, GPIO timing, hardware behavior, power-loss scenarios
 
 #### Path 2: Firmware Build (PlatformIO Required)
@@ -126,6 +134,7 @@ For complete device validation and release preparation:
 - [`docs/runtime-architecture.md`](docs/runtime-architecture.md) — runtime design, storage semantics, reset flows, boot recovery
 - [`docs/release-validation.md`](docs/release-validation.md) — candidate/verified bundle workflow, testing procedures
 - [`docs/compatibility-lifecycle.md`](docs/compatibility-lifecycle.md) — compatibility/rollback surface lifecycle and deprecation rules
+- [`docs/runtime-reload-event-matrix.md`](docs/runtime-reload-event-matrix.md) — runtime reload domains, event producers, consumer matrix, and code-owned manifest guardrails
 - [`tools/compatibility_registry.json`](tools/compatibility_registry.json) — machine-readable registry for compatibility surfaces and their required host evidence
 - [`docs/state-surface-lifecycle.md`](docs/state-surface-lifecycle.md) — production/consumer/compatibility ownership for state fields
 - [`docs/host-simulator-matrix.md`](docs/host-simulator-matrix.md) — host simulator and validation matrix boundaries
@@ -205,7 +214,7 @@ For complete device validation, use the **device-validation path** with real har
 ## 📊 Validation Status
 
 **Last Updated:** 2026-04-19  
-**Host Validation:** Run `./tools/host_sanity_check.sh` for the current branch status  
+**Host Validation:** Run `bash ./tools/host_sanity_check.sh` for the current branch status  
 **Firmware Build Status:** Determined only by PlatformIO build output / CI artifacts  
 **Device Verification:** Determined only by verified release bundles and device smoke evidence  
 **Current Repository Validation Level:** host/build validation can be established locally; release-grade device validation requires a release workflow run with device evidence and lab attestation
@@ -216,7 +225,7 @@ Repository-local files must not be treated as proof of a current successful firm
 
 When modifying this repository:
 1. Ensure `pio run -e esp32s3_n16r8_dev` compiles without errors
-2. Run host validation: `./tools/host_sanity_check.sh`
+2. Run host validation: `bash ./tools/host_sanity_check.sh`
 3. Update documentation if changing API contracts
 4. Do not modify `src/legacy/` without explicit reason
 5. Contract assets (`data/*.json`) require validation after changes
@@ -224,3 +233,9 @@ When modifying this repository:
 ## 📄 License
 
 See LICENSE file for licensing information.
+
+### Contract ownership guardrails
+
+- HTTP route metadata is owned by the route module that registers the route; `web_route_catalog_registry.cpp` only aggregates module descriptors.
+- `/api/config/device` is modeled with method-level operations: `GET` uses `configDeviceReadback`, while `POST` uses `deviceConfigUpdate` and must flow through `device_config_authority`.
+- Companion protocol capabilities are contract-owned in `companion_proto_contract.*`; advertised caps must match parser and handler support.

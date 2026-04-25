@@ -11,27 +11,33 @@ BOOTSTRAP = ROOT / 'data' / 'contract-bootstrap.json'
 ASSET = ROOT / 'data' / 'asset-contract.json'
 WORKFLOW = ROOT / '.github' / 'workflows' / 'platformio-build.yml'
 WEB_CONTRACT_CPP = ROOT / 'src' / 'web' / 'web_contract.cpp'
+WEB_ROUTE_CATALOG_CPP = ROOT / 'src' / 'web' / 'web_route_catalog_registry.cpp'
+WEB_ROUTE_MODULE_FILES = sorted((ROOT / 'src' / 'web').glob('web_route_module_*.cpp'))
 WEB_ROUTES_API_CPP = ROOT / 'src' / 'web' / 'web_routes_api.cpp'
-APP_JS = ROOT / 'data' / 'app.js'
+APP_JS_FILES = [
+    ROOT / 'data' / 'app-core.js',
+    ROOT / 'data' / 'app-render.js',
+    ROOT / 'data' / 'app-actions.js',
+    ROOT / 'data' / 'app.js',
+]
 
 VERSION_RE = re.compile(r'static constexpr uint32_t (WEB_[A-Z_]+) = (\d+)U;')
 APPEND_ROUTE_RE = re.compile(r'append_route\(response, "([^"]+)", (WEB_ROUTE_[A-Z0-9_]+), (?:true|false)\);')
 ROUTE_CONST_RE = re.compile(r'static constexpr const char \*(WEB_ROUTE_[A-Z0-9_]+) = "([^"]+)";')
-ROUTE_SCHEMA_ENTRY_RE = re.compile(r'\{"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\}')
+ROUTE_CATALOG_ENTRY_RE = re.compile(r'\{"([^"]+)",\s*(WEB_ROUTE_[A-Z0-9_]+),\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]+)",')
 SERVER_ON_CONST_RE = re.compile(r'server\.on\((WEB_ROUTE_[A-Z0-9_]+),\s*HTTP_(GET|POST)')
 CONTRACT_ROUTE_USAGE_RE = re.compile(r'contractRoute\(\"([^\"]+)\"\)')
 
 
-def parse_route_schemas(contract_text: str) -> dict[str, dict[str, str]]:
-    marker = 'static constexpr RouteSchemaSpec kRouteSchemas[] = {'
-    start = contract_text.find(marker)
-    if start < 0:
-        return {}
-    end = contract_text.find('};', start)
-    if end < 0:
-        return {}
-    body = contract_text[start:end]
-    return {key: {'kind': kind, 'name': name} for key, kind, name in ROUTE_SCHEMA_ENTRY_RE.findall(body)}
+def parse_route_catalog_from_modules() -> list[tuple[str, str, str, str, str]]:
+    entries: list[tuple[str, str, str, str, str]] = []
+    for module_file in WEB_ROUTE_MODULE_FILES:
+        text = module_file.read_text(encoding='utf-8')
+        if 'static constexpr WebRouteCatalogEntry' not in text:
+            continue
+        for key, const, tier, producer, consumer, deprecation, default_method in ROUTE_CATALOG_ENTRY_RE.findall(text):
+            entries.append((key, const, tier, producer, default_method))
+    return entries
 
 
 checks = [
@@ -120,7 +126,7 @@ checks = [
         'web_contract_get_api_schema',
         'web_contract_get_route_api_schema',
     ], 'runtime contract publishes schema catalogs'),
-    (ROOT / 'data' / 'app.js', [
+    (ROOT / 'data' / 'app-core.js', [
         'function contractStateSchema(viewName)',
         'function contractApiSchema(name)',
         'function validateApiPayload(payload, schemaName, errorMessage)',
@@ -196,11 +202,12 @@ route_module_texts = []
 for module_path in sorted((ROOT / 'src' / 'web').glob('web_route_module_*.cpp')):
     route_module_texts.append(module_path.read_text(encoding='utf-8'))
 route_registration_text = '\n'.join([routes_api_text] + route_module_texts)
-app_js_text = APP_JS.read_text(encoding='utf-8')
+app_js_text = '\n'.join(path.read_text(encoding='utf-8') for path in APP_JS_FILES)
 header_versions = {name: int(value) for name, value in VERSION_RE.findall(header_text)}
 route_consts = {const: path for const, path in ROUTE_CONST_RE.findall(header_text)}
-contract_routes = APPEND_ROUTE_RE.findall(contract_text)
-route_schemas = parse_route_schemas(contract_text)
+route_catalog_entries = parse_route_catalog_from_modules()
+contract_routes = [(key, const) for key, const, _tier, _producer, _method in route_catalog_entries]
+route_schemas = {key: {'defaultMethod': method} for key, _const, _tier, _producer, method in route_catalog_entries}
 registered_consts = {const for const, _method in SERVER_ON_CONST_RE.findall(route_registration_text)}
 frontend_route_keys = set(CONTRACT_ROUTE_USAGE_RE.findall(app_js_text))
 
@@ -262,6 +269,31 @@ if 'stateSchemas' not in bootstrap:
 expected_validation_schema = header_versions['WEB_RELEASE_VALIDATION_SCHEMA_VERSION']
 if bootstrap.get('releaseValidation', {}).get('validationSchemaVersion') != expected_validation_schema:
     missing.append(f'[contract schema sync] releaseValidation.validationSchemaVersion expected {expected_validation_schema}')
+
+
+# Route definitions must be owned by route modules. The catalog registry may only aggregate
+# module descriptors; it must not reintroduce a second global WebRouteCatalogEntry table.
+catalog_registry_text = WEB_ROUTE_CATALOG_CPP.read_text(encoding='utf-8')
+if ('static constexpr WebRouteCatalogEntry ' + 'kRoutes[]') in catalog_registry_text:
+    missing.append('[route catalog single source] web_route_catalog_registry.cpp must not define a duplicate global kRoutes table')
+if ('static constexpr ' + 'Api' + 'SchemaSpec ' + 'k' + 'Api' + 'Schemas[]') in WEB_CONTRACT_CPP.read_text(encoding='utf-8'):
+    missing.append('[route catalog single source] web_contract.cpp must not own a duplicate legacy API schema table')
+if ('static constexpr ' + 'State' + 'SchemaEntry ' + 'k' + 'State' + 'Schema') in WEB_CONTRACT_CPP.read_text(encoding='utf-8'):
+    missing.append('[route catalog single source] web_contract.cpp must not own duplicate state schema tables')
+if 'WebApiSchemaCatalogEntry k' in contract_text or 'WebStateSchemaCatalogEntry k' in contract_text or 'WebRouteCatalogEntry k' in contract_text:
+    missing.append('[route catalog single source] web_contract.cpp must not own catalog entry arrays; modules own descriptors')
+if 'static constexpr WebRouteCatalogEntry' in catalog_registry_text:
+    missing.append('[route catalog single source] web_route_catalog_registry.cpp must stay an aggregator, not a catalog owner')
+
+config_device_schema = bootstrap.get('routeSchemas', {}).get('configDevice', {})
+config_device_ops = config_device_schema.get('operations', {})
+if set(config_device_ops.keys()) != {'GET', 'POST'}:
+    missing.append('[contract route sync] configDevice must declare distinct GET and POST operations')
+else:
+    if config_device_ops['GET'].get('name') != 'configDeviceReadback':
+        missing.append('[contract route sync] configDevice.GET must use configDeviceReadback')
+    if config_device_ops['POST'].get('name') != 'deviceConfigUpdate':
+        missing.append('[contract route sync] configDevice.POST must use deviceConfigUpdate')
 
 if missing:
     print('\n'.join(missing))

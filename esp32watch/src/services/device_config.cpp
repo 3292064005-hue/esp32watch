@@ -9,6 +9,7 @@ extern "C" {
 }
 #include "persist_preferences.h"
 #include "services/device_config_codec.h"
+#include "services/device_config_backend.h"
 
 #include "services/device_config_internal.hpp"
 
@@ -39,7 +40,7 @@ extern "C" bool device_config_get(DeviceConfigSnapshot *out)
     return true;
 }
 
-extern "C" bool device_config_apply_update(const DeviceConfigUpdate *update)
+extern "C" bool device_config_backend_apply_update(const DeviceConfigUpdate *update)
 {
     DeviceConfigSnapshot next_snapshot;
     DeviceConfigUpdate canonical_update = {};
@@ -95,13 +96,18 @@ extern "C" bool device_config_apply_update(const DeviceConfigUpdate *update)
 }
 
 
+extern "C" bool device_config_backend_restore_defaults(void)
+{
+    DeviceConfigSnapshot defaults_snapshot;
+    char default_wifi_password[DEVICE_CONFIG_WIFI_PASSWORD_MAX_LEN + 1U] = {0};
+    char default_api_token[DEVICE_CONFIG_API_TOKEN_MAX_LEN + 1U] = {0};
 
-
-
-
-
-
-
-
-
+    device_config_init();
+    seed_defaults_snapshot(&defaults_snapshot,
+                           default_wifi_password,
+                           sizeof(default_wifi_password),
+                           default_api_token,
+                           sizeof(default_api_token));
+    return persist_snapshot(defaults_snapshot, default_wifi_password, default_api_token);
+}
 

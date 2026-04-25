@@ -1,4 +1,5 @@
 #include "services/storage_facade.h"
+#include "services/storage_facade_device_config_backend.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -36,15 +37,12 @@ void storage_service_clear_sensor_calibration(void) {}
 
 void device_config_init(void) {}
 bool device_config_get(DeviceConfigSnapshot *out) { if (out == NULL) return false; *out = g_cfg; return true; }
-bool device_config_apply_update(const DeviceConfigUpdate *update) { (void)update; return true; }
-bool device_config_save_wifi(const char *ssid, const char *password) { (void)ssid; (void)password; return true; }
-bool device_config_save_network_profile(const char *timezone_posix, const char *timezone_id, float latitude, float longitude, const char *location_name) { (void)timezone_posix; (void)timezone_id; (void)latitude; (void)longitude; (void)location_name; return true; }
-bool device_config_save_api_token(const char *token) { (void)token; return true; }
+bool device_config_backend_apply_update(const DeviceConfigUpdate *update) { (void)update; return true; }
+bool device_config_backend_restore_defaults(void) { g_restore_defaults_called = true; return true; }
 bool device_config_get_wifi_password(char *out, uint32_t out_size) { if (out == NULL || out_size == 0U) return false; strncpy(out, "pw", out_size - 1U); out[out_size - 1U] = '\0'; return true; }
 bool device_config_get_api_token(char *out, uint32_t out_size) { if (out == NULL || out_size == 0U) return false; strncpy(out, "ok", out_size - 1U); out[out_size - 1U] = '\0'; return true; }
 bool device_config_has_api_token(void) { return g_has_token; }
 bool device_config_authenticate_token(const char *token) { return token != NULL && strcmp(token, "ok") == 0; }
-bool device_config_restore_defaults(void) { g_restore_defaults_called = true; return true; }
 
 const char *device_config_backend_name(void) { return "NVS_A_B"; }
 bool device_config_backend_ready(void) { return g_device_config_backend_ready; }
@@ -69,7 +67,7 @@ int main(void)
     assert(strcmp(password, "pw") == 0);
     assert(storage_facade_device_config_has_api_token());
     assert(storage_facade_authenticate_device_token("ok"));
-    assert(storage_facade_restore_device_config_defaults());
+    assert(storage_facade_device_config_backend_restore_defaults());
     assert(g_restore_defaults_called);
 
     assert(storage_facade_describe(STORAGE_OBJECT_APP_SETTINGS, &semantic));

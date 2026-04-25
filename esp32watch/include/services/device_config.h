@@ -66,36 +66,35 @@ void device_config_init(void);
 bool device_config_get(DeviceConfigSnapshot *out);
 
 /**
- * @brief Validate and atomically apply a staged configuration update.
+ * @brief Durable device configuration writes are authority-owned.
  *
- * @param[in] update Requested field updates. Fields whose set_* flag is false keep their current persisted value.
- * @return true when the entire update validated and was committed; false when validation or persistence failed.
- * @throws None.
- * @boundary_behavior Uses a versioned double-slot commit record so a failed write cannot replace the last known-good committed snapshot.
+ * All mutating callers must route through device_config_authority so that
+ * runtime reload, audit, and durability reporting stay consistent. Backend
+ * write primitives live in device_config_backend.h and are not part of the
+ * public read/authentication surface exposed here.
  */
-bool device_config_apply_update(const DeviceConfigUpdate *update);
-
 /**
- * @brief Persist Wi-Fi station credentials.
+ * @brief Compatibility wrapper for legacy Wi-Fi configuration writes.
  *
- * @param[in] ssid Station SSID. Pass an empty string to clear credentials.
- * @param[in] password Station password. Empty is allowed for open networks.
- * @return true when the configuration was validated and stored.
+ * @param[in] ssid Wi-Fi SSID to persist.
+ * @param[in] password Wi-Fi password to persist.
+ * @return true when the authority accepted and durably committed the update; false otherwise.
  * @throws None.
- * @boundary_behavior Rejects overlong fields and passwords whose length is between 1 and 7 bytes.
+ * @boundary_behavior Delegates to device_config_authority_apply_update(); new callers must use the authority API directly.
  */
 bool device_config_save_wifi(const char *ssid, const char *password);
 
 /**
- * @brief Persist time-sync and weather-sync configuration.
+ * @brief Compatibility wrapper for legacy network profile writes.
  *
- * @param[in] timezone_posix POSIX TZ string consumed by configTzTime().
- * @param[in] timezone_id IANA timezone identifier consumed by the weather provider.
- * @param[in] latitude Decimal latitude in the inclusive range [-90, 90].
- * @param[in] longitude Decimal longitude in the inclusive range [-180, 180].
- * @param[in] location_name Human-readable location label.
- * @return true when the configuration was validated and stored.
+ * @param[in] timezone_posix POSIX timezone string.
+ * @param[in] timezone_id Human-readable timezone identifier.
+ * @param[in] latitude Latitude in decimal degrees.
+ * @param[in] longitude Longitude in decimal degrees.
+ * @param[in] location_name User-facing location label.
+ * @return true when the authority accepted and durably committed the update; false otherwise.
  * @throws None.
+ * @boundary_behavior Delegates to device_config_authority_apply_update(); new callers must use the authority API directly.
  */
 bool device_config_save_network_profile(const char *timezone_posix,
                                         const char *timezone_id,
@@ -104,14 +103,23 @@ bool device_config_save_network_profile(const char *timezone_posix,
                                         const char *location_name);
 
 /**
- * @brief Persist or clear the API mutation token.
+ * @brief Compatibility wrapper for legacy API token writes.
  *
- * @param[in] token Token string. Pass an empty string to clear the token.
- * @return true when the token was validated and stored.
+ * @param[in] token Mutation token to persist.
+ * @return true when the authority accepted and durably committed the update; false otherwise.
  * @throws None.
- * @boundary_behavior Rejects tokens longer than DEVICE_CONFIG_API_TOKEN_MAX_LEN.
+ * @boundary_behavior Delegates to device_config_authority_apply_update(); new callers must use the authority API directly.
  */
 bool device_config_save_api_token(const char *token);
+
+/**
+ * @brief Compatibility wrapper for legacy device configuration restore requests.
+ *
+ * @return true when the authority restored defaults and completed follow-up runtime handling; false otherwise.
+ * @throws None.
+ * @boundary_behavior Delegates to device_config_authority_restore_defaults(); new callers must use the authority API directly.
+ */
+bool device_config_restore_defaults(void);
 
 /**
  * @brief Copy the persisted Wi-Fi station password into a caller buffer.
@@ -149,15 +157,6 @@ bool device_config_has_api_token(void);
  * @throws None.
  */
 bool device_config_authenticate_token(const char *token);
-
-/**
- * @brief Reset the device configuration to a clean, unprovisioned state.
- *
- * @return true when the reset completed; false when persistence could not commit defaults.
- * @throws None.
- * @boundary_behavior Preserves the previous committed snapshot if the new default snapshot cannot be committed.
- */
-bool device_config_restore_defaults(void);
 
 /**
  * @brief Read the monotonic committed generation of the authoritative device configuration snapshot.

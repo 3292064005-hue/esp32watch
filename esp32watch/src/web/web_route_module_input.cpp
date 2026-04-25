@@ -2,6 +2,16 @@
 #include "web/web_contract.h"
 #include "web/web_routes_api_handlers.h"
 
+namespace {
+static constexpr const char *kTrackedActionResponseFields[] = {"ok", "actionId", "requestId", "actionType", "trackPath", "queueDepth"};
+static constexpr WebRouteOperationCatalogEntry kInputKeyOps[] = {
+    {"POST", "api", "trackedActionAccepted", nullptr, 0U, kTrackedActionResponseFields, sizeof(kTrackedActionResponseFields) / sizeof(kTrackedActionResponseFields[0])},
+};
+static constexpr WebRouteCatalogEntry kInputRoutes[] = {
+    {"inputKey", WEB_ROUTE_INPUT_KEY, "control", "key_input", "rich_console", "stable", "POST", kInputKeyOps, sizeof(kInputKeyOps) / sizeof(kInputKeyOps[0])},
+};
+}
+
 void web_register_route_module_input(AsyncWebServer &server)
 {
     server.on(WEB_ROUTE_INPUT_KEY, HTTP_POST, handle_input_key_request, nullptr, capture_request_body);
@@ -9,6 +19,8 @@ void web_register_route_module_input(AsyncWebServer &server)
 
 void web_install_route_module_input(void)
 {
-    (void)web_route_module_register("input", web_register_route_module_input);
+    (void)web_route_module_register("input", web_register_route_module_input,
+                                    kInputRoutes, sizeof(kInputRoutes) / sizeof(kInputRoutes[0]),
+                                    nullptr, 0U,
+                                    nullptr, 0U);
 }
-

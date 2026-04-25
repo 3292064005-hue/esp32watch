@@ -4,6 +4,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -159,7 +160,7 @@ def main() -> int:
     forged_device_report = OUTPUT_DIR / 'forged-device-smoke-report.json'
     try:
         subprocess.run([
-            'python3', 'tools/write_host_validation_report.py',
+            sys.executable, 'tools/write_host_validation_report.py',
             '--env', ENV,
             '--output', str(host_report),
             '--runner', 'LOCAL_HOST',
@@ -171,7 +172,7 @@ def main() -> int:
             '--check', 'bundle-verify=PASS',
         ], cwd=ROOT, check=True)
         proc = subprocess.run([
-            'python3', 'tools/package_release.py',
+            sys.executable, 'tools/package_release.py',
             '--env', ENV,
             '--output-dir', str(OUTPUT_DIR),
             '--host-validation-status', 'PASS',
@@ -180,7 +181,7 @@ def main() -> int:
         ], cwd=ROOT, check=True, capture_output=True, text=True)
         assert CANDIDATE_BUNDLE.exists(), proc.stdout + proc.stderr
         subprocess.run([
-            'python3', 'tools/verify_release_bundle.py',
+            sys.executable, 'tools/verify_release_bundle.py',
             '--env', ENV,
             '--bundle', str(CANDIDATE_BUNDLE),
         ], cwd=ROOT, check=True)
@@ -190,14 +191,14 @@ def main() -> int:
                     continue
                 dst_zip.writestr(info, src_zip.read(info.filename))
         proc = subprocess.run([
-            'python3', 'tools/verify_release_bundle.py',
+            sys.executable, 'tools/verify_release_bundle.py',
             '--env', ENV,
             '--bundle', str(CORRUPT_BUNDLE),
         ], cwd=ROOT, capture_output=True, text=True)
         assert proc.returncode != 0
         forged_device_report.write_text('device smoke not executed\n', encoding='utf-8')
         proc = subprocess.run([
-            'python3', 'tools/package_release.py',
+            sys.executable, 'tools/package_release.py',
             '--env', ENV,
             '--output-dir', str(OUTPUT_DIR),
             '--host-validation-status', 'PASS',
@@ -208,7 +209,7 @@ def main() -> int:
         assert proc.returncode != 0
         write_device_report(device_report, CANDIDATE_BUNDLE, 'FAIL')
         proc = subprocess.run([
-            'python3', 'tools/promote_release_bundle.py',
+            sys.executable, 'tools/promote_release_bundle.py',
             '--env', ENV,
             '--bundle', str(CANDIDATE_BUNDLE),
             '--device-smoke-report', str(device_report),
@@ -217,7 +218,7 @@ def main() -> int:
         assert proc.returncode != 0
         write_device_report(device_report, CANDIDATE_BUNDLE, 'PASS')
         proc = subprocess.run([
-            'python3', 'tools/promote_release_bundle.py',
+            sys.executable, 'tools/promote_release_bundle.py',
             '--env', ENV,
             '--bundle', str(CANDIDATE_BUNDLE),
             '--device-smoke-report', str(device_report),
@@ -225,7 +226,7 @@ def main() -> int:
         ], cwd=ROOT, check=True, capture_output=True, text=True)
         assert VERIFIED_BUNDLE.exists(), proc.stdout + proc.stderr
         subprocess.run([
-            'python3', 'tools/verify_release_bundle.py',
+            sys.executable, 'tools/verify_release_bundle.py',
             '--env', ENV,
             '--bundle', str(VERIFIED_BUNDLE),
         ], cwd=ROOT, check=True)
@@ -238,7 +239,7 @@ def main() -> int:
                     data = (json.dumps(payload, indent=2) + '\n').encode('utf-8')
                 dst_zip.writestr(info, data)
         proc = subprocess.run([
-            'python3', 'tools/verify_release_bundle.py',
+            sys.executable, 'tools/verify_release_bundle.py',
             '--env', ENV,
             '--bundle', str(CORRUPT_BUNDLE),
         ], cwd=ROOT, capture_output=True, text=True)

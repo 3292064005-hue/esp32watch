@@ -36,7 +36,4 @@ for surface in surfaces:
         for snippet in evidence['snippets']:
             target = snippet.replace('`','') if path.suffix in {'.md','.json'} else snippet
             assert target in normalized_text, f'{surface["id"]} missing evidence snippet in {evidence["file"]}: {snippet}'
-route_schema = CONTRACT.get('routeSchemas', {}).get('stateSummary', {})
-assert 'stateSummary' in CONTRACT.get('routes', {}), 'runtime contract must expose stateSummary compatibility route'
-assert route_schema.get('kind') == 'state' and route_schema.get('name') == 'summary', 'runtime contract must bind stateSummary route to compatibility summary state schema'
 print('[OK] compatibility lifecycle registry, declared surfaces, and host coverage checks passed')

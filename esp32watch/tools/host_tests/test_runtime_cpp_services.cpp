@@ -30,7 +30,6 @@ extern "C" bool storage_facade_get_device_config(DeviceConfigSnapshot *out)
     *out = g_cfg;
     return true;
 }
-extern "C" bool storage_facade_apply_device_config_update(const DeviceConfigUpdate *) { return false; }
 extern "C" bool storage_facade_get_device_wifi_password(char *out, uint32_t out_size)
 {
     if (out == nullptr || out_size == 0U || !g_cfg_ok) {
@@ -42,7 +41,6 @@ extern "C" bool storage_facade_get_device_wifi_password(char *out, uint32_t out_
 }
 extern "C" bool storage_facade_device_config_has_api_token(void) { return false; }
 extern "C" bool storage_facade_authenticate_device_token(const char *) { return true; }
-extern "C" bool storage_facade_restore_device_config_defaults(void) { return true; }
 extern "C" uint32_t device_config_generation(void) { return g_config_generation; }
 extern "C" bool time_service_init(void) { return true; }
 extern "C" bool time_service_is_datetime_valid(const DateTime *) { return true; }

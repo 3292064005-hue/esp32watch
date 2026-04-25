@@ -1,1 +1,2 @@
-PyYAML>=6.0,<7.0
+# Host validation is intentionally stdlib-only.
+# Keep this file for CI compatibility; add dependencies here only when a host test truly requires them.

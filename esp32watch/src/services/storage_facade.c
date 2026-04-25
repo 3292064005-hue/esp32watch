@@ -1,4 +1,6 @@
 #include "services/storage_facade.h"
+#include "services/device_config_backend.h"
+#include "services/storage_facade_device_config_backend.h"
 #include <string.h>
 
 static void copy_text(char *dst, size_t dst_size, const char *src)
@@ -125,10 +127,10 @@ bool storage_facade_get_device_api_token(char *out, uint32_t out_size)
     return device_config_get_api_token(out, out_size);
 }
 
-bool storage_facade_apply_device_config_update(const DeviceConfigUpdate *update)
+bool storage_facade_device_config_backend_apply_update(const DeviceConfigUpdate *update)
 {
     storage_facade_ensure_device_config_ready();
-    return device_config_apply_update(update);
+    return device_config_backend_apply_update(update);
 }
 
 bool storage_facade_device_config_has_api_token(void)
@@ -143,10 +145,10 @@ bool storage_facade_authenticate_device_token(const char *token)
     return device_config_authenticate_token(token);
 }
 
-bool storage_facade_restore_device_config_defaults(void)
+bool storage_facade_device_config_backend_restore_defaults(void)
 {
     storage_facade_ensure_device_config_ready();
-    return device_config_restore_defaults();
+    return device_config_backend_restore_defaults();
 }
 
 bool storage_facade_get_runtime_snapshot(StorageFacadeRuntimeSnapshot *out)

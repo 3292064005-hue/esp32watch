@@ -36,7 +36,7 @@ jobs:
         env:
           SKIP_PIO: "1"
           PIO_TIMEOUT_SEC: 1200
-        run: ./tools/host_sanity_check.sh
+        run: bash ./tools/host_sanity_check.sh
 
   build-firmware:
     runs-on: ubuntu-latest
@@ -57,7 +57,7 @@ jobs:
       - name: Verify partition contract
         run: python3 tools/verify_partition_contract.py
       - name: Build firmware + LittleFS + candidate bundle
-        run: ./tools/verify_platformio_build.sh ${{ matrix.env }}
+        run: bash ./tools/verify_platformio_build.sh ${{ matrix.env }}
       - name: Upload candidate artifacts
         uses: actions/upload-artifact@v4
         with:

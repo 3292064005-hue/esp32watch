@@ -1,4 +1,5 @@
 #include "companion_proto_internal.h"
+#include "companion_proto_contract.h"
 #include "model.h"
 #include "services/diag_service.h"
 #include "services/sensor_service.h"
@@ -516,6 +517,7 @@ size_t companion_proto_format_proto(char *out, size_t out_size)
 {
     return companion_proto_write_response(out,
                                           out_size,
-                                          "OK proto=%u caps=info,settings,diag,faults,sensor,activity,storage,clock,perf,safeclr,sensorreinit,sensorfsm",
-                                          (unsigned)COMPANION_PROTO_VERSION);
+                                          "OK proto=%u caps=%s",
+                                          (unsigned)companion_proto_contract_version(),
+                                          companion_proto_contract_caps_csv());
 }

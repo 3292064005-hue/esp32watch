@@ -1,17 +1,22 @@
 {
-  "runtimeContractVersion": 13,
-  "apiVersion": 19,
+  "runtimeContractVersion": 15,
+  "apiVersion": 20,
   "stateVersion": 13,
   "commandCatalogVersion": 4,
-  "assetContractVersion": 13,
+  "assetContractVersion": 15,
   "routes": {
-    "contract": "/api/contract",
     "health": "/api/health",
+    "contract": "/api/contract",
     "meta": "/api/meta",
+    "storageSemantics": "/api/storage/semantics",
     "actionsCatalog": "/api/actions/catalog",
     "actionsLatest": "/api/actions/latest",
     "actionsStatus": "/api/actions/status",
-    "stateSummary": "/api/state/summary",
+    "command": "/api/command",
+    "configDevice": "/api/config/device",
+    "resetAppState": "/api/reset/app-state",
+    "resetDeviceConfig": "/api/reset/device-config",
+    "resetFactory": "/api/reset/factory",
     "stateDetail": "/api/state/detail",
     "statePerf": "/api/state/perf",
     "stateRaw": "/api/state/raw",
@@ -19,33 +24,15 @@
     "displayFrame": "/api/display/frame",
     "displayOverlay": "/api/display/overlay",
     "displayOverlayClear": "/api/display/overlay/clear",
-    "configDevice": "/api/config/device",
-    "inputKey": "/api/input/key",
-    "command": "/api/command",
-    "resetAppState": "/api/reset/app-state",
-    "resetDeviceConfig": "/api/reset/device-config",
-    "resetFactory": "/api/reset/factory",
-    "storageSemantics": "/api/storage/semantics"
+    "inputKey": "/api/input/key"
   },
   "routeSchemas": {
-    "contract": {
-      "kind": "api",
-      "name": "contractDocument",
-      "tier": "tooling",
-      "producerOwner": "web_contract",
-      "consumerOwner": "rich_console",
-      "deprecationPolicy": "schema-versioned",
-      "requestFields": [],
-      "responseFields": [
-        "ok",
-        "contract"
-      ]
-    },
     "health": {
       "kind": "api",
       "name": "health",
-      "tier": "control",
-      "producerOwner": "web_server",
+      "defaultMethod": "GET",
+      "tier": "diagnostic",
+      "producerOwner": "web_health",
       "consumerOwner": "rich_console",
       "deprecationPolicy": "stable",
       "requestFields": [],
@@ -59,13 +46,57 @@
         "timeConfidence",
         "filesystemReady",
         "assetContractReady"
-      ]
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "health",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "wifiConnected",
+            "ip",
+            "uptimeMs",
+            "timeAuthority",
+            "timeSource",
+            "timeConfidence",
+            "filesystemReady",
+            "assetContractReady"
+          ]
+        }
+      }
+    },
+    "contract": {
+      "kind": "api",
+      "name": "contractDocument",
+      "defaultMethod": "GET",
+      "tier": "tooling",
+      "producerOwner": "web_contract",
+      "consumerOwner": "rich_console",
+      "deprecationPolicy": "stable",
+      "requestFields": [],
+      "responseFields": [
+        "ok",
+        "contract"
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "contractDocument",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "contract"
+          ]
+        }
+      }
     },
     "meta": {
       "kind": "api",
       "name": "meta",
-      "tier": "control",
-      "producerOwner": "web_routes_api",
+      "defaultMethod": "GET",
+      "tier": "diagnostic",
+      "producerOwner": "system_runtime_service_init",
       "consumerOwner": "rich_console",
       "deprecationPolicy": "stable",
       "requestFields": [],
@@ -77,11 +108,140 @@
         "timeAuthority",
         "timeSource",
         "timeConfidence"
-      ]
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "meta",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "apiVersion",
+            "stateVersion",
+            "storageSchemaVersion",
+            "timeAuthority",
+            "timeSource",
+            "timeConfidence"
+          ]
+        }
+      }
+    },
+    "storageSemantics": {
+      "kind": "api",
+      "name": "storageSemantics",
+      "defaultMethod": "GET",
+      "tier": "diagnostic",
+      "producerOwner": "storage_semantics",
+      "consumerOwner": "rich_console",
+      "deprecationPolicy": "stable",
+      "requestFields": [],
+      "responseFields": [
+        "ok",
+        "apiVersion",
+        "objects",
+        "backendCapabilities"
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "storageSemantics",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "apiVersion",
+            "objects",
+            "backendCapabilities"
+          ]
+        }
+      }
     },
     "actionsCatalog": {
       "kind": "api",
       "name": "actionsCatalog",
+      "defaultMethod": "GET",
+      "tier": "control",
+      "producerOwner": "app_command_catalog",
+      "consumerOwner": "rich_console",
+      "deprecationPolicy": "stable",
+      "requestFields": [],
+      "responseFields": [
+        "ok",
+        "commands"
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "actionsCatalog",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "commands"
+          ]
+        }
+      }
+    },
+    "actionsLatest": {
+      "kind": "api",
+      "name": "actionsStatus",
+      "defaultMethod": "GET",
+      "tier": "control",
+      "producerOwner": "web_action_queue",
+      "consumerOwner": "rich_console",
+      "deprecationPolicy": "stable",
+      "requestFields": [],
+      "responseFields": [
+        "ok",
+        "id",
+        "status",
+        "type"
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "actionsStatus",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "id",
+            "status",
+            "type"
+          ]
+        }
+      }
+    },
+    "actionsStatus": {
+      "kind": "api",
+      "name": "actionsStatus",
+      "defaultMethod": "GET",
+      "tier": "control",
+      "producerOwner": "web_action_queue",
+      "consumerOwner": "rich_console",
+      "deprecationPolicy": "stable",
+      "requestFields": [],
+      "responseFields": [
+        "ok",
+        "id",
+        "status",
+        "type"
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "actionsStatus",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "id",
+            "status",
+            "type"
+          ]
+        }
+      }
+    },
+    "command": {
+      "kind": "api",
+      "name": "trackedActionAccepted",
+      "defaultMethod": "POST",
       "tier": "control",
       "producerOwner": "app_command",
       "consumerOwner": "rich_console",
@@ -89,57 +249,166 @@
       "requestFields": [],
       "responseFields": [
         "ok",
-        "commands"
-      ]
+        "actionId",
+        "requestId",
+        "actionType",
+        "trackPath",
+        "queueDepth"
+      ],
+      "operations": {
+        "POST": {
+          "kind": "api",
+          "name": "trackedActionAccepted",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "actionId",
+            "requestId",
+            "actionType",
+            "trackPath",
+            "queueDepth"
+          ]
+        }
+      }
     },
-    "actionsLatest": {
+    "configDevice": {
       "kind": "api",
-      "name": "actionsStatus",
-      "tier": "console",
-      "producerOwner": "web_action_queue",
-      "consumerOwner": "rich_console",
-      "deprecationPolicy": "stable",
-      "requestFields": [],
-      "responseFields": [
-        "ok",
-        "id",
-        "status",
-        "type"
-      ]
-    },
-    "actionsStatus": {
-      "kind": "api",
-      "name": "actionsStatus",
+      "name": "configDeviceReadback",
+      "defaultMethod": "GET",
       "tier": "control",
-      "producerOwner": "web_action_queue",
+      "producerOwner": "device_config_authority",
       "consumerOwner": "rich_console",
       "deprecationPolicy": "stable",
       "requestFields": [],
       "responseFields": [
         "ok",
-        "id",
-        "status",
-        "type"
-      ]
+        "config"
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "configDeviceReadback",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "config"
+          ]
+        },
+        "POST": {
+          "kind": "api",
+          "name": "deviceConfigUpdate",
+          "requestFields": [
+            "ssid",
+            "password",
+            "timezonePosix",
+            "timezoneId",
+            "latitude",
+            "longitude",
+            "locationName",
+            "apiToken",
+            "runtimeReloadDomains"
+          ],
+          "responseFields": [
+            "ok",
+            "wifiSaved",
+            "networkSaved",
+            "tokenSaved",
+            "runtimeReload"
+          ]
+        }
+      }
     },
-    "stateSummary": {
-      "kind": "state",
-      "name": "summary",
-      "tier": "compatibility",
-      "producerOwner": "web_state_bridge",
-      "consumerOwner": "legacy_clients",
-      "deprecationPolicy": "replace-with-stateAggregate",
+    "resetAppState": {
+      "kind": "api",
+      "name": "resetActionResponse",
+      "defaultMethod": "POST",
+      "tier": "control",
+      "producerOwner": "reset_service",
+      "consumerOwner": "rich_console",
+      "deprecationPolicy": "stable",
       "requestFields": [],
       "responseFields": [
         "ok",
-        "apiVersion",
-        "stateVersion",
-        "stateRevision"
-      ]
+        "message",
+        "resetKind",
+        "runtimeReload"
+      ],
+      "operations": {
+        "POST": {
+          "kind": "api",
+          "name": "resetActionResponse",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "message",
+            "resetKind",
+            "runtimeReload"
+          ]
+        }
+      }
+    },
+    "resetDeviceConfig": {
+      "kind": "api",
+      "name": "resetActionResponse",
+      "defaultMethod": "POST",
+      "tier": "control",
+      "producerOwner": "reset_service",
+      "consumerOwner": "rich_console",
+      "deprecationPolicy": "stable",
+      "requestFields": [],
+      "responseFields": [
+        "ok",
+        "message",
+        "resetKind",
+        "runtimeReload"
+      ],
+      "operations": {
+        "POST": {
+          "kind": "api",
+          "name": "resetActionResponse",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "message",
+            "resetKind",
+            "runtimeReload"
+          ]
+        }
+      }
+    },
+    "resetFactory": {
+      "kind": "api",
+      "name": "resetActionResponse",
+      "defaultMethod": "POST",
+      "tier": "control",
+      "producerOwner": "reset_service",
+      "consumerOwner": "rich_console",
+      "deprecationPolicy": "stable",
+      "requestFields": [],
+      "responseFields": [
+        "ok",
+        "message",
+        "resetKind",
+        "runtimeReload"
+      ],
+      "operations": {
+        "POST": {
+          "kind": "api",
+          "name": "resetActionResponse",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "message",
+            "resetKind",
+            "runtimeReload"
+          ]
+        }
+      }
     },
     "stateDetail": {
       "kind": "state",
       "name": "detail",
+      "defaultMethod": "GET",
       "tier": "diagnostic",
       "producerOwner": "web_state_bridge",
       "consumerOwner": "rich_console",
@@ -150,13 +419,27 @@
         "apiVersion",
         "stateVersion",
         "stateRevision"
-      ]
+      ],
+      "operations": {
+        "GET": {
+          "kind": "state",
+          "name": "detail",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "apiVersion",
+            "stateVersion",
+            "stateRevision"
+          ]
+        }
+      }
     },
     "statePerf": {
       "kind": "state",
       "name": "perf",
+      "defaultMethod": "GET",
       "tier": "diagnostic",
-      "producerOwner": "web_state_bridge",
+      "producerOwner": "watch_app_runtime",
       "consumerOwner": "rich_console",
       "deprecationPolicy": "stable",
       "requestFields": [],
@@ -165,26 +448,54 @@
         "apiVersion",
         "stateVersion",
         "stateRevision"
-      ]
+      ],
+      "operations": {
+        "GET": {
+          "kind": "state",
+          "name": "perf",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "apiVersion",
+            "stateVersion",
+            "stateRevision"
+          ]
+        }
+      }
     },
     "stateRaw": {
       "kind": "state",
       "name": "raw",
-      "tier": "tooling",
-      "producerOwner": "web_state_bridge",
-      "consumerOwner": "internal_tools",
-      "deprecationPolicy": "no-external-dependents",
+      "defaultMethod": "GET",
+      "tier": "internal",
+      "producerOwner": "system_startup_report",
+      "consumerOwner": "tooling",
+      "deprecationPolicy": "stable",
       "requestFields": [],
       "responseFields": [
         "ok",
         "apiVersion",
         "stateVersion",
         "stateRevision"
-      ]
+      ],
+      "operations": {
+        "GET": {
+          "kind": "state",
+          "name": "raw",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "apiVersion",
+            "stateVersion",
+            "stateRevision"
+          ]
+        }
+      }
     },
     "stateAggregate": {
       "kind": "state",
       "name": "aggregate",
+      "defaultMethod": "GET",
       "tier": "control",
       "producerOwner": "web_state_bridge",
       "consumerOwner": "rich_console",
@@ -195,12 +506,26 @@
         "apiVersion",
         "stateVersion",
         "stateRevision"
-      ]
+      ],
+      "operations": {
+        "GET": {
+          "kind": "state",
+          "name": "aggregate",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "apiVersion",
+            "stateVersion",
+            "stateRevision"
+          ]
+        }
+      }
     },
     "displayFrame": {
       "kind": "api",
       "name": "displayFrame",
-      "tier": "diagnostic",
+      "defaultMethod": "GET",
+      "tier": "console",
       "producerOwner": "display_service",
       "consumerOwner": "rich_console",
       "deprecationPolicy": "stable",
@@ -211,11 +536,26 @@
         "height",
         "presentCount",
         "bufferHex"
-      ]
+      ],
+      "operations": {
+        "GET": {
+          "kind": "api",
+          "name": "displayFrame",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "width",
+            "height",
+            "presentCount",
+            "bufferHex"
+          ]
+        }
+      }
     },
     "displayOverlay": {
       "kind": "api",
       "name": "trackedActionAccepted",
+      "defaultMethod": "POST",
       "tier": "control",
       "producerOwner": "web_overlay",
       "consumerOwner": "rich_console",
@@ -228,11 +568,27 @@
         "actionType",
         "trackPath",
         "queueDepth"
-      ]
+      ],
+      "operations": {
+        "POST": {
+          "kind": "api",
+          "name": "trackedActionAccepted",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "actionId",
+            "requestId",
+            "actionType",
+            "trackPath",
+            "queueDepth"
+          ]
+        }
+      }
     },
     "displayOverlayClear": {
       "kind": "api",
       "name": "trackedActionAccepted",
+      "defaultMethod": "POST",
       "tier": "control",
       "producerOwner": "web_overlay",
       "consumerOwner": "rich_console",
@@ -245,56 +601,27 @@
         "actionType",
         "trackPath",
         "queueDepth"
-      ]
-    },
-    "configDevice": {
-      "kind": "api",
-      "name": "configDeviceReadback",
-      "tier": "control",
-      "producerOwner": "device_config_authority",
-      "consumerOwner": "rich_console",
-      "deprecationPolicy": "stable",
-      "requestFields": [
-        "ssid",
-        "password",
-        "timezonePosix",
-        "timezoneId",
-        "latitude",
-        "longitude",
-        "locationName",
-        "apiToken",
-        "runtimeReloadDomains"
       ],
-      "responseFields": [
-        "ok",
-        "runtimeReload",
-        "runtimeReload.runtimeReloadRequested",
-        "runtimeReload.runtimeReloadPreflightOk",
-        "runtimeReload.runtimeReloadApplyAttempted",
-        "runtimeReload.runtimeReloaded",
-        "runtimeReload.runtimeReloadEventDispatchOk",
-        "runtimeReload.runtimeReloadAuthoritativePath",
-        "runtimeReload.runtimeReloadVerifyOk",
-        "runtimeReload.runtimeReloadPartialSuccess",
-        "runtimeReload.runtimeHandlerCount",
-        "runtimeReload.runtimeMatchedHandlerCount",
-        "runtimeReload.runtimeHandlerSuccessCount",
-        "runtimeReload.runtimeHandlerFailureCount",
-        "runtimeReload.runtimeHandlerCriticalFailureCount",
-        "runtimeReload.runtimeReloadConfigGeneration",
-        "runtimeReload.runtimeReloadDomainResultCount",
-        "runtimeReload.runtimeReloadSupportedDomains",
-        "runtimeReload.runtimeReloadImpactDomains",
-        "runtimeReload.runtimeReloadAppliedDomains",
-        "runtimeReload.runtimeReloadFailedDomains",
-        "runtimeReload.runtimeReloadDomainResults",
-        "runtimeReload.runtimeReloadFailurePhase",
-        "runtimeReload.runtimeReloadFailureCode"
-      ]
+      "operations": {
+        "POST": {
+          "kind": "api",
+          "name": "trackedActionAccepted",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "actionId",
+            "requestId",
+            "actionType",
+            "trackPath",
+            "queueDepth"
+          ]
+        }
+      }
     },
     "inputKey": {
       "kind": "api",
       "name": "trackedActionAccepted",
+      "defaultMethod": "POST",
       "tier": "control",
       "producerOwner": "key_input",
       "consumerOwner": "rich_console",
@@ -307,107 +634,25 @@
         "actionType",
         "trackPath",
         "queueDepth"
-      ]
-    },
-    "command": {
-      "kind": "api",
-      "name": "trackedActionAccepted",
-      "tier": "control",
-      "producerOwner": "app_command",
-      "consumerOwner": "rich_console",
-      "deprecationPolicy": "stable",
-      "requestFields": [],
-      "responseFields": [
-        "ok",
-        "actionId",
-        "requestId",
-        "actionType",
-        "trackPath",
-        "queueDepth"
-      ]
-    },
-    "resetAppState": {
-      "kind": "api",
-      "name": "resetActionResponse",
-      "tier": "control",
-      "producerOwner": "reset_service",
-      "consumerOwner": "rich_console",
-      "deprecationPolicy": "stable",
-      "requestFields": [],
-      "responseFields": [
-        "ok",
-        "message",
-        "resetKind",
-        "runtimeReload"
-      ]
-    },
-    "resetDeviceConfig": {
-      "kind": "api",
-      "name": "resetActionResponse",
-      "tier": "control",
-      "producerOwner": "reset_service",
-      "consumerOwner": "rich_console",
-      "deprecationPolicy": "stable",
-      "requestFields": [],
-      "responseFields": [
-        "ok",
-        "message",
-        "resetKind",
-        "runtimeReload"
-      ]
-    },
-    "resetFactory": {
-      "kind": "api",
-      "name": "resetActionResponse",
-      "tier": "control",
-      "producerOwner": "reset_service",
-      "consumerOwner": "rich_console",
-      "deprecationPolicy": "stable",
-      "requestFields": [],
-      "responseFields": [
-        "ok",
-        "message",
-        "resetKind",
-        "runtimeReload"
-      ]
-    },
-    "storageSemantics": {
-      "kind": "api",
-      "name": "storageSemantics",
-      "tier": "diagnostic",
-      "producerOwner": "storage_semantics",
-      "consumerOwner": "rich_console",
-      "deprecationPolicy": "stable",
-      "requestFields": [],
-      "responseFields": [
-        "ok",
-        "apiVersion",
-        "objects",
-        "backendCapabilities"
-      ]
+      ],
+      "operations": {
+        "POST": {
+          "kind": "api",
+          "name": "trackedActionAccepted",
+          "requestFields": [],
+          "responseFields": [
+            "ok",
+            "actionId",
+            "requestId",
+            "actionType",
+            "trackPath",
+            "queueDepth"
+          ]
+        }
+      }
     }
   },
   "stateSchemas": {
-    "summary": [
-      {
-        "section": "wifi",
-        "flags": []
-      },
-      {
-        "section": "system",
-        "flags": []
-      },
-      {
-        "section": "summary",
-        "flags": [
-          "WEB_STATE_SECTION_FLAG_SUMMARY_INCLUDE_NETWORK_LABEL"
-        ]
-      },
-      {
-        "section": "weather",
-        "flags": []
-      }
-    ],
     "detail": [
       {
         "section": "activity",
@@ -570,11 +815,11 @@
     ]
   },
   "releaseValidation": {
-    "candidateBundleKind": "candidate",
-    "verifiedBundleKind": "verified",
+    "candidateBundleKind": "CANDIDATE_RELEASE_BUNDLE",
+    "verifiedBundleKind": "VERIFIED_RELEASE_BUNDLE",
     "hostReportType": "HOST_VALIDATION_REPORT",
     "deviceReportType": "DEVICE_SMOKE_REPORT",
-    "validationSchemaVersion": 7
+    "validationSchemaVersion": 8
   },
   "apiSchemas": {
     "health": {
@@ -617,17 +862,39 @@
         "releaseValidation"
       ]
     },
-    "displayFrame": {
+    "contractDocument": {
       "type": "object",
       "required": [
         "ok",
-        "width",
-        "height",
-        "presentCount",
-        "bufferHex"
+        "contract"
       ],
       "sections": [
-        "displayFrame"
+        "contract"
+      ]
+    },
+    "storageSemantics": {
+      "type": "object",
+      "required": [
+        "ok",
+        "apiVersion",
+        "objects",
+        "backendCapabilities"
+      ],
+      "sections": [
+        "storageSemantics"
+      ]
+    },
+    "releaseValidation": {
+      "type": "object",
+      "required": [
+        "candidateBundleKind",
+        "verifiedBundleKind",
+        "hostReportType",
+        "deviceReportType",
+        "validationSchemaVersion"
+      ],
+      "sections": [
+        "releaseValidation"
       ]
     },
     "trackedActionAccepted": {
@@ -664,41 +931,6 @@
       ],
       "sections": [
         "commandCatalog"
-      ]
-    },
-    "resetActionResponse": {
-      "type": "object",
-      "required": [
-        "ok",
-        "message",
-        "resetKind",
-        "runtimeReload",
-        "runtimeReload.runtimeReloadRequested",
-        "runtimeReload.runtimeReloadPreflightOk",
-        "runtimeReload.runtimeReloadApplyAttempted",
-        "runtimeReload.runtimeReloaded",
-        "runtimeReload.runtimeReloadEventDispatchOk",
-        "runtimeReload.runtimeReloadAuthoritativePath",
-        "runtimeReload.runtimeReloadVerifyOk",
-        "runtimeReload.runtimeReloadPartialSuccess",
-        "runtimeReload.runtimeHandlerCount",
-        "runtimeReload.runtimeMatchedHandlerCount",
-        "runtimeReload.runtimeHandlerSuccessCount",
-        "runtimeReload.runtimeHandlerFailureCount",
-        "runtimeReload.runtimeHandlerCriticalFailureCount",
-        "runtimeReload.runtimeReloadConfigGeneration",
-        "runtimeReload.runtimeReloadDomainResultCount",
-        "runtimeReload.runtimeReloadSupportedDomains",
-        "runtimeReload.runtimeReloadImpactDomains",
-        "runtimeReload.runtimeReloadAppliedDomains",
-        "runtimeReload.runtimeReloadFailedDomains",
-        "runtimeReload.runtimeReloadDomainResults",
-        "runtimeReload.runtimeReloadFailurePhase",
-        "runtimeReload.runtimeReloadFailureCode"
-      ],
-      "sections": [
-        "resetAction",
-        "runtimeReload"
       ]
     },
     "deviceConfigUpdate": {
@@ -745,39 +977,52 @@
         "capabilities"
       ]
     },
-    "contractDocument": {
+    "resetActionResponse": {
       "type": "object",
       "required": [
         "ok",
-        "contract"
+        "message",
+        "resetKind",
+        "runtimeReload",
+        "runtimeReload.runtimeReloadRequested",
+        "runtimeReload.runtimeReloadPreflightOk",
+        "runtimeReload.runtimeReloadApplyAttempted",
+        "runtimeReload.runtimeReloaded",
+        "runtimeReload.runtimeReloadEventDispatchOk",
+        "runtimeReload.runtimeReloadAuthoritativePath",
+        "runtimeReload.runtimeReloadVerifyOk",
+        "runtimeReload.runtimeReloadPartialSuccess",
+        "runtimeReload.runtimeHandlerCount",
+        "runtimeReload.runtimeMatchedHandlerCount",
+        "runtimeReload.runtimeHandlerSuccessCount",
+        "runtimeReload.runtimeHandlerFailureCount",
+        "runtimeReload.runtimeHandlerCriticalFailureCount",
+        "runtimeReload.runtimeReloadConfigGeneration",
+        "runtimeReload.runtimeReloadDomainResultCount",
+        "runtimeReload.runtimeReloadSupportedDomains",
+        "runtimeReload.runtimeReloadImpactDomains",
+        "runtimeReload.runtimeReloadAppliedDomains",
+        "runtimeReload.runtimeReloadFailedDomains",
+        "runtimeReload.runtimeReloadDomainResults",
+        "runtimeReload.runtimeReloadFailurePhase",
+        "runtimeReload.runtimeReloadFailureCode"
       ],
       "sections": [
-        "contract"
+        "resetAction",
+        "runtimeReload"
       ]
     },
-    "storageSemantics": {
+    "displayFrame": {
       "type": "object",
       "required": [
         "ok",
-        "apiVersion",
-        "objects",
-        "backendCapabilities"
+        "width",
+        "height",
+        "presentCount",
+        "bufferHex"
       ],
       "sections": [
-        "storageSemantics"
-      ]
-    },
-    "releaseValidation": {
-      "type": "object",
-      "required": [
-        "candidateBundleKind",
-        "verifiedBundleKind",
-        "hostReportType",
-        "deviceReportType",
-        "validationSchemaVersion"
-      ],
-      "sections": [
-        "releaseValidation"
+        "displayFrame"
       ]
     }
   }

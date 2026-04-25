@@ -59,3 +59,14 @@ Ordinary configuration writes now also fan out into the runtime reload registry 
 - API token changes naturally request `AUTH` and `COMPANION` follow-up domains.
 
 `runtimeReloadDomains` remains additive: it can request extra follow-up domains, but the default configuration path no longer relies on it to reach non-Wi-Fi / non-Network runtime consumers.
+
+## Route catalog single-source rule
+
+Route metadata is owned by the route module that registers the route. `web_route_catalog_registry.cpp` is an aggregator over module descriptors and must not define a second global route table. The runtime contract emits `routes`, `routeSchemas`, `stateSchemas`, and `apiSchemas` from those module descriptors.
+
+Routes with multiple HTTP methods must declare method-level operations. `/api/config/device` is intentionally modeled as one path with two operations:
+
+- `GET /api/config/device` uses `configDeviceReadback` and returns the current device configuration readback surface.
+- `POST /api/config/device` uses `deviceConfigUpdate` and is the only mutation operation; durable writes still flow through `device_config_authority`.
+
+Consumers may continue to read the top-level `routeSchemas.<routeKey>.name` as the default operation schema, but validation tooling must inspect `routeSchemas.<routeKey>.operations` when a route supports multiple methods.

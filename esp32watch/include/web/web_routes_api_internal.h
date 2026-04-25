@@ -12,7 +12,6 @@ void web_send_latest_action_response(AsyncWebServerRequest *request);
 void web_send_action_status_response(AsyncWebServerRequest *request);
 void web_send_device_config_response(AsyncWebServerRequest *request);
 void web_handle_config_device_post_common(AsyncWebServerRequest *request);
-void web_send_state_summary_response(AsyncWebServerRequest *request);
 void web_send_state_detail_response(AsyncWebServerRequest *request);
 void web_send_state_perf_response(AsyncWebServerRequest *request);
 void web_send_state_raw_response(AsyncWebServerRequest *request);

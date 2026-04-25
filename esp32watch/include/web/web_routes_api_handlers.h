@@ -12,7 +12,6 @@ void handle_actions_latest_request(AsyncWebServerRequest *request);
 void handle_actions_status_request(AsyncWebServerRequest *request);
 void handle_config_device_get_request(AsyncWebServerRequest *request);
 void handle_config_device_post_request(AsyncWebServerRequest *request);
-void handle_state_summary_request(AsyncWebServerRequest *request);
 void handle_state_detail_request(AsyncWebServerRequest *request);
 void handle_state_perf_request(AsyncWebServerRequest *request);
 void handle_state_raw_request(AsyncWebServerRequest *request);

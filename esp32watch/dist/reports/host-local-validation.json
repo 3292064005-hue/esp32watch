@@ -1,0 +1,23 @@
+{
+  "reportType": "HOST_LOCAL_VALIDATION_REPORT",
+  "startedAtUtc": "2026-04-25T03:29:32Z",
+  "finishedAtUtc": "2026-04-25T03:35:47Z",
+  "result": "PASS",
+  "entrypoint": "tools/host_validate_local.sh",
+  "hostToolTimeoutSec": 300,
+  "hostCompileTimeoutSec": 600,
+  "checks": [
+    "host Python dependency check",
+    "asset-contract generation",
+    "runtime contract parity",
+    "workflow contract guard",
+    "web runtime smoke",
+    "host C/C++ syntax checks",
+    "authority boundary scan",
+    "reload-event manifest alignment",
+    "reload-event manifest executable test",
+    "companion protocol contract executable test",
+    "host behavior checks",
+    "optional PlatformIO build validation when pio is installed"
+  ]
+}

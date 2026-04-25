@@ -151,15 +151,6 @@ bool storage_facade_get_device_wifi_password(char *out, uint32_t out_size);
 bool storage_facade_get_device_api_token(char *out, uint32_t out_size);
 
 /**
- * @brief Apply a staged durable device configuration update through the storage facade.
- *
- * @param[in] update Requested configuration update.
- * @return true when the update validated and committed successfully.
- * @throws None.
- */
-bool storage_facade_apply_device_config_update(const DeviceConfigUpdate *update);
-
-/**
  * @brief Report whether durable control-plane authentication is configured.
  *
  * @return true when a mutation token exists.
@@ -175,14 +166,6 @@ bool storage_facade_device_config_has_api_token(void);
  * @throws None.
  */
 bool storage_facade_authenticate_device_token(const char *token);
-
-/**
- * @brief Reset durable device configuration ownership to defaults through the storage facade.
- *
- * @return true when defaults were committed.
- * @throws None.
- */
-bool storage_facade_restore_device_config_defaults(void);
 
 /**
  * @brief Collect storage runtime metadata, backend labels, and durability guarantees through the facade.

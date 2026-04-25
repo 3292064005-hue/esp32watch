@@ -154,9 +154,9 @@ gcc -std=c11 -Iinclude -Isrc \
   --step ABOUT:48 \
   --output /tmp/esp32watch_host_tests/host_runtime_simulator.json
 python3 tools/host_tests/test_host_runtime_simulator.py /tmp/esp32watch_host_tests/host_runtime_simulator.json
-./tools/run_host_simulator_matrix.sh baseline
-./tools/run_host_simulator_matrix.sh reset-flow
-./tools/run_host_simulator_matrix.sh storage-focus
+bash ./tools/run_host_simulator_matrix.sh baseline
+bash ./tools/run_host_simulator_matrix.sh reset-flow
+bash ./tools/run_host_simulator_matrix.sh storage-focus
 
 gcc -std=c11 -Iinclude -Isrc \
   tools/host_tests/test_ui_app_catalog.c \
@@ -234,7 +234,7 @@ gcc -std=c11 -Iinclude -Isrc \
   -o /tmp/esp32watch_host_tests/model_alarm_time_integration_test
 /tmp/esp32watch_host_tests/model_alarm_time_integration_test
 
-./tools/run_host_board_profile_matrix.sh
+bash ./tools/run_host_board_profile_matrix.sh
 
 gcc -std=c11 -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude -Isrc \
   tools/host_tests/test_command_catalog_compatibility.c \
