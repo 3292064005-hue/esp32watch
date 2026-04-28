@@ -1,10 +1,29 @@
 #include "web/web_route_module_registry.h"
 #include "web/web_contract.h"
 #include "web/web_routes_api_handlers.h"
+#include "web/web_runtime_reload_contract.h"
 
 namespace {
+void handle_reset_app_state_route_request_releasing_body(AsyncWebServerRequest *request)
+{
+    handle_reset_app_state_route_request(request);
+    release_request_body(request);
+}
+
+void handle_reset_device_config_route_request_releasing_body(AsyncWebServerRequest *request)
+{
+    handle_reset_device_config_route_request(request);
+    release_request_body(request);
+}
+
+void handle_reset_factory_route_request_releasing_body(AsyncWebServerRequest *request)
+{
+    handle_reset_factory_route_request(request);
+    release_request_body(request);
+}
+
 static constexpr const char *kResetResponseFields[] = {"ok", "message", "resetKind", "runtimeReload"};
-static constexpr const char *kResetActionRequired[] = {"ok", "message", "resetKind", "runtimeReload", "runtimeReload.runtimeReloadRequested", "runtimeReload.runtimeReloadPreflightOk", "runtimeReload.runtimeReloadApplyAttempted", "runtimeReload.runtimeReloaded", "runtimeReload.runtimeReloadEventDispatchOk", "runtimeReload.runtimeReloadAuthoritativePath", "runtimeReload.runtimeReloadVerifyOk", "runtimeReload.runtimeReloadPartialSuccess", "runtimeReload.runtimeHandlerCount", "runtimeReload.runtimeMatchedHandlerCount", "runtimeReload.runtimeHandlerSuccessCount", "runtimeReload.runtimeHandlerFailureCount", "runtimeReload.runtimeHandlerCriticalFailureCount", "runtimeReload.runtimeReloadConfigGeneration", "runtimeReload.runtimeReloadDomainResultCount", "runtimeReload.runtimeReloadSupportedDomains", "runtimeReload.runtimeReloadImpactDomains", "runtimeReload.runtimeReloadAppliedDomains", "runtimeReload.runtimeReloadFailedDomains", "runtimeReload.runtimeReloadDomainResults", "runtimeReload.runtimeReloadFailurePhase", "runtimeReload.runtimeReloadFailureCode"};
+static constexpr const char *kResetActionRequired[] = {"ok", "message", "resetKind", "runtimeReload", WEB_RUNTIME_RELOAD_REQUIRED_FIELD_LIST};
 static constexpr const char *kResetActionSections[] = {"resetAction", "runtimeReload"};
 
 static constexpr WebRouteOperationCatalogEntry kResetAppStateOps[] = {
@@ -28,9 +47,9 @@ static constexpr WebApiSchemaCatalogEntry kResetApiSchemas[] = {
 
 void web_register_route_module_reset(AsyncWebServer &server)
 {
-    server.on(WEB_ROUTE_RESET_APP_STATE, HTTP_POST, handle_reset_app_state_route_request, nullptr, capture_request_body);
-    server.on(WEB_ROUTE_RESET_DEVICE_CONFIG, HTTP_POST, handle_reset_device_config_route_request, nullptr, capture_request_body);
-    server.on(WEB_ROUTE_RESET_FACTORY, HTTP_POST, handle_reset_factory_route_request, nullptr, capture_request_body);
+    server.on(WEB_ROUTE_RESET_APP_STATE, HTTP_POST, handle_reset_app_state_route_request_releasing_body, nullptr, capture_request_body);
+    server.on(WEB_ROUTE_RESET_DEVICE_CONFIG, HTTP_POST, handle_reset_device_config_route_request_releasing_body, nullptr, capture_request_body);
+    server.on(WEB_ROUTE_RESET_FACTORY, HTTP_POST, handle_reset_factory_route_request_releasing_body, nullptr, capture_request_body);
 }
 
 void web_install_route_module_reset(void)

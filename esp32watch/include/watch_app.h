@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "services/wdt_service.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -78,6 +79,16 @@ typedef struct {
     uint8_t deferred;
     WatchAppStageId stage;
 } WatchAppStageHistoryEntry;
+typedef struct {
+    WatchAppStageId id;
+    const char *name;
+    uint32_t budget_ms;
+    WdtCheckpoint wdt_checkpoint;
+    uint32_t qos_mask;
+    bool state_exposed;
+    bool transaction_pm_lock;
+} WatchAppStageManifestEntry;
+
 
 void watch_app_init(void);
 
@@ -120,6 +131,25 @@ const char *watch_app_init_status_name(WatchAppInitStageStatus status);
 void watch_app_task(void);
 void watch_app_request_render(void);
 const char *watch_app_stage_name(WatchAppStageId id);
+
+/**
+ * @brief Return the runtime-stage manifest entry count.
+ *
+ * @return Number of stages executed by the cooperative runtime loop.
+ * @throws None.
+ */
+uint8_t watch_app_stage_manifest_count(void);
+
+/**
+ * @brief Copy a runtime-stage manifest entry.
+ *
+ * @param[in] index Zero-based manifest index.
+ * @param[out] out Destination entry.
+ * @return true when @p out was populated; false for invalid index or NULL out.
+ * @throws None.
+ */
+bool watch_app_stage_manifest_at(uint8_t index, WatchAppStageManifestEntry *out);
+
 bool watch_app_get_stage_telemetry(WatchAppStageId id, WatchAppStageTelemetry *out);
 uint8_t watch_app_get_stage_history_count(void);
 bool watch_app_get_stage_history_recent(uint8_t reverse_index, WatchAppStageHistoryEntry *out);

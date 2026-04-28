@@ -99,6 +99,7 @@ void watch_app_record_stage_timing(WatchAppStageId stage,
  * @boundary_behavior Defaults to platform_time_now_ms() unless a platform/test override is linked.
  */
 uint32_t watch_app_stage_clock_now(void);
+uint32_t watch_app_stage_budget_ms(WatchAppStageId id);
 
 bool watch_app_should_defer_render(const WatchAppStageTelemetry *telemetry, uint32_t loop_counter);
 bool watch_app_should_run_diag_stage(const WatchAppStageTelemetry *telemetry, uint32_t loop_counter);

@@ -117,6 +117,12 @@ uint32_t watch_app_stage_clock_now(void)
     return 0U;
 }
 
+uint32_t watch_app_stage_budget_ms(WatchAppStageId id)
+{
+    (void)id;
+    return 10U;
+}
+
 int main(void)
 {
     WatchAppStageTelemetry telemetry[WATCH_APP_STAGE_COUNT];

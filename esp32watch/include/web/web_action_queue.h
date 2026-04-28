@@ -54,8 +54,28 @@ typedef struct {
     char message[32];
 } WebActionStatusSnapshot;
 
+/**
+ * @brief Enqueue a web-originated mutation for main-loop execution and create a status record.
+ *
+ * @param[in] action Action payload. Must not be NULL.
+ * @param[in] accepted_at_ms Monotonic timestamp captured by the HTTP callback.
+ * @param[out] out_id Optional accepted action id.
+ * @return true when the action was queued; false for NULL input or full queue.
+ * @throws None.
+ * @boundary_behavior Thread-safe for AsyncWebServer producers and main-loop consumers.
+ */
 bool web_action_enqueue_tracked(const WebAction *action, uint32_t accepted_at_ms, uint32_t *out_id);
+
+/**
+ * @brief Dequeue the next accepted web action for main-loop execution.
+ *
+ * @param[out] out Destination action buffer.
+ * @return true when an action was copied; false when the queue is empty or out is NULL.
+ * @throws None.
+ * @boundary_behavior Thread-safe single-consumer API; copied action remains valid after unlock.
+ */
 bool web_action_dequeue(WebAction *out);
+
 uint16_t web_action_queue_depth(void);
 uint16_t web_action_queue_drop_count(void);
 void web_action_mark_running(uint32_t action_id, uint32_t started_at_ms);

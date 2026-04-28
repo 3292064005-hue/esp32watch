@@ -108,7 +108,6 @@ typedef struct {
     uint32_t storage_commit_idle_ms;
     uint32_t storage_commit_max_ms;
     uint32_t storage_commit_cal_ms;
-    uint32_t watch_app_stage_budget_ms[WATCH_APP_STAGE_COUNT];
 } AppTuningManifest;
 
 static inline const AppTuningManifest *app_tuning_manifest_get(void)
@@ -176,21 +175,7 @@ static inline const AppTuningManifest *app_tuning_manifest_get(void)
 
         .storage_commit_idle_ms = STORAGE_COMMIT_IDLE_MS,
         .storage_commit_max_ms = STORAGE_COMMIT_MAX_MS,
-        .storage_commit_cal_ms = STORAGE_COMMIT_CAL_MS,
-        .watch_app_stage_budget_ms = {
-            WATCH_APP_STAGE_INPUT_BUDGET_MS,
-            WATCH_APP_STAGE_SENSOR_BUDGET_MS,
-            WATCH_APP_STAGE_MODEL_BUDGET_MS,
-            WATCH_APP_STAGE_UI_BUDGET_MS,
-            WATCH_APP_STAGE_BATTERY_BUDGET_MS,
-            WATCH_APP_STAGE_ALERT_BUDGET_MS,
-            WATCH_APP_STAGE_DIAG_BUDGET_MS,
-            WATCH_APP_STAGE_STORAGE_BUDGET_MS,
-            WATCH_APP_STAGE_NETWORK_BUDGET_MS,
-            WATCH_APP_STAGE_WEB_BUDGET_MS,
-            WATCH_APP_STAGE_RENDER_BUDGET_MS,
-            WATCH_APP_STAGE_IDLE_BUDGET_MS
-        }
+        .storage_commit_cal_ms = STORAGE_COMMIT_CAL_MS
     };
     return &manifest;
 }

@@ -3,6 +3,12 @@
 #include "web/web_routes_api_handlers.h"
 
 namespace {
+void handle_input_key_request_releasing_body(AsyncWebServerRequest *request)
+{
+    handle_input_key_request(request);
+    release_request_body(request);
+}
+
 static constexpr const char *kTrackedActionResponseFields[] = {"ok", "actionId", "requestId", "actionType", "trackPath", "queueDepth"};
 static constexpr WebRouteOperationCatalogEntry kInputKeyOps[] = {
     {"POST", "api", "trackedActionAccepted", nullptr, 0U, kTrackedActionResponseFields, sizeof(kTrackedActionResponseFields) / sizeof(kTrackedActionResponseFields[0])},
@@ -14,7 +20,7 @@ static constexpr WebRouteCatalogEntry kInputRoutes[] = {
 
 void web_register_route_module_input(AsyncWebServer &server)
 {
-    server.on(WEB_ROUTE_INPUT_KEY, HTTP_POST, handle_input_key_request, nullptr, capture_request_body);
+    server.on(WEB_ROUTE_INPUT_KEY, HTTP_POST, handle_input_key_request_releasing_body, nullptr, capture_request_body);
 }
 
 void web_install_route_module_input(void)

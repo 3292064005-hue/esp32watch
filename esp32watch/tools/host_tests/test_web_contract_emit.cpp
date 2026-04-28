@@ -33,6 +33,7 @@ void capture_request_body(AsyncWebServerRequest *request, uint8_t *data, size_t 
     (void)index;
     (void)total;
 }
+void release_request_body(AsyncWebServerRequest *request) { (void)request; }
 
 int main() {
     String response("{");

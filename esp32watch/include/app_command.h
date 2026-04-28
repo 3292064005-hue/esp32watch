@@ -63,10 +63,39 @@ typedef enum {
     APP_COMMAND_RESULT_UNSUPPORTED
 } AppCommandResultCode;
 
+typedef enum {
+    APP_COMMAND_PAYLOAD_NONE = 0,
+    APP_COMMAND_PAYLOAD_U8_VALUE,
+    APP_COMMAND_PAYLOAD_U32_VALUE,
+    APP_COMMAND_PAYLOAD_I8_DELTA,
+    APP_COMMAND_PAYLOAD_I32_DELTA,
+    APP_COMMAND_PAYLOAD_BOOL_ENABLED,
+    APP_COMMAND_PAYLOAD_DATETIME,
+    APP_COMMAND_PAYLOAD_ALARM_ENABLED,
+    APP_COMMAND_PAYLOAD_ALARM_TIME,
+    APP_COMMAND_PAYLOAD_ALARM_REPEAT,
+    APP_COMMAND_PAYLOAD_GAME_HIGH_SCORE
+} AppCommandPayloadKind;
+
+typedef enum {
+    APP_COMMAND_CAPABILITY_NONE = 0,
+    APP_COMMAND_CAPABILITY_VIBRATION = 1 << 0,
+    APP_COMMAND_CAPABILITY_SENSOR = 1 << 1,
+    APP_COMMAND_CAPABILITY_STORAGE = 1 << 2,
+    APP_COMMAND_CAPABILITY_SAFE_MODE = 1 << 3,
+    APP_COMMAND_CAPABILITY_RESET = 1 << 4
+} AppCommandCapabilityMask;
+
 typedef struct {
     AppCommandType type;
     const char *wire_name;
     bool web_exposed;
+    AppCommandPayloadKind payload_kind;
+    const char *payload_field;
+    int32_t min_value;
+    int32_t max_value;
+    uint32_t capability_mask;
+    bool destructive;
 } AppCommandDescriptor;
 
 typedef struct {
@@ -150,6 +179,30 @@ size_t app_command_catalog_count(void);
  * @throws None.
  */
 const AppCommandDescriptor *app_command_catalog_at(size_t index);
+
+/**
+ * @brief Return a stable printable name for a command payload kind.
+ *
+ * @param[in] kind Payload kind to stringify.
+ * @return Stable payload kind string.
+ * @throws None.
+ */
+const char *app_command_payload_kind_name(AppCommandPayloadKind kind);
+
+/**
+ * @brief Validate a fully populated command payload against its descriptor.
+ *
+ * @param[in] command Command payload to validate.
+ * @param[out] out_result Optional validation result details.
+ * @return true when the descriptor exists, source is valid, capability gates pass,
+ *         and payload ranges are valid; false otherwise.
+ * @throws None.
+ * @boundary_behavior Commands with payload kinds that cannot be range-checked by
+ *                    scalar descriptor bounds are validated by their dedicated
+ *                    indexed/domain-specific boundaries.
+ */
+bool app_command_validate(const AppCommand *command, AppCommandExecutionResult *out_result);
+
 
 /**
  * @brief Return a stable printable name for a command execution result code.

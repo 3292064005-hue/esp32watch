@@ -41,6 +41,9 @@ typedef struct {
     SensorSnapshot sensor_snapshot;
     WebStateDetailSnapshot detail_state;
     char filesystem_status[24];
+    bool from_published_snapshot;
+    uint32_t published_at_ms;
+    uint32_t snapshot_age_ms;
     uint32_t uptime_ms;
 } WebRuntimeSnapshot;
 
@@ -62,6 +65,31 @@ typedef struct {
  * @boundary_behavior Returns false for NULL @p out and otherwise leaves missing sub-snapshots marked through has_* flags instead of failing the whole capture.
  */
 bool web_runtime_snapshot_collect(WebRuntimeSnapshot *out);
+
+/**
+ * @brief Publish the latest main-loop-owned runtime snapshot for Async web readers.
+ *
+ * @param[in] now_ms Current monotonic time used as the publication timestamp.
+ * @return true when a new snapshot was captured and published.
+ * @throws None.
+ * @boundary_behavior Keeps the previous published snapshot when direct capture fails.
+ */
+bool web_runtime_snapshot_publish(uint32_t now_ms);
+
+/**
+ * @brief Copy the latest main-loop-published snapshot.
+ *
+ * @param[out] out Destination snapshot buffer.
+ * @param[in] now_ms Current monotonic time used to compute snapshot age.
+ * @return true when a published snapshot exists; false when the main loop has
+ *         not published the first complete snapshot yet. Async web request
+ *         paths must not perform direct runtime collection as a fallback.
+ * @throws None.
+ * @boundary_behavior Copies the active published buffer outside the critical
+ *                    section after incrementing a per-buffer reader reference.
+ */
+bool web_runtime_snapshot_get_published(WebRuntimeSnapshot *out, uint32_t now_ms);
+
 
 #ifdef __cplusplus
 }

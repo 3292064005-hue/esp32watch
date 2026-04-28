@@ -39,7 +39,7 @@ bool network_sync_try_time_sync(uint32_t now_ms, const DeviceConfigSnapshot &cfg
     DateTime dt;
 
     network_sync_configure_ntp_if_needed(cfg);
-    if (!getLocalTime(&local_tm, 100)) {
+    if (!getLocalTime(&local_tm, APP_NETWORK_SYNC_TIME_SYNC_WAIT_MS)) {
         return false;
     }
 

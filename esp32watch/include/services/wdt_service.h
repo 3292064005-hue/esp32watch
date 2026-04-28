@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     WDT_CHECKPOINT_NONE = 0,
     WDT_CHECKPOINT_INPUT,
@@ -39,5 +43,9 @@ const char *wdt_service_checkpoint_name(WdtCheckpoint checkpoint);
 const char *wdt_service_checkpoint_result_name(WdtCheckpointResult result);
 
 bool wdt_service_is_initialized(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

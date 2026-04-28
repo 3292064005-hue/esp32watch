@@ -1,6 +1,9 @@
 {
-  "assetContractVersion": 15,
-  "generatedAtUtc": "2026-04-25T03:33:55Z",
+  "assetContractVersion": 16,
+  "generatedAtUtc": "2026-04-28T03:10:35Z",
+  "generatedBy": "tools/generate_asset_contract.py",
+  "contractSourceSha256": "a722ab06d058d58d55008b65bf8ebce0cd777a9b634979ebb167d9e7e6e0722d",
+  "assetSourceSha256": "03055b982926b2fce3b18b388600e0d8ab0103677040577aeb59ec24928d6bc4",
   "app": "esp32watch-web-console",
   "entrypoints": [
     "index.html",
@@ -20,11 +23,11 @@
     "contract-bootstrap.json"
   ],
   "bootstrapContract": {
-    "runtimeContractVersion": 15,
-    "apiVersion": 20,
+    "runtimeContractVersion": 16,
+    "apiVersion": 21,
     "stateVersion": 13,
-    "commandCatalogVersion": 4,
-    "assetContractVersion": 15,
+    "commandCatalogVersion": 5,
+    "assetContractVersion": 16,
     "routes": {
       "health": "/api/health",
       "contract": "/api/contract",
@@ -948,7 +951,14 @@
         "type": "object",
         "required": [
           "ok",
-          "commands"
+          "commands",
+          "commands[].type",
+          "commands[].payloadKind",
+          "commands[].payloadField",
+          "commands[].minValue",
+          "commands[].maxValue",
+          "commands[].capabilityMask",
+          "commands[].destructive"
         ],
         "sections": [
           "commandCatalog"
@@ -963,6 +973,9 @@
           "runtimeReload.runtimeReloadPreflightOk",
           "runtimeReload.runtimeReloadApplyAttempted",
           "runtimeReload.runtimeReloaded",
+          "runtimeReload.runtimeHotAppliedOk",
+          "runtimeReload.runtimePersistedOnlyOk",
+          "runtimeReload.runtimeFullyEffectiveNow",
           "runtimeReload.runtimeReloadEventDispatchOk",
           "runtimeReload.runtimeReloadAuthoritativePath",
           "runtimeReload.runtimeReloadVerifyOk",
@@ -973,11 +986,14 @@
           "runtimeReload.runtimeHandlerFailureCount",
           "runtimeReload.runtimeHandlerCriticalFailureCount",
           "runtimeReload.runtimeReloadConfigGeneration",
-          "runtimeReload.runtimeReloadDomainResultCount",
+          "runtimeReload.runtimeReloadRequiresReboot",
           "runtimeReload.runtimeReloadSupportedDomains",
           "runtimeReload.runtimeReloadImpactDomains",
           "runtimeReload.runtimeReloadAppliedDomains",
+          "runtimeReload.runtimeReloadDeferredDomains",
+          "runtimeReload.runtimeReloadRebootRequiredDomains",
           "runtimeReload.runtimeReloadFailedDomains",
+          "runtimeReload.runtimeReloadDomainResultCount",
           "runtimeReload.runtimeReloadDomainResults",
           "runtimeReload.runtimeReloadFailurePhase",
           "runtimeReload.runtimeReloadFailureCode"
@@ -1009,6 +1025,9 @@
           "runtimeReload.runtimeReloadPreflightOk",
           "runtimeReload.runtimeReloadApplyAttempted",
           "runtimeReload.runtimeReloaded",
+          "runtimeReload.runtimeHotAppliedOk",
+          "runtimeReload.runtimePersistedOnlyOk",
+          "runtimeReload.runtimeFullyEffectiveNow",
           "runtimeReload.runtimeReloadEventDispatchOk",
           "runtimeReload.runtimeReloadAuthoritativePath",
           "runtimeReload.runtimeReloadVerifyOk",
@@ -1019,11 +1038,14 @@
           "runtimeReload.runtimeHandlerFailureCount",
           "runtimeReload.runtimeHandlerCriticalFailureCount",
           "runtimeReload.runtimeReloadConfigGeneration",
-          "runtimeReload.runtimeReloadDomainResultCount",
+          "runtimeReload.runtimeReloadRequiresReboot",
           "runtimeReload.runtimeReloadSupportedDomains",
           "runtimeReload.runtimeReloadImpactDomains",
           "runtimeReload.runtimeReloadAppliedDomains",
+          "runtimeReload.runtimeReloadDeferredDomains",
+          "runtimeReload.runtimeReloadRebootRequiredDomains",
           "runtimeReload.runtimeReloadFailedDomains",
+          "runtimeReload.runtimeReloadDomainResultCount",
           "runtimeReload.runtimeReloadDomainResults",
           "runtimeReload.runtimeReloadFailurePhase",
           "runtimeReload.runtimeReloadFailureCode"
@@ -1060,9 +1082,9 @@
       "sha256": "b82b17e162091874fb870a124e1ce8df73b9456bfe952209c4b320c53dc9e9a0"
     },
     "app-core.js": {
-      "bytes": 15081,
-      "fnv1a32": "D43CEEB4",
-      "sha256": "10ffecff7ac5a995ffb9e7f46fb4319d964efaafe075fad637f9878c5eaf8b84"
+      "bytes": 15471,
+      "fnv1a32": "3B4864F4",
+      "sha256": "77bdf915218813a283aa6278a819d6effd59ad4c82f30a59c4159f85c786ded8"
     },
     "app-render.js": {
       "bytes": 10870,
@@ -1070,9 +1092,9 @@
       "sha256": "8b424b936e98fcbc9c1de53a3d3f559832ff4641b4fd1cbcff81fcfa9add4832"
     },
     "app-actions.js": {
-      "bytes": 6589,
-      "fnv1a32": "B261B7DE",
-      "sha256": "85cbfe687afa6450405efcfb639d33d2153e30be134ff633df703d607c40a3ae"
+      "bytes": 7328,
+      "fnv1a32": "AC5A7542",
+      "sha256": "e7b69130d2d9f94419629ec33112a2da582f354b96ab5334a76f83f5c7adde3d"
     },
     "app.js": {
       "bytes": 2337,
@@ -1080,9 +1102,9 @@
       "sha256": "892366e372fe9d05cf1b179f021f6a474568bde88c5ea80d211ac8e1786c253d"
     },
     "contract-bootstrap.json": {
-      "bytes": 25358,
-      "fnv1a32": "00598698",
-      "sha256": "caabf735ae33612493a1b5727515babb01bda458bd948994592a36a2ec935081"
+      "bytes": 26226,
+      "fnv1a32": "802F0A6B",
+      "sha256": "544be532920169cfe1efab6e0aade0d725371635ab9bb4c110aadf5729433e01"
     }
   }
 }

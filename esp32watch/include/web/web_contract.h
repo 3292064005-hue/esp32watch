@@ -6,11 +6,11 @@
 
 class String;
 
-static constexpr uint32_t WEB_API_VERSION = 20U;
+static constexpr uint32_t WEB_API_VERSION = 21U;
 static constexpr uint32_t WEB_STATE_VERSION = 13U;
-static constexpr uint32_t WEB_COMMAND_CATALOG_VERSION = 4U;
-static constexpr uint32_t WEB_RUNTIME_CONTRACT_VERSION = 15U;
-static constexpr uint32_t WEB_ASSET_CONTRACT_VERSION = 15U;
+static constexpr uint32_t WEB_COMMAND_CATALOG_VERSION = 5U;
+static constexpr uint32_t WEB_RUNTIME_CONTRACT_VERSION = 16U;
+static constexpr uint32_t WEB_ASSET_CONTRACT_VERSION = 16U;
 static constexpr uint32_t WEB_RELEASE_VALIDATION_SCHEMA_VERSION = 8U;
 
 static constexpr const char *WEB_ROUTE_CONTRACT = "/api/contract";

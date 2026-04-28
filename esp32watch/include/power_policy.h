@@ -67,6 +67,31 @@ bool power_policy_can_enter_cpu_idle(bool render_due,
                                      bool storage_pending,
                                      bool transaction_active);
 uint32_t power_policy_build_qos_mask(const PowerQosSnapshot *snapshot);
+
+/**
+ * @brief Acquire the platform PM lock for a concrete runtime transaction.
+ *
+ * @param[in] qos_mask QoS flags describing the transaction's sleep-sensitive resources.
+ * @param[in] owner Stable diagnostic owner name.
+ * @return true when no PM lock is required, the platform does not expose PM locks,
+ *         or the platform lock was acquired successfully; false on platform failure.
+ * @throws None.
+ * @boundary_behavior A zero @p qos_mask is a no-op. Callers must pair a successful
+ *                    enter with power_policy_platform_pm_lock_exit().
+ */
+bool power_policy_platform_pm_lock_enter(uint32_t qos_mask, const char *owner);
+
+/**
+ * @brief Release the platform PM lock held for a concrete runtime transaction.
+ *
+ * @param[in] qos_mask QoS flags used when entering the transaction.
+ * @param[in] owner Stable diagnostic owner name.
+ * @return true when no PM lock is required, the platform does not expose PM locks,
+ *         or the platform lock was released successfully; false on platform failure.
+ * @throws None.
+ */
+bool power_policy_platform_pm_lock_exit(uint32_t qos_mask, const char *owner);
+
 bool power_policy_can_enter_cpu_idle_ex(const PowerQosSnapshot *snapshot, uint32_t *qos_mask_out);
 
 const char *power_policy_sleep_blocker_name(PowerSleepBlocker blocker);

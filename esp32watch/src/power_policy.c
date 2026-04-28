@@ -2,6 +2,7 @@
 #include <string.h>
 #include "power_policy.h"
 #include "ui_page_registry.h"
+#include "platform_api.h"
 
 #define POWER_QOS_PROVIDER_MAX 8U
 
@@ -120,6 +121,34 @@ uint32_t power_policy_build_qos_mask(const PowerQosSnapshot *snapshot)
         mask |= POWER_QOS_WEB_BUSY;
     }
     return mask;
+}
+
+
+static bool power_policy_qos_mask_needs_platform_pm_lock(uint32_t qos_mask)
+{
+    return qos_mask != POWER_QOS_NONE;
+}
+
+bool power_policy_platform_pm_lock_enter(uint32_t qos_mask, const char *owner)
+{
+    if (!power_policy_qos_mask_needs_platform_pm_lock(qos_mask)) {
+        return true;
+    }
+    if (!platform_pm_lock_supported()) {
+        return true;
+    }
+    return platform_pm_lock_acquire(owner != NULL ? owner : "runtime");
+}
+
+bool power_policy_platform_pm_lock_exit(uint32_t qos_mask, const char *owner)
+{
+    if (!power_policy_qos_mask_needs_platform_pm_lock(qos_mask)) {
+        return true;
+    }
+    if (!platform_pm_lock_supported()) {
+        return true;
+    }
+    return platform_pm_lock_release(owner != NULL ? owner : "runtime");
 }
 
 bool power_policy_can_enter_cpu_idle_ex(const PowerQosSnapshot *snapshot, uint32_t *qos_mask_out)

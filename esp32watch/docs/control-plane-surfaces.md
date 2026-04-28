@@ -70,3 +70,11 @@ Routes with multiple HTTP methods must declare method-level operations. `/api/co
 - `POST /api/config/device` uses `deviceConfigUpdate` and is the only mutation operation; durable writes still flow through `device_config_authority`.
 
 Consumers may continue to read the top-level `routeSchemas.<routeKey>.name` as the default operation schema, but validation tooling must inspect `routeSchemas.<routeKey>.operations` when a route supports multiple methods.
+
+## Published state readiness
+
+State routes are snapshot consumers, not live service collectors. During startup, `/api/state/*` may return `503` until the main loop publishes its first complete runtime snapshot. Clients should honor `retryAfterMs` and retry rather than treating this as a fatal console error.
+
+## Command catalog schema
+
+`/api/actions/catalog` requires every command entry to expose the schema fields used by clients and validators: `type`, `payloadKind`, `payloadField`, `minValue`, `maxValue`, `capabilityMask`, and `destructive`. Array paths such as `commands[].type` are part of the contract validator surface.

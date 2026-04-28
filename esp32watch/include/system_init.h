@@ -188,6 +188,19 @@ void system_mark_companion_transport_initialized(void);
 void system_mark_app_initialized(void);
 
 /**
+ * @brief Report whether runtime mutation routes may accept control actions.
+ *
+ * Control readiness is stricter than HTTP server readiness: storage, time,
+ * network sync, web server, and the application stage must all have completed
+ * before AsyncWebServer callbacks may enqueue runtime actions.
+ *
+ * @return true when runtime control actions may be accepted; false during
+ *         startup, degraded fatal stop, or before app initialization completes.
+ */
+bool system_runtime_control_ready(void);
+
+
+/**
  * @brief Query the last successful or degraded system initialization stage.
  *
  * @return Last stage completed before any fatal stop or the most recent

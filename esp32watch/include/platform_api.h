@@ -214,6 +214,36 @@ bool platform_get_support_snapshot(PlatformSupportSnapshot *out);
  *                    hardware-supported minimum/maximum window.
  */
 bool platform_light_sleep_for(uint32_t duration_ms);
+
+/**
+ * @brief Report whether platform power-management locks are compiled in.
+ *
+ * @return true when the active platform can create/use IDF PM locks; false when
+ *         the adapter is compiled as a no-op.
+ * @throws None.
+ */
+bool platform_pm_lock_supported(void);
+
+/**
+ * @brief Acquire the platform idle-sleep lock.
+ *
+ * @param[in] owner Stable caller label for diagnostics. May be NULL.
+ * @return true when the lock was acquired or the adapter is disabled; false
+ *         when a compiled-in PM lock backend rejected the acquire operation.
+ * @throws None.
+ */
+bool platform_pm_lock_acquire(const char *owner);
+
+/**
+ * @brief Release the platform idle-sleep lock.
+ *
+ * @param[in] owner Stable caller label for diagnostics. May be NULL.
+ * @return true when the lock was released or the adapter is disabled; false
+ *         when a compiled-in PM lock backend rejected the release operation.
+ * @throws None.
+ */
+bool platform_pm_lock_release(const char *owner);
+
 void platform_reset_system(void);
 
 #ifdef __cplusplus

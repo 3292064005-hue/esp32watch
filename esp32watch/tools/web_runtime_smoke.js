@@ -24,6 +24,9 @@ function makeRuntimeReloadPayload(overrides = {}) {
     runtimeReloadPreflightOk: true,
     runtimeReloadApplyAttempted: false,
     runtimeReloaded: true,
+    runtimeHotAppliedOk: true,
+    runtimePersistedOnlyOk: true,
+    runtimeFullyEffectiveNow: true,
     runtimeReloadEventDispatchOk: true,
     runtimeReloadAuthoritativePath: true,
     runtimeReloadVerifyOk: true,
@@ -38,12 +41,15 @@ function makeRuntimeReloadPayload(overrides = {}) {
     runtimeReloadConfigGeneration: 1,
     runtimeWifiAppliedGeneration: 1,
     runtimeNetworkAppliedGeneration: 1,
+    runtimeReloadRequiresReboot: false,
     runtimeReloadDomainResultCount: 0,
     runtimeWifiVerifyReason: 'NONE',
     runtimeNetworkVerifyReason: 'NONE',
     runtimeReloadSupportedDomains: ['WIFI', 'NETWORK'],
     runtimeReloadImpactDomains: [],
     runtimeReloadAppliedDomains: [],
+    runtimeReloadDeferredDomains: [],
+    runtimeReloadRebootRequiredDomains: [],
     runtimeReloadFailedDomains: [],
     runtimeReloadDomainResults: [],
     runtimeReloadFailurePhase: 'NONE',
@@ -209,8 +215,8 @@ const fetchPayloads = {
   },
   [bootstrapContract.routes.actionsCatalog]: {
     ok: true,
-    commands: [{ type: 'storageManualFlush', webExposed: true }],
-    commandCatalog: { commandCatalogVersion: bootstrapContract.commandCatalogVersion, commands: [{ type: 'storageManualFlush', webExposed: true }] },
+    commands: [{ type: 'storageManualFlush', webExposed: true, payloadKind: 'NONE', payloadField: '', minValue: 0, maxValue: 0, capabilityMask: 4, destructive: false }],
+    commandCatalog: { commandCatalogVersion: bootstrapContract.commandCatalogVersion, commands: [{ type: 'storageManualFlush', webExposed: true, payloadKind: 'NONE', payloadField: '', minValue: 0, maxValue: 0, capabilityMask: 4, destructive: false }] },
   },
   [bootstrapContract.routes.configDevice]: {
     ok: true,
@@ -349,7 +355,8 @@ const fetchPayloads = {
       runtimeReloadImpactDomains: [],
       runtimeReloadAppliedDomains: [],
       runtimeReloadDomainResults: [],
-      runtimeReloadDomainResultCount: 0,
+      runtimeReloadRequiresReboot: false,
+    runtimeReloadDomainResultCount: 0,
     }),
     resetAction: { resetKind: 'APP_STATE', appStateReset: true, deviceConfigReset: false, auditNotified: true, auditEventDispatched: true },
   }),
@@ -422,20 +429,31 @@ function deletePayloadPath(payload, keyPath) {
     return false;
   }
   const parts = String(keyPath).split('.');
-  let cursor = payload;
-  for (let i = 0; i < parts.length - 1; i += 1) {
-    const part = parts[i];
-    if (!cursor || typeof cursor !== 'object' || !Object.prototype.hasOwnProperty.call(cursor, part)) {
+  const walk = (cursor, index) => {
+    if (!cursor || typeof cursor !== 'object' || index >= parts.length) {
       return false;
     }
-    cursor = cursor[part];
-  }
-  const last = parts[parts.length - 1];
-  if (!cursor || typeof cursor !== 'object' || !Object.prototype.hasOwnProperty.call(cursor, last)) {
-    return false;
-  }
-  delete cursor[last];
-  return true;
+    const part = parts[index];
+    if (part.endsWith('[]')) {
+      const key = part.slice(0, -2);
+      if (!Object.prototype.hasOwnProperty.call(cursor, key) || !Array.isArray(cursor[key]) || cursor[key].length === 0) {
+        return false;
+      }
+      return walk(cursor[key][0], index + 1);
+    }
+    if (index + 1 === parts.length) {
+      if (!Object.prototype.hasOwnProperty.call(cursor, part)) {
+        return false;
+      }
+      delete cursor[part];
+      return true;
+    }
+    if (!Object.prototype.hasOwnProperty.call(cursor, part)) {
+      return false;
+    }
+    return walk(cursor[part], index + 1);
+  };
+  return walk(payload, 0);
 }
 
 function makeInvalidRoutePayload(routeKey, payload) {

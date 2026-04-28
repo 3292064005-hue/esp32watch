@@ -84,6 +84,7 @@ void send_queue_ack(AsyncWebServerRequest *request, uint32_t action_id, WebActio
 }
 
 static void append_command_catalog_entry(String &response,
+                                         const AppCommandDescriptor *descriptor,
                                          const char *type,
                                          bool web_exposed,
                                          const char *lifecycle,
@@ -98,7 +99,22 @@ static void append_command_catalog_entry(String &response,
     web_json_kv_bool(response, "webExposed", web_exposed, false);
     web_json_kv_str(response, "lifecycle", lifecycle != nullptr ? lifecycle : "ACTIVE", false);
     web_json_kv_str(response, "canonicalType", canonical_type != nullptr ? canonical_type : type, false);
-    web_json_kv_bool(response, "legacyAlias", legacy_alias, true);
+    web_json_kv_bool(response, "legacyAlias", legacy_alias, false);
+    if (descriptor != nullptr) {
+        web_json_kv_str(response, "payloadKind", app_command_payload_kind_name(descriptor->payload_kind), false);
+        web_json_kv_str(response, "payloadField", descriptor->payload_field != nullptr ? descriptor->payload_field : "", false);
+        web_json_kv_i32(response, "minValue", descriptor->min_value, false);
+        web_json_kv_i32(response, "maxValue", descriptor->max_value, false);
+        web_json_kv_u32(response, "capabilityMask", descriptor->capability_mask, false);
+        web_json_kv_bool(response, "destructive", descriptor->destructive, true);
+    } else {
+        web_json_kv_str(response, "payloadKind", "NONE", false);
+        web_json_kv_str(response, "payloadField", "", false);
+        web_json_kv_i32(response, "minValue", 0, false);
+        web_json_kv_i32(response, "maxValue", 0, false);
+        web_json_kv_u32(response, "capabilityMask", 0U, false);
+        web_json_kv_bool(response, "destructive", false, true);
+    }
     response += '}';
 }
 
@@ -122,10 +138,11 @@ void append_command_catalog(String &response)
         if (descriptor == nullptr || !descriptor->web_exposed || !web_command_supported(descriptor)) {
             continue;
         }
-        append_command_catalog_entry(response, descriptor->wire_name, descriptor->web_exposed, "ACTIVE", descriptor->wire_name, false);
+        append_command_catalog_entry(response, descriptor, descriptor->wire_name, descriptor->web_exposed, "ACTIVE", descriptor->wire_name, false);
     }
     for (i = 0; i < (sizeof(kDeprecatedAliases) / sizeof(kDeprecatedAliases[0])); ++i) {
         append_command_catalog_entry(response,
+                                     app_command_describe_by_name(kDeprecatedAliases[i].canonical_type),
                                      kDeprecatedAliases[i].alias_type,
                                      false,
                                      "DEPRECATED",

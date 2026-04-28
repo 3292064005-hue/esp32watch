@@ -8,6 +8,7 @@ import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from web_contract_sources import WEB_CONTRACT_SOURCE_PATHS
 
 BOOTSTRAP_CONTRACT_NAME = 'contract-bootstrap.json'
 ENTRYPOINTS = ['index.html', 'app.css', 'app-core.js', 'app-render.js', 'app-actions.js', 'app.js']
@@ -74,6 +75,17 @@ def fnv1a32(data: bytes) -> str:
         h ^= b
         h = (h * FNV_PRIME) & 0xFFFFFFFF
     return f'{h:08X}'
+
+
+def source_hash(paths: list[str]) -> str:
+    digest = hashlib.sha256()
+    for rel in sorted(paths):
+        path = ROOT / rel
+        digest.update(rel.encode('utf-8'))
+        digest.update(b'\0')
+        digest.update(path.read_bytes())
+        digest.update(b'\0')
+    return digest.hexdigest()
 
 
 def parse_state_view_schemas() -> dict:
@@ -160,9 +172,13 @@ def main() -> int:
             'sha256': hashlib.sha256(payload).hexdigest(),
         }
 
+    contract_source_paths = WEB_CONTRACT_SOURCE_PATHS
     doc = {
         'assetContractVersion': contract['assetContractVersion'],
         'generatedAtUtc': datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
+        'generatedBy': 'tools/generate_asset_contract.py',
+        'contractSourceSha256': source_hash(contract_source_paths),
+        'assetSourceSha256': source_hash([f'data/{name}' for name in REQUIRED_FILES]),
         'app': 'esp32watch-web-console',
         'entrypoints': ENTRYPOINTS,
         'requiredFiles': REQUIRED_FILES,

@@ -135,8 +135,10 @@ static bool collect_api_state_bundle(WebApiStateBundle *out, bool require_device
     }
 
     memset(out, 0, sizeof(*out));
-    if (!web_runtime_snapshot_collect(&out->runtime) ||
-        !web_state_core_collect_from_runtime_snapshot(&out->runtime, &out->core) ||
+    if (!web_runtime_snapshot_get_published(&out->runtime, web_state_bridge_uptime_ms())) {
+        return false;
+    }
+    if (!web_state_core_collect_from_runtime_snapshot(&out->runtime, &out->core) ||
         !web_state_detail_collect_from_runtime_snapshot(&out->runtime, &out->detail)) {
         return false;
     }
@@ -706,7 +708,23 @@ static void send_state_payload_response(AsyncWebServerRequest *request,
     response.reserve(reserve_hint);
 
     if (!collect_api_state_bundle(&bundle, require_device_config)) {
-        request->send(500, "application/json", "{\"ok\":false,\"message\":\"snapshot unavailable\"}");
+        String unavailable;
+        SystemStartupStatus startup_status = {};
+        const bool has_startup_status = system_get_startup_status(&startup_status);
+
+        unavailable.reserve(192U);
+        unavailable = "{";
+        web_json_kv_bool(unavailable, "ok", false, false);
+        web_json_kv_str(unavailable, "message", "snapshot not ready", false);
+        web_json_kv_u32(unavailable, "retryAfterMs", 250U, false);
+        web_json_kv_bool(unavailable, "appReady", system_runtime_control_ready(), false);
+        web_json_kv_bool(unavailable, "publishedSnapshotReady", false, false);
+        web_json_kv_str(unavailable,
+                        "startupStage",
+                        has_startup_status ? system_init_stage_name(startup_status.last_stage) : "UNKNOWN",
+                        true);
+        unavailable += "}";
+        request->send(503, "application/json", unavailable);
         return;
     }
 

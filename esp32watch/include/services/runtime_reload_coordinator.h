@@ -49,6 +49,9 @@ typedef struct {
     bool apply_attempted;
     bool event_dispatch_ok;
     bool verify_ok;
+    bool hot_apply_ok;
+    bool persisted_only_ok;
+    bool fully_effective_now;
     bool partial_success;
     bool wifi_reload_ok;
     bool network_reload_ok;

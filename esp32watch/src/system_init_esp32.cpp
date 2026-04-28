@@ -474,6 +474,15 @@ extern "C" void system_mark_app_initialized(void)
 }
 
 extern "C" SystemInitStage system_init_last_stage(void) { return g_last_init_stage; }
+extern "C" bool system_runtime_control_ready(void)
+{
+    return !g_init_failed &&
+           system_init_stage_completed(SYSTEM_INIT_STAGE_STORAGE_SERVICE) &&
+           system_init_stage_completed(SYSTEM_INIT_STAGE_TIME_SERVICE) &&
+           system_init_stage_completed(SYSTEM_INIT_STAGE_NETWORK_SYNC_SERVICE) &&
+           system_init_stage_completed(SYSTEM_INIT_STAGE_WEB_SERVER) &&
+           system_init_stage_completed(SYSTEM_INIT_STAGE_APP);
+}
 extern "C" bool system_init_stage_completed(SystemInitStage stage) { return system_init_completion_is_marked(&g_init_completed, stage); }
 extern "C" SystemInitStageStatus system_init_stage_status(SystemInitStage stage)
 {

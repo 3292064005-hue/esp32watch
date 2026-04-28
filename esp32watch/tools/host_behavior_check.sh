@@ -2,6 +2,26 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p /tmp/esp32watch_host_tests
+PYTHON_CMD=()
+
+if [[ -n "${HOST_PYTHON:-}" ]]; then
+  PYTHON_CMD=("${HOST_PYTHON}")
+else
+  for candidate in python3 python; do
+    if command -v "${candidate}" >/dev/null 2>&1 && "${candidate}" -c 'import sys; sys.exit(0)' >/dev/null 2>&1; then
+      PYTHON_CMD=("${candidate}")
+      break
+    fi
+  done
+fi
+
+if [[ "${#PYTHON_CMD[@]}" -eq 0 ]]; then
+  echo "[FAIL] No working Python interpreter found; set HOST_PYTHON or install python3/python" >&2
+  exit 1
+fi
+
+echo "[INFO] Using Python: ${PYTHON_CMD[*]}"
+
 COMMON_CPP_DEFINES=(
   -DAPP_BOARD_PROFILE_ESP32S3_WATCH
   -DESP32_I2C_SDA_GPIO=8
@@ -153,7 +173,7 @@ gcc -std=c11 -Iinclude -Isrc \
   --step STORAGE:32 \
   --step ABOUT:48 \
   --output /tmp/esp32watch_host_tests/host_runtime_simulator.json
-python3 tools/host_tests/test_host_runtime_simulator.py /tmp/esp32watch_host_tests/host_runtime_simulator.json
+"${PYTHON_CMD[@]}" tools/host_tests/test_host_runtime_simulator.py /tmp/esp32watch_host_tests/host_runtime_simulator.json
 bash ./tools/run_host_simulator_matrix.sh baseline
 bash ./tools/run_host_simulator_matrix.sh reset-flow
 bash ./tools/run_host_simulator_matrix.sh storage-focus
@@ -245,14 +265,14 @@ gcc -std=c11 -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude -Is
   -o /tmp/esp32watch_host_tests/command_catalog_compatibility_test
 /tmp/esp32watch_host_tests/command_catalog_compatibility_test
 
-python3 tools/verify_host_python_requirements.py
-python3 tools/host_tests/test_compatibility_lifecycle.py
-python3 tools/host_tests/test_workflow_yaml.py
+"${PYTHON_CMD[@]}" tools/verify_host_python_requirements.py
+"${PYTHON_CMD[@]}" tools/host_tests/test_compatibility_lifecycle.py
+"${PYTHON_CMD[@]}" tools/host_tests/test_workflow_yaml.py
 
-python3 tools/host_tests/test_release_bundle.py
-python3 tools/host_tests/test_capture_device_smoke_report.py
-python3 tools/host_tests/test_run_device_scenarios.py
-python3 tools/host_tests/test_flash_candidate_bundle.py
-python3 tools/host_tests/test_runtime_contract_output.py
+"${PYTHON_CMD[@]}" tools/host_tests/test_release_bundle.py
+"${PYTHON_CMD[@]}" tools/host_tests/test_capture_device_smoke_report.py
+"${PYTHON_CMD[@]}" tools/host_tests/test_run_device_scenarios.py
+"${PYTHON_CMD[@]}" tools/host_tests/test_flash_candidate_bundle.py
+"${PYTHON_CMD[@]}" tools/host_tests/test_runtime_contract_output.py
 
 echo "[INFO] Host behavior checks completed."

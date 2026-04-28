@@ -62,8 +62,6 @@ void watch_app_reset_stage_telemetry(WatchAppStageTelemetry *telemetry,
                                      uint8_t *count)
 {
     size_t i;
-    const AppTuningManifest *tuning = app_tuning_manifest_get();
-
     if (telemetry == NULL || history == NULL || head == NULL || count == NULL) {
         return;
     }
@@ -73,7 +71,7 @@ void watch_app_reset_stage_telemetry(WatchAppStageTelemetry *telemetry,
     *head = 0U;
     *count = 0U;
     for (i = 0U; i < WATCH_APP_STAGE_COUNT; ++i) {
-        telemetry[i].budget_ms = tuning->watch_app_stage_budget_ms[i];
+        telemetry[i].budget_ms = watch_app_stage_budget_ms((WatchAppStageId)i);
     }
 }
 

@@ -74,4 +74,9 @@
 #define ESP32_IDLE_LIGHT_SLEEP_MAX_MS  100U
 #endif
 
+#ifndef ESP32_POWER_USE_IDF_PM_LOCKS
+#define ESP32_POWER_USE_IDF_PM_LOCKS    1
+#endif
+
+
 #endif

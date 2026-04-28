@@ -5,6 +5,23 @@ cd "$(dirname "$0")/.."
 scenario="${1:-baseline}"
 out_dir="/tmp/esp32watch_host_tests"
 mkdir -p "$out_dir"
+PYTHON_CMD=()
+
+if [[ -n "${HOST_PYTHON:-}" ]]; then
+  PYTHON_CMD=("${HOST_PYTHON}")
+else
+  for candidate in python3 python; do
+    if command -v "${candidate}" >/dev/null 2>&1 && "${candidate}" -c 'import sys; sys.exit(0)' >/dev/null 2>&1; then
+      PYTHON_CMD=("${candidate}")
+      break
+    fi
+  done
+fi
+
+if [[ "${#PYTHON_CMD[@]}" -eq 0 ]]; then
+  echo "[FAIL] No working Python interpreter found; set HOST_PYTHON or install python3/python" >&2
+  exit 1
+fi
 
 BIN="$out_dir/host_runtime_simulator_matrix"
 OUT="$out_dir/host_runtime_simulator_${scenario}.json"
@@ -30,7 +47,7 @@ case "$scenario" in
       --step STORAGE:32 \
       --step ABOUT:48 \
       --output "$OUT"
-    python3 tools/host_tests/test_host_runtime_simulator.py "$OUT"
+    "${PYTHON_CMD[@]}" tools/host_tests/test_host_runtime_simulator.py "$OUT"
     ;;
   reset-flow)
     "$BIN" \
@@ -39,7 +56,7 @@ case "$scenario" in
       --step WATCHFACE:32 \
       --step ABOUT:48 \
       --output "$OUT"
-    python3 - "$OUT" <<'PY'
+    "${PYTHON_CMD[@]}" - "$OUT" <<'PY'
 import json, sys
 payload = json.load(open(sys.argv[1], 'r', encoding='utf-8'))
 frames = payload['frames']
@@ -56,7 +73,7 @@ PY
       --step ABOUT:32 \
       --step STORAGE:48 \
       --output "$OUT"
-    python3 - "$OUT" <<'PY'
+    "${PYTHON_CMD[@]}" - "$OUT" <<'PY'
 import json, sys
 payload = json.load(open(sys.argv[1], 'r', encoding='utf-8'))
 frames = payload['frames']

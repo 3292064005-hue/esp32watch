@@ -1,9 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+PYTHON_CMD=()
 
-python3 ./tools/generate_asset_contract.py
-python3 ./tools/verify_partition_contract.py
+if [[ -n "${HOST_PYTHON:-}" ]]; then
+  PYTHON_CMD=("${HOST_PYTHON}")
+else
+  for candidate in python3 python; do
+    if command -v "${candidate}" >/dev/null 2>&1 && "${candidate}" -c 'import sys; sys.exit(0)' >/dev/null 2>&1; then
+      PYTHON_CMD=("${candidate}")
+      break
+    fi
+  done
+fi
+
+if [[ "${#PYTHON_CMD[@]}" -eq 0 ]]; then
+  echo "[FAIL] No working Python interpreter found; set HOST_PYTHON or install python3/python" >&2
+  exit 1
+fi
+
+echo "[INFO] Using Python: ${PYTHON_CMD[*]}"
+
+"${PYTHON_CMD[@]}" ./tools/generate_asset_contract.py
+"${PYTHON_CMD[@]}" ./tools/verify_partition_contract.py
 
 if ! command -v pio >/dev/null 2>&1; then
   echo "[ERROR] pio not found" >&2
@@ -26,7 +45,7 @@ for env in "${envs[@]}"; do
   echo "[OK] ${env} produced firmware.bin and littlefs.bin"
 
   host_report="dist/host-validation/${env}-host-validation.json"
-  python3 ./tools/write_host_validation_report.py \
+  "${PYTHON_CMD[@]}" ./tools/write_host_validation_report.py \
     --env "${env}" \
     --output "${host_report}" \
     --runner LOCAL_HOST \
@@ -37,10 +56,10 @@ for env in "${envs[@]}"; do
     --check littlefs-build=PASS \
     --check bundle-verify=PASS
 
-  bundle="$(python3 ./tools/package_release.py \
+  bundle="$("${PYTHON_CMD[@]}" ./tools/package_release.py \
     --env "${env}" \
     --host-validation-status PASS \
     --host-validation-report "${host_report}" \
     --device-smoke-status NOT_RUN)"
-  python3 ./tools/verify_release_bundle.py --env "${env}" --bundle "${bundle}"
+  "${PYTHON_CMD[@]}" ./tools/verify_release_bundle.py --env "${env}" --bundle "${bundle}"
  done

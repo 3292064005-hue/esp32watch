@@ -3,6 +3,12 @@
 #include "web/web_routes_api_handlers.h"
 
 namespace {
+void handle_command_request_releasing_body(AsyncWebServerRequest *request)
+{
+    handle_command_request(request);
+    release_request_body(request);
+}
+
 static constexpr const char *kActionsCatalogResponseFields[] = {"ok", "commands"};
 static constexpr const char *kActionsStatusResponseFields[] = {"ok", "id", "status", "type"};
 static constexpr const char *kTrackedActionResponseFields[] = {"ok", "actionId", "requestId", "actionType", "trackPath", "queueDepth"};
@@ -11,7 +17,7 @@ static constexpr const char *kTrackedActionAcceptedRequired[] = {"ok", "actionId
 static constexpr const char *kTrackedActionAcceptedSections[] = {"trackedActionAccepted"};
 static constexpr const char *kActionsStatusRequired[] = {"ok", "id", "status", "type"};
 static constexpr const char *kActionsStatusSections[] = {"actionStatus"};
-static constexpr const char *kActionsCatalogRequired[] = {"ok", "commands"};
+static constexpr const char *kActionsCatalogRequired[] = {"ok", "commands", "commands[].type", "commands[].payloadKind", "commands[].payloadField", "commands[].minValue", "commands[].maxValue", "commands[].capabilityMask", "commands[].destructive"};
 static constexpr const char *kActionsCatalogSections[] = {"commandCatalog"};
 
 static constexpr WebRouteOperationCatalogEntry kActionsCatalogOps[] = {
@@ -46,7 +52,7 @@ void web_register_route_module_actions(AsyncWebServer &server)
     server.on(WEB_ROUTE_ACTIONS_CATALOG, HTTP_GET, handle_actions_catalog_request);
     server.on(WEB_ROUTE_ACTIONS_LATEST, HTTP_GET, handle_actions_latest_request);
     server.on(WEB_ROUTE_ACTIONS_STATUS, HTTP_GET, handle_actions_status_request);
-    server.on(WEB_ROUTE_COMMAND, HTTP_POST, handle_command_request, nullptr, capture_request_body);
+    server.on(WEB_ROUTE_COMMAND, HTTP_POST, handle_command_request_releasing_body, nullptr, capture_request_body);
 }
 
 void web_install_route_module_actions(void)

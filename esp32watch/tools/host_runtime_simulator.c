@@ -149,6 +149,8 @@ void power_policy_reset_qos_registry(void) {}
 bool power_policy_register_qos_provider(PowerQosProviderFn provider, void *ctx) { (void)provider; (void)ctx; return true; }
 void power_policy_collect_qos_snapshot(PowerQosSnapshot *out) { if (out) memset(out, 0, sizeof(*out)); }
 bool power_policy_can_enter_cpu_idle_ex(const PowerQosSnapshot *snapshot, uint32_t *suggested_idle_ms) { (void)snapshot; if (suggested_idle_ms) *suggested_idle_ms = 0U; return false; }
+bool power_policy_platform_pm_lock_enter(uint32_t qos_mask, const char *owner) { (void)qos_mask; (void)owner; return true; }
+bool power_policy_platform_pm_lock_exit(uint32_t qos_mask, const char *owner) { (void)qos_mask; (void)owner; return true; }
 
 void power_service_idle(bool can_idle_sleep) { (void)can_idle_sleep; }
 void power_service_request_sleep(SleepReason reason) { (void)reason; }

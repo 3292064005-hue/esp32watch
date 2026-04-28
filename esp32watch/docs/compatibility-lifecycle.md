@@ -30,3 +30,8 @@ Compatibility governance is backed by a machine-readable registry at `tools/comp
 - `tools/host_tests/test_command_catalog_compatibility.c` — asserts deprecated command aliases resolve to the canonical command without reappearing as active catalog entries.
 - `tools/host_tests/test_model_runtime_split.c` — keeps the compatibility read-side shims (`model_get`, `model_get_domain_state`) under host coverage.
 - `tools/host_tests/test_system_runtime_service_init.cpp` — keeps the `LEGACY_CONSUMER_FIRST` init profile under host coverage.
+
+
+## Archived legacy boundary
+
+See `docs/legacy-archive.md` for the active rule: legacy/Bluepill surfaces are retained as archive material and are not part of the active ESP32-S3 runtime path.

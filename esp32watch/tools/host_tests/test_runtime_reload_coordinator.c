@@ -269,7 +269,9 @@ int main(void)
     assert(report.failed_domain_mask == 0U);
     assert(report.domain_result_count == 1U);
     assert(report.domain_results[0].persisted_only);
-    assert(report.domain_results[0].effective);
+    assert(!report.domain_results[0].effective);
+    assert(report.persisted_only_ok);
+    assert(!report.fully_effective_now);
     assert(strcmp(report.domain_results[0].verify_reason, "PERSISTED_ONLY") == 0);
 
     runtime_event_service_reset();
@@ -284,6 +286,8 @@ int main(void)
     assert(report.reboot_required_domain_mask == RUNTIME_RELOAD_DOMAIN_COMPANION);
     assert(report.failed_domain_mask == 0U);
     assert(report.domain_results[0].reboot_required);
+    assert(!report.domain_results[0].effective);
+    assert(!report.fully_effective_now);
     assert(strcmp(report.domain_results[0].verify_reason, "REQUIRES_REBOOT") == 0);
 
     runtime_event_service_reset();

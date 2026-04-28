@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+WEB_CONTRACT_SOURCE_PATHS = [
+    'include/web/web_contract.h',
+    'include/web/web_runtime_reload_contract.h',
+    'include/app_command.h',
+    'src/app_command.c',
+    'src/app_command_module_core.c',
+    'src/web/web_contract.cpp',
+    'src/web/web_json.cpp',
+    'src/web/web_json_writer.cpp',
+    'src/web/web_routes_api_contract_meta.cpp',
+    'src/web/web_routes_api_support.cpp',
+    'src/web/web_route_state_payload.cpp',
+    'src/web/web_runtime_snapshot.cpp',
+    'src/web/web_route_catalog_registry.cpp',
+    'src/web/web_route_module_registry.cpp',
+    'src/web/web_route_module_manifest.cpp',
+    'src/web/web_route_module_core.cpp',
+    'src/web/web_route_module_actions.cpp',
+    'src/web/web_route_module_config.cpp',
+    'src/web/web_route_module_reset.cpp',
+    'src/web/web_route_module_state.cpp',
+    'src/web/web_route_module_display.cpp',
+    'src/web/web_route_module_input.cpp',
+]

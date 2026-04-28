@@ -36,8 +36,12 @@ async function postReset(path, successMessage, failureMessage) {
     document.getElementById("apiToken").value = "";
   }
   state.formDirty = false;
-  if (runtimeReload.runtimeReloadRequested && !runtimeReload.runtimeReloaded) {
+  if (runtimeReload.runtimeReloadRequested && runtimeReload.runtimeReloadRequiresReboot) {
+    toast(result.message || "Reset completed; reboot required for all changes", "info");
+  } else if (runtimeReload.runtimeReloadRequested && !runtimeReload.runtimeHotAppliedOk) {
     toast(result.message || failureMessage, "error");
+  } else if (runtimeReload.runtimeReloadRequested && !runtimeReload.runtimeFullyEffectiveNow) {
+    toast(result.message || "Reset completed; some changes are saved but not hot-applied", "info");
   } else {
     toast(successMessage, "success");
   }
@@ -92,8 +96,12 @@ async function saveConfig() {
   document.getElementById("currentAuthToken").value = newToken;
   state.formDirty = false;
   document.getElementById("wifiPassword").value = "";
-  if (runtimeReload.runtimeReloadRequested && !runtimeReload.runtimeReloaded) {
-    toast(result.message || "Configuration saved, but runtime reload failed", "error");
+  if (runtimeReload.runtimeReloadRequested && runtimeReload.runtimeReloadRequiresReboot) {
+    toast("Configuration saved; reboot required for all changes", "info");
+  } else if (runtimeReload.runtimeReloadRequested && !runtimeReload.runtimeHotAppliedOk) {
+    toast(result.message || "Configuration saved, but hot runtime reload failed", "error");
+  } else if (runtimeReload.runtimeReloadRequested && !runtimeReload.runtimeFullyEffectiveNow) {
+    toast("Configuration saved; some changes are persisted only", "info");
   } else {
     toast("Configuration saved", "success");
   }

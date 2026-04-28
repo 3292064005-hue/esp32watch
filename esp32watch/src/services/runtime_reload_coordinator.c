@@ -253,6 +253,9 @@ static void runtime_reload_report_init(RuntimeReloadReport *out, bool requested)
     out->wifi_reload_ok = true;
     out->network_reload_ok = true;
     out->verify_ok = !requested;
+    out->hot_apply_ok = !requested;
+    out->persisted_only_ok = !requested;
+    out->fully_effective_now = !requested;
     out->first_failed_handler_name = "NONE";
     out->failure_phase = "NONE";
     out->failure_code = "NONE";
@@ -504,7 +507,7 @@ static bool runtime_reload_verify_mask(uint32_t requested_domain_mask, RuntimeRe
                     result->applied = false;
                     result->verify_ok = true;
                     result->persisted_only = true;
-                    result->effective = true;
+                    result->effective = false;
                     result->verify_reason = kVerifyReasonPersistedOnly;
                 }
                 if (report != NULL) {
@@ -516,7 +519,7 @@ static bool runtime_reload_verify_mask(uint32_t requested_domain_mask, RuntimeRe
                     result->applied = false;
                     result->verify_ok = true;
                     result->reboot_required = true;
-                    result->effective = true;
+                    result->effective = false;
                     result->verify_reason = kVerifyReasonRequiresReboot;
                 }
                 if (report != NULL) {
@@ -589,6 +592,29 @@ static bool runtime_reload_execute(uint32_t requested_domain_mask, RuntimeReload
     }
 
     report.verify_ok = runtime_reload_verify_mask(requested_domain_mask, &report);
+    {
+        const uint32_t supported_requested_mask = requested_domain_mask & runtime_reload_supported_domain_mask();
+        const uint32_t requested_hot_mask = supported_requested_mask & runtime_reload_domain_mask_for_strategy(RUNTIME_RELOAD_APPLY_HOT);
+        const uint32_t requested_persisted_mask = supported_requested_mask & runtime_reload_domain_mask_for_strategy(RUNTIME_RELOAD_APPLY_PERSISTED_ONLY);
+        const bool no_failed_requested_domains = (report.failed_domain_mask & supported_requested_mask) == RUNTIME_RELOAD_DOMAIN_NONE;
+
+        report.hot_apply_ok = (!requested) ||
+                              requested_hot_mask == RUNTIME_RELOAD_DOMAIN_NONE ||
+                              (report.verify_ok &&
+                               no_failed_requested_domains &&
+                               (report.applied_domain_mask & requested_hot_mask) == requested_hot_mask);
+        report.persisted_only_ok = (!requested) ||
+                                   requested_persisted_mask == RUNTIME_RELOAD_DOMAIN_NONE ||
+                                   (report.verify_ok &&
+                                    no_failed_requested_domains &&
+                                    (report.deferred_domain_mask & requested_persisted_mask) == requested_persisted_mask);
+        report.fully_effective_now = (!requested) ||
+                                     (report.verify_ok &&
+                                      no_failed_requested_domains &&
+                                      report.deferred_domain_mask == RUNTIME_RELOAD_DOMAIN_NONE &&
+                                      report.reboot_required_domain_mask == RUNTIME_RELOAD_DOMAIN_NONE &&
+                                      (report.applied_domain_mask & supported_requested_mask) == supported_requested_mask);
+    }
     reload_ok = report.verify_ok;
     report.partial_success = report.failed_domain_mask != RUNTIME_RELOAD_DOMAIN_NONE &&
                              (report.applied_domain_mask != RUNTIME_RELOAD_DOMAIN_NONE ||

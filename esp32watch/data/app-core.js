@@ -204,14 +204,22 @@ async function apiWithSchema(routeKey, fallbackPath, schemaName, options = {}) {
 function payloadHasPath(payload, keyPath) {
   if (!keyPath) return true;
   const parts = String(keyPath).split('.');
-  let cursor = payload;
-  for (const part of parts) {
+  const walk = (cursor, index) => {
+    if (index >= parts.length) return true;
+    const part = parts[index];
+    if (part.endsWith('[]')) {
+      const key = part.slice(0, -2);
+      if (cursor === null || cursor === undefined || !Object.prototype.hasOwnProperty.call(cursor, key) || !Array.isArray(cursor[key])) {
+        return false;
+      }
+      return cursor[key].every(item => walk(item, index + 1));
+    }
     if (cursor === null || cursor === undefined || !Object.prototype.hasOwnProperty.call(cursor, part)) {
       return false;
     }
-    cursor = cursor[part];
-  }
-  return true;
+    return walk(cursor[part], index + 1);
+  };
+  return walk(payload, 0);
 }
 
 function payloadHasRequiredKeys(payload, schemaName) {

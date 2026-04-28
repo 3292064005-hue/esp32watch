@@ -2,6 +2,7 @@
 #include "web/web_wifi.h"
 #include "web/web_action_queue.h"
 #include "web/web_overlay.h"
+#include "web/web_runtime_snapshot.h"
 #include "web/web_state_bridge.h"
 #include "web/web_fs_config.h"
 #include "web/web_contract.h"
@@ -534,6 +535,8 @@ void web_server_poll(uint32_t now_ms)
     if (!web_overlay_is_active(now_ms)) {
         web_overlay_clear();
     }
+
+    (void)web_runtime_snapshot_publish(now_ms);
 }
 
 bool web_server_has_pending_actions(void)

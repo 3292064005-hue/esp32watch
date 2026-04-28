@@ -1,6 +1,7 @@
 #include "app_command.h"
 #include "app_command_registry.h"
 #include "app_limits.h"
+#include "board_features.h"
 #include "services/diag_service.h"
 #include "services/sensor_service.h"
 #include "services/storage_service.h"
@@ -66,10 +67,51 @@ const char *app_command_result_code_name(AppCommandResultCode code)
     }
 }
 
-bool app_command_execute_detailed(const AppCommand *command,
-                                  uint8_t *last_sensor_sensitivity,
-                                  AppCommandExecutionResult *out_result)
+const char *app_command_payload_kind_name(AppCommandPayloadKind kind)
 {
+    switch (kind) {
+        case APP_COMMAND_PAYLOAD_NONE: return "NONE";
+        case APP_COMMAND_PAYLOAD_U8_VALUE: return "U8_VALUE";
+        case APP_COMMAND_PAYLOAD_U32_VALUE: return "U32_VALUE";
+        case APP_COMMAND_PAYLOAD_I8_DELTA: return "I8_DELTA";
+        case APP_COMMAND_PAYLOAD_I32_DELTA: return "I32_DELTA";
+        case APP_COMMAND_PAYLOAD_BOOL_ENABLED: return "BOOL_ENABLED";
+        case APP_COMMAND_PAYLOAD_DATETIME: return "DATETIME";
+        case APP_COMMAND_PAYLOAD_ALARM_ENABLED: return "ALARM_ENABLED";
+        case APP_COMMAND_PAYLOAD_ALARM_TIME: return "ALARM_TIME";
+        case APP_COMMAND_PAYLOAD_ALARM_REPEAT: return "ALARM_REPEAT";
+        case APP_COMMAND_PAYLOAD_GAME_HIGH_SCORE: return "GAME_HIGH_SCORE";
+        default: return "UNKNOWN";
+    }
+}
+
+static bool app_command_capabilities_available(uint32_t capability_mask)
+{
+    if ((capability_mask & APP_COMMAND_CAPABILITY_VIBRATION) != 0U) {
+#if APP_FEATURE_VIBRATION
+        ;
+#else
+        return false;
+#endif
+    }
+    if ((capability_mask & APP_COMMAND_CAPABILITY_SENSOR) != 0U) {
+#if APP_FEATURE_SENSOR
+        ;
+#else
+        return false;
+#endif
+    }
+    return true;
+}
+
+static bool app_command_i32_in_range(int32_t value, int32_t min_value, int32_t max_value)
+{
+    return value >= min_value && value <= max_value;
+}
+
+bool app_command_validate(const AppCommand *command, AppCommandExecutionResult *out_result)
+{
+    const AppCommandDescriptor *descriptor;
     if (command == NULL) {
         app_command_set_result(out_result, false, APP_COMMAND_RESULT_INVALID_DESCRIPTOR);
         return false;
@@ -78,8 +120,85 @@ bool app_command_execute_detailed(const AppCommand *command,
         app_command_set_result(out_result, false, APP_COMMAND_RESULT_INVALID_SOURCE);
         return false;
     }
-    if (app_command_describe(command->type) == NULL) {
+
+    descriptor = app_command_describe(command->type);
+    if (descriptor == NULL) {
         app_command_set_result(out_result, false, APP_COMMAND_RESULT_UNSUPPORTED);
+        return false;
+    }
+    if (!app_command_capabilities_available(descriptor->capability_mask)) {
+        app_command_set_result(out_result, false, APP_COMMAND_RESULT_UNSUPPORTED);
+        return false;
+    }
+
+    switch (descriptor->payload_kind) {
+        case APP_COMMAND_PAYLOAD_NONE:
+            break;
+        case APP_COMMAND_PAYLOAD_U8_VALUE:
+            if (!app_command_i32_in_range((int32_t)command->data.u8, descriptor->min_value, descriptor->max_value)) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_OUT_OF_RANGE);
+                return false;
+            }
+            break;
+        case APP_COMMAND_PAYLOAD_U32_VALUE:
+            if (command->data.u32 > (uint32_t)descriptor->max_value ||
+                command->data.u32 < (uint32_t)descriptor->min_value) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_OUT_OF_RANGE);
+                return false;
+            }
+            break;
+        case APP_COMMAND_PAYLOAD_I8_DELTA:
+            if (!app_command_i32_in_range((int32_t)command->data.delta_i8, descriptor->min_value, descriptor->max_value)) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_OUT_OF_RANGE);
+                return false;
+            }
+            break;
+        case APP_COMMAND_PAYLOAD_I32_DELTA:
+            if (!app_command_i32_in_range(command->data.delta_i32, descriptor->min_value, descriptor->max_value)) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_OUT_OF_RANGE);
+                return false;
+            }
+            break;
+        case APP_COMMAND_PAYLOAD_BOOL_ENABLED:
+            break;
+        case APP_COMMAND_PAYLOAD_ALARM_ENABLED:
+            if (command->data.alarm_enabled.index >= APP_MAX_ALARMS) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_OUT_OF_RANGE);
+                return false;
+            }
+            break;
+        case APP_COMMAND_PAYLOAD_ALARM_TIME:
+            if (command->data.alarm_time.index >= APP_MAX_ALARMS ||
+                command->data.alarm_time.hour > 23U ||
+                command->data.alarm_time.minute > 59U) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_OUT_OF_RANGE);
+                return false;
+            }
+            break;
+        case APP_COMMAND_PAYLOAD_ALARM_REPEAT:
+            if (command->data.alarm_repeat.index >= APP_MAX_ALARMS ||
+                command->data.alarm_repeat.repeat_mask > 0x7FU) {
+                app_command_set_result(out_result, false, APP_COMMAND_RESULT_OUT_OF_RANGE);
+                return false;
+            }
+            break;
+        case APP_COMMAND_PAYLOAD_DATETIME:
+        case APP_COMMAND_PAYLOAD_GAME_HIGH_SCORE:
+            break;
+        default:
+            app_command_set_result(out_result, false, APP_COMMAND_RESULT_INVALID_DESCRIPTOR);
+            return false;
+    }
+
+    app_command_set_result(out_result, true, APP_COMMAND_RESULT_OK);
+    return true;
+}
+
+bool app_command_execute_detailed(const AppCommand *command,
+                                  uint8_t *last_sensor_sensitivity,
+                                  AppCommandExecutionResult *out_result)
+{
+    if (!app_command_validate(command, out_result)) {
         return false;
     }
 

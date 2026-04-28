@@ -4,6 +4,9 @@
 #include <esp_system.h>
 #include <string.h>
 #include "esp32_port_config.h"
+#if ESP32_POWER_USE_IDF_PM_LOCKS
+#include <esp_pm.h>
+#endif
 #include "platform_api.h"
 #include "app_config.h"
 #include "board_manifest.h"
@@ -29,6 +32,9 @@ static RTC_NOINIT_ATTR uint32_t g_bkp_magic = 0U;
 static RTC_NOINIT_ATTR uint32_t g_bkp_regs[kBkpRegisterCount] = {0};
 static bool g_bkp_loaded = false;
 static uint32_t g_adc_last_value = 2048U;
+#if ESP32_POWER_USE_IDF_PM_LOCKS
+static esp_pm_lock_handle_t g_platform_idle_pm_lock = nullptr;
+#endif
 
 static bool bkp_should_reset_for_reason(esp_reset_reason_t reason)
 {
@@ -311,6 +317,44 @@ PlatformStatus platform_watchdog_kick(PlatformWatchdog *device)
 {
     (void)device;
     return PLATFORM_STATUS_ERROR;
+}
+
+
+bool platform_pm_lock_supported(void)
+{
+#if ESP32_POWER_USE_IDF_PM_LOCKS
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool platform_pm_lock_acquire(const char *owner)
+{
+    (void)owner;
+#if ESP32_POWER_USE_IDF_PM_LOCKS
+    if (g_platform_idle_pm_lock == nullptr) {
+        if (esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "watch_idle", &g_platform_idle_pm_lock) != ESP_OK) {
+            return false;
+        }
+    }
+    return esp_pm_lock_acquire(g_platform_idle_pm_lock) == ESP_OK;
+#else
+    return true;
+#endif
+}
+
+bool platform_pm_lock_release(const char *owner)
+{
+    (void)owner;
+#if ESP32_POWER_USE_IDF_PM_LOCKS
+    if (g_platform_idle_pm_lock == nullptr) {
+        return true;
+    }
+    return esp_pm_lock_release(g_platform_idle_pm_lock) == ESP_OK;
+#else
+    return true;
+#endif
 }
 
 bool platform_light_sleep_for(uint32_t duration_ms)

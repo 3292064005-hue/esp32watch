@@ -26,5 +26,6 @@ void handle_reset_app_state_route_request(AsyncWebServerRequest *request);
 void handle_reset_device_config_route_request(AsyncWebServerRequest *request);
 void handle_reset_factory_route_request(AsyncWebServerRequest *request);
 void capture_request_body(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
+void release_request_body(AsyncWebServerRequest *request);
 
 #endif

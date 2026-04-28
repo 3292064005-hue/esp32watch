@@ -10,6 +10,39 @@
 #include <string.h>
 #include <cstdio>
 
+#if defined(ARDUINO_ARCH_ESP32)
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
+#endif
+
+#if defined(ARDUINO_ARCH_ESP32)
+static portMUX_TYPE g_web_runtime_snapshot_mux = portMUX_INITIALIZER_UNLOCKED;
+#define WEB_RUNTIME_SNAPSHOT_LOCK() portENTER_CRITICAL(&g_web_runtime_snapshot_mux)
+#define WEB_RUNTIME_SNAPSHOT_UNLOCK() portEXIT_CRITICAL(&g_web_runtime_snapshot_mux)
+#else
+#define WEB_RUNTIME_SNAPSHOT_LOCK() do { } while (0)
+#define WEB_RUNTIME_SNAPSHOT_UNLOCK() do { } while (0)
+#endif
+
+#define WEB_RUNTIME_PUBLISHED_SNAPSHOT_BUFFER_COUNT 3U
+
+static WebRuntimeSnapshot g_published_snapshots[WEB_RUNTIME_PUBLISHED_SNAPSHOT_BUFFER_COUNT];
+static uint8_t g_published_snapshot_active_index = 0U;
+static uint8_t g_published_snapshot_reader_count[WEB_RUNTIME_PUBLISHED_SNAPSHOT_BUFFER_COUNT];
+static bool g_published_snapshot_valid = false;
+static uint32_t g_published_snapshot_sequence = 0U;
+
+static uint8_t web_runtime_snapshot_find_publish_buffer(void)
+{
+    for (uint8_t offset = 1U; offset <= WEB_RUNTIME_PUBLISHED_SNAPSHOT_BUFFER_COUNT; ++offset) {
+        const uint8_t index = (uint8_t)((g_published_snapshot_active_index + offset) % WEB_RUNTIME_PUBLISHED_SNAPSHOT_BUFFER_COUNT);
+        if (index != g_published_snapshot_active_index && g_published_snapshot_reader_count[index] == 0U) {
+            return index;
+        }
+    }
+    return WEB_RUNTIME_PUBLISHED_SNAPSHOT_BUFFER_COUNT;
+}
+
 extern "C" {
 #include "display.h"
 #include "services/diag_service.h"
@@ -285,5 +318,77 @@ extern "C" bool web_runtime_snapshot_collect(WebRuntimeSnapshot *out)
     collect_alarm_music_overlay_detail(out);
     collect_perf_detail(out);
     out->has_detail_state = true;
+    return true;
+}
+
+
+extern "C" bool web_runtime_snapshot_publish(uint32_t now_ms)
+{
+    WebRuntimeSnapshot snapshot = {};
+    uint8_t publish_index;
+
+    if (!web_runtime_snapshot_collect(&snapshot)) {
+        return false;
+    }
+    snapshot.from_published_snapshot = false;
+    snapshot.published_at_ms = now_ms;
+    snapshot.snapshot_age_ms = 0U;
+
+    WEB_RUNTIME_SNAPSHOT_LOCK();
+    publish_index = web_runtime_snapshot_find_publish_buffer();
+    WEB_RUNTIME_SNAPSHOT_UNLOCK();
+    if (publish_index >= WEB_RUNTIME_PUBLISHED_SNAPSHOT_BUFFER_COUNT) {
+        return false;
+    }
+
+    g_published_snapshots[publish_index] = snapshot;
+
+    WEB_RUNTIME_SNAPSHOT_LOCK();
+    if (g_published_snapshot_reader_count[publish_index] != 0U) {
+        WEB_RUNTIME_SNAPSHOT_UNLOCK();
+        return false;
+    }
+    g_published_snapshot_active_index = publish_index;
+    g_published_snapshot_valid = true;
+    ++g_published_snapshot_sequence;
+    if (g_published_snapshot_sequence == 0U) {
+        ++g_published_snapshot_sequence;
+    }
+    WEB_RUNTIME_SNAPSHOT_UNLOCK();
+    return true;
+}
+
+extern "C" bool web_runtime_snapshot_get_published(WebRuntimeSnapshot *out, uint32_t now_ms)
+{
+    uint8_t read_index;
+
+    if (out == nullptr) {
+        return false;
+    }
+
+    WEB_RUNTIME_SNAPSHOT_LOCK();
+    if (!g_published_snapshot_valid) {
+        WEB_RUNTIME_SNAPSHOT_UNLOCK();
+        return false;
+    }
+    read_index = g_published_snapshot_active_index;
+    if (g_published_snapshot_reader_count[read_index] != UINT8_MAX) {
+        ++g_published_snapshot_reader_count[read_index];
+    } else {
+        WEB_RUNTIME_SNAPSHOT_UNLOCK();
+        return false;
+    }
+    WEB_RUNTIME_SNAPSHOT_UNLOCK();
+
+    *out = g_published_snapshots[read_index];
+
+    WEB_RUNTIME_SNAPSHOT_LOCK();
+    if (g_published_snapshot_reader_count[read_index] > 0U) {
+        --g_published_snapshot_reader_count[read_index];
+    }
+    WEB_RUNTIME_SNAPSHOT_UNLOCK();
+
+    out->from_published_snapshot = true;
+    out->snapshot_age_ms = now_ms >= out->published_at_ms ? (now_ms - out->published_at_ms) : 0U;
     return true;
 }

@@ -5,6 +5,7 @@
 #include "web/web_state_bridge.h"
 #include "web/web_state_bridge_internal.h"
 #include "web/web_json.h"
+#include "web/web_json_writer.h"
 #include "web/web_wifi.h"
 #include "web/web_server.h"
 #include "web/web_api_config.h"
@@ -20,6 +21,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cmath>
+#include <cstdint>
 
 extern "C" {
 #include "display_internal.h"
@@ -32,6 +34,7 @@ extern "C" {
 #include "services/storage_service.h"
 #include "app_tuning.h"
 #include "board_manifest.h"
+#include "board_features.h"
 #include "system_init.h"
 #include "services/runtime_event_service.h"
 #include "services/runtime_reload_coordinator.h"
@@ -49,16 +52,21 @@ bool web_command_supported(const AppCommandDescriptor *descriptor)
     if (descriptor == nullptr) {
         return false;
     }
-    switch (descriptor->type) {
-        case APP_COMMAND_SET_VIBRATE:
+    if ((descriptor->capability_mask & APP_COMMAND_CAPABILITY_VIBRATION) != 0U) {
 #if APP_FEATURE_VIBRATION
-            return true;
+        ;
 #else
-            return false;
+        return false;
 #endif
-        default:
-            return true;
     }
+    if ((descriptor->capability_mask & APP_COMMAND_CAPABILITY_SENSOR) != 0U) {
+#if APP_FEATURE_SENSOR
+        ;
+#else
+        return false;
+#endif
+    }
+    return true;
 }
 
 const char *feature_lifecycle_name(bool enabled)
@@ -143,9 +151,15 @@ bool parse_command_type(const char *cmd_str, AppCommandType *out_type)
 
 void send_json_error(AsyncWebServerRequest *request, int status, const char *message)
 {
-    String response = "{\"ok\":false,\"message\":\"";
-    web_json_escape_append(response, message != nullptr ? message : "error");
-    response += "\"}";
+    String response;
+    WebJsonWriter writer(response);
+    writer.beginObject();
+    writer.kv("ok", false);
+    writer.kv("message", message != nullptr ? message : "error");
+    writer.endObject();
+    if (!writer.ok()) {
+        response = "{\"ok\":false,\"message\":\"json writer failure\"}";
+    }
     request->send(status, "application/json", response);
 }
 
@@ -225,19 +239,15 @@ void append_runtime_reload_payload(String &response, const RuntimeReloadReport &
 {
     const uint32_t supported_domain_mask = runtime_reload_supported_domain_mask();
     const uint32_t requested_supported_mask = reload.requested_domain_mask & supported_domain_mask;
-    const uint32_t effective_domain_mask = reload.applied_domain_mask |
-                                           reload.deferred_domain_mask |
-                                           reload.reboot_required_domain_mask;
-    const bool runtime_reloaded = (!reload.requested) ||
-                                  (requested_supported_mask == RUNTIME_RELOAD_DOMAIN_NONE) ||
-                                  (reload.failed_domain_mask == RUNTIME_RELOAD_DOMAIN_NONE &&
-                                   requested_supported_mask == effective_domain_mask &&
-                                   reload.verify_ok);
+    const bool runtime_reloaded = reload.fully_effective_now;
 
     web_json_kv_bool(response, "runtimeReloadRequested", reload.requested, false);
     web_json_kv_bool(response, "runtimeReloadPreflightOk", reload.preflight_ok, false);
     web_json_kv_bool(response, "runtimeReloadApplyAttempted", reload.apply_attempted, false);
     web_json_kv_bool(response, "runtimeReloaded", runtime_reloaded, false);
+    web_json_kv_bool(response, "runtimeHotAppliedOk", reload.hot_apply_ok, false);
+    web_json_kv_bool(response, "runtimePersistedOnlyOk", reload.persisted_only_ok, false);
+    web_json_kv_bool(response, "runtimeFullyEffectiveNow", reload.fully_effective_now, false);
     web_json_kv_bool(response, "runtimeReloadEventDispatchOk", reload.event_dispatch_ok, false);
     web_json_kv_bool(response, "runtimeReloadAuthoritativePath", true, false);
     web_json_kv_bool(response, "runtimeReloadVerifyOk", reload.verify_ok, false);
@@ -455,6 +465,55 @@ bool parse_strict_u32_field(const String &value, uint32_t *out_value)
     return true;
 }
 
+static bool parse_strict_i32_field_local(const String &value, int32_t *out_value)
+{
+    const char *cursor = value.c_str();
+    char *end_ptr = nullptr;
+    long parsed = 0L;
+
+    if (out_value == nullptr || value.length() == 0) {
+        return false;
+    }
+
+    parsed = strtol(cursor, &end_ptr, 10);
+    if (end_ptr == cursor || end_ptr == nullptr) {
+        return false;
+    }
+    while (*end_ptr != '\0' && isspace((unsigned char)(*end_ptr)) != 0) {
+        ++end_ptr;
+    }
+    if (*end_ptr != '\0') {
+        return false;
+    }
+    if (parsed < (long)INT32_MIN || parsed > (long)INT32_MAX) {
+        return false;
+    }
+    *out_value = (int32_t)parsed;
+    return true;
+}
+
+static bool read_json_i32_field_local(const StaticJsonDocument<256> &doc, const char *name, int32_t *value)
+{
+    auto field = doc[name];
+    if (value == nullptr || field.isNull() || !field.is<int32_t>()) {
+        return false;
+    }
+    *value = field.as<int32_t>();
+    return true;
+}
+
+static bool command_descriptor_range_accepts_i32(const AppCommandDescriptor *descriptor, int32_t value)
+{
+    return descriptor != nullptr && value >= descriptor->min_value && value <= descriptor->max_value;
+}
+
+static bool command_descriptor_range_accepts_u32(const AppCommandDescriptor *descriptor, uint32_t value)
+{
+    return descriptor != nullptr &&
+           descriptor->min_value >= 0 &&
+           value <= (uint32_t)descriptor->max_value;
+}
+
 bool populate_command_payload_from_request(AsyncWebServerRequest *request,
                                                   const StaticJsonDocument<256> *json_doc,
                                                   AppCommand *command,
@@ -463,8 +522,11 @@ bool populate_command_payload_from_request(AsyncWebServerRequest *request,
 {
     String value_str;
     uint32_t u32_value = 0U;
-    const char *integer_error = "command requires integer field `value`";
-    const char *bool_error = "command requires boolean field `enabled`";
+    int32_t i32_value = 0;
+    bool enabled = false;
+    const AppCommandDescriptor *descriptor = nullptr;
+
+    (void)cmd_str;
 
     if (command == nullptr) {
         if (out_error != nullptr) {
@@ -473,40 +535,117 @@ bool populate_command_payload_from_request(AsyncWebServerRequest *request,
         return false;
     }
 
-    switch (command->type) {
-        case APP_COMMAND_SET_BRIGHTNESS:
-        case APP_COMMAND_SET_WATCHFACE:
+    descriptor = app_command_describe(command->type);
+    if (descriptor == nullptr) {
+        if (out_error != nullptr) {
+            *out_error = "unsupported command";
+        }
+        return false;
+    }
+
+    switch (descriptor->payload_kind) {
+        case APP_COMMAND_PAYLOAD_NONE:
+            break;
+
+        case APP_COMMAND_PAYLOAD_U8_VALUE:
+        case APP_COMMAND_PAYLOAD_U32_VALUE:
             if (json_doc != nullptr) {
-                if (!read_json_u32_field(*json_doc, "value", &u32_value)) {
+                if (!read_json_u32_field(*json_doc, descriptor->payload_field != nullptr ? descriptor->payload_field : "value", &u32_value)) {
                     if (out_error != nullptr) {
-                        *out_error = integer_error;
+                        *out_error = "command requires integer field `";
+                        *out_error += descriptor->payload_field != nullptr ? descriptor->payload_field : "value";
+                        *out_error += "`";
                     }
                     return false;
                 }
             } else {
-                if (!read_form_field(request, "value", value_str) || !parse_strict_u32_field(value_str, &u32_value)) {
+                if (!read_form_field(request, descriptor->payload_field != nullptr ? descriptor->payload_field : "value", value_str) ||
+                    !parse_strict_u32_field(value_str, &u32_value)) {
                     if (out_error != nullptr) {
-                        *out_error = integer_error;
+                        *out_error = "command requires integer field `";
+                        *out_error += descriptor->payload_field != nullptr ? descriptor->payload_field : "value";
+                        *out_error += "`";
                     }
                     return false;
                 }
             }
-            command->data.u8 = (uint8_t)(u32_value & 0xFFU);
-            return true;
-        case APP_COMMAND_SET_SHOW_SECONDS: {
-            bool enabled = false;
-            if (json_doc != nullptr) {
-                if (!read_json_bool_field(*json_doc, "enabled", &enabled)) {
+            if (!command_descriptor_range_accepts_u32(descriptor, u32_value)) {
+                if (out_error != nullptr) {
+                    *out_error = "command integer field out of range";
+                }
+                return false;
+            }
+            if (descriptor->payload_kind == APP_COMMAND_PAYLOAD_U8_VALUE) {
+                if (u32_value > 0xFFU) {
                     if (out_error != nullptr) {
-                        *out_error = bool_error;
+                        *out_error = "command integer field out of range";
+                    }
+                    return false;
+                }
+                command->data.u8 = (uint8_t)u32_value;
+            } else {
+                command->data.u32 = u32_value;
+            }
+            break;
+
+        case APP_COMMAND_PAYLOAD_I8_DELTA:
+        case APP_COMMAND_PAYLOAD_I32_DELTA:
+            if (json_doc != nullptr) {
+                if (!read_json_i32_field_local(*json_doc, descriptor->payload_field != nullptr ? descriptor->payload_field : "delta", &i32_value)) {
+                    if (out_error != nullptr) {
+                        *out_error = "command requires signed integer field `";
+                        *out_error += descriptor->payload_field != nullptr ? descriptor->payload_field : "delta";
+                        *out_error += "`";
+                    }
+                    return false;
+                }
+            } else {
+                if (!read_form_field(request, descriptor->payload_field != nullptr ? descriptor->payload_field : "delta", value_str) ||
+                    !parse_strict_i32_field_local(value_str, &i32_value)) {
+                    if (out_error != nullptr) {
+                        *out_error = "command requires signed integer field `";
+                        *out_error += descriptor->payload_field != nullptr ? descriptor->payload_field : "delta";
+                        *out_error += "`";
+                    }
+                    return false;
+                }
+            }
+            if (!command_descriptor_range_accepts_i32(descriptor, i32_value)) {
+                if (out_error != nullptr) {
+                    *out_error = "command signed integer field out of range";
+                }
+                return false;
+            }
+            if (descriptor->payload_kind == APP_COMMAND_PAYLOAD_I8_DELTA) {
+                if (i32_value < INT8_MIN || i32_value > INT8_MAX) {
+                    if (out_error != nullptr) {
+                        *out_error = "command signed integer field out of range";
+                    }
+                    return false;
+                }
+                command->data.delta_i8 = (int8_t)i32_value;
+            } else {
+                command->data.delta_i32 = i32_value;
+            }
+            break;
+
+        case APP_COMMAND_PAYLOAD_BOOL_ENABLED:
+            if (json_doc != nullptr) {
+                if (!read_json_bool_field(*json_doc, descriptor->payload_field != nullptr ? descriptor->payload_field : "enabled", &enabled)) {
+                    if (out_error != nullptr) {
+                        *out_error = "command requires boolean field `";
+                        *out_error += descriptor->payload_field != nullptr ? descriptor->payload_field : "enabled";
+                        *out_error += "`";
                     }
                     return false;
                 }
             } else {
                 const char *raw = nullptr;
-                if (!read_form_field(request, "enabled", value_str)) {
+                if (!read_form_field(request, descriptor->payload_field != nullptr ? descriptor->payload_field : "enabled", value_str)) {
                     if (out_error != nullptr) {
-                        *out_error = bool_error;
+                        *out_error = "command requires boolean field `";
+                        *out_error += descriptor->payload_field != nullptr ? descriptor->payload_field : "enabled";
+                        *out_error += "`";
                     }
                     return false;
                 }
@@ -517,18 +656,35 @@ bool populate_command_payload_from_request(AsyncWebServerRequest *request,
                     enabled = false;
                 } else {
                     if (out_error != nullptr) {
-                        *out_error = bool_error;
+                        *out_error = "command requires boolean field `";
+                        *out_error += descriptor->payload_field != nullptr ? descriptor->payload_field : "enabled";
+                        *out_error += "`";
                     }
                     return false;
                 }
             }
             command->data.enabled = enabled;
-            return true;
-        }
+            break;
+
         default:
-            (void)cmd_str;
-            return true;
+            if (out_error != nullptr) {
+                *out_error = "command payload kind is not supported by web control";
+            }
+            return false;
     }
+
+    {
+        AppCommandExecutionResult validation = {};
+        if (!app_command_validate(command, &validation)) {
+            if (out_error != nullptr) {
+                *out_error = "command payload rejected: ";
+                *out_error += app_command_result_code_name(validation.code);
+            }
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void capture_request_body(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
@@ -552,6 +708,15 @@ void capture_request_body(AsyncWebServerRequest *request, uint8_t *data, size_t 
         uint8_t *buffer = static_cast<uint8_t *>(request->_tempObject);
         memcpy(buffer + index, data, len);
     }
+}
+
+void release_request_body(AsyncWebServerRequest *request)
+{
+    if (request == nullptr || request->_tempObject == nullptr) {
+        return;
+    }
+    free(request->_tempObject);
+    request->_tempObject = nullptr;
 }
 
 void append_hex_byte(String &out, uint8_t value)
@@ -620,6 +785,25 @@ bool require_control_auth(AsyncWebServerRequest *request)
     }
     if (control_is_locked_in_provisioning_ap()) {
         request->send(403, "application/json", "{\"ok\":false,\"message\":\"control locked until API token is configured or STA link is active\"}");
+        return false;
+    }
+    if (!system_runtime_control_ready()) {
+        SystemStartupReport startup = {};
+        const bool has_startup = system_get_startup_report(&startup);
+        String response = "{\"ok\":false,\"message\":\"runtime control not ready\",";
+        web_json_kv_str(response,
+                        "startupStage",
+                        has_startup ? system_init_stage_name(startup.last_completed_stage) : "UNKNOWN",
+                        false);
+        web_json_kv_str(response,
+                        "failureStage",
+                        has_startup ? system_init_stage_name(startup.failure_stage) : "UNKNOWN",
+                        false);
+        web_json_kv_bool(response, "startupOk", has_startup ? startup.startup_ok : false, false);
+        web_json_kv_bool(response, "appReady", system_init_stage_completed(SYSTEM_INIT_STAGE_APP), false);
+        web_json_kv_u32(response, "retryAfterMs", 250U, true);
+        response += "}";
+        request->send(503, "application/json", response);
         return false;
     }
     return true;

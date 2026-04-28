@@ -185,3 +185,32 @@ State, meta, and health outputs must describe this authority explicitly through 
 ## 13. Companion protocol contract
 
 The companion protocol exposes its advertised version, capabilities, GET subject catalog, and EXPORT subject catalog through `companion_proto_contract.*`. Parser and handler code must not advertise a command or subject that is not implemented by the active protocol surface. The advertised capability list intentionally includes only implemented command capabilities such as `safeclr` and `sensorreinit`; unsupported experimental commands must stay absent until parser and handler support are implemented together.
+
+## 11. Published Web state snapshot
+
+Async Web request handlers must read the main-loop-published `WebRuntimeSnapshot` only. They must not fall back to direct service/model collection from the Async request context.
+
+Publication uses a three-buffer snapshot ring with per-buffer reader references:
+
+1. the main loop captures a local runtime snapshot;
+2. it selects an inactive buffer with no active readers under a short critical section;
+3. it copies the snapshot into that inactive buffer outside the critical section;
+4. it flips the active buffer index under a short critical section.
+
+Before the first complete snapshot is published, state routes return `503` with `snapshot not ready`, `retryAfterMs`, `appReady`, `publishedSnapshotReady`, and `startupStage` fields. This startup response is an expected readiness state, not a server fault.
+
+## 12. Runtime stage manifest and PM locks
+
+Runtime stage metadata is owned by the stage descriptor manifest in `src/watch_app_runtime.c`. The manifest binds each stage to:
+
+- stable stage id/name;
+- cooperative-loop budget;
+- WDT checkpoint;
+- QoS mask;
+- state exposure flag;
+- transaction-level PM-lock policy;
+- stage run function.
+
+`app_tuning` no longer carries a second stage-budget array. Stage telemetry initializes budgets from the runtime manifest to avoid split-brain budget drift.
+
+For sleep-sensitive transactions, SENSOR/STORAGE/NETWORK/WEB/RENDER stages acquire the platform PM lock before running the stage and release it immediately after the transaction finishes. The aggregated QoS snapshot still decides whether the IDLE stage may enter light sleep, but platform PM locks now also protect concrete stage transactions when `ESP32_POWER_USE_IDF_PM_LOCKS=1`.
